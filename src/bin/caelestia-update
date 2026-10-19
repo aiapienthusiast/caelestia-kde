@@ -33,13 +33,21 @@ run_step() {
         return $?
     fi
 
-    if [[ -f "$UPD_DIR/repo/scripts/$id.sh" ]]; then
-        BUNDLE_DIR="$UPD_DIR/repo" run_stage "$seconds" bash "$UPD_DIR/repo/scripts/$id.sh"
-        return $?
-    fi
-
-    printf '[ERR]   cannot run the %s step: no installer binary and no script\n' "$id" >&2
+    printf '[ERR]   cannot run the %s step: no installer binary to run it with\n' "$id" >&2
     return 127
+}
+
+# The ids this updater runs, from the installer's own table. Typing them here as well is what let
+# a step be renamed in the installer and silently missed by this path.
+update_step_id() {
+    local suffix="$1" bin ids=""
+    if [[ -f "$UPD_DIR/repo/scripts/lib/installer-bin.sh" ]]; then
+        # shellcheck source=/dev/null
+        . "$UPD_DIR/repo/scripts/lib/installer-bin.sh"
+    fi
+    bin="$(caelestia_installer_bin 2>/dev/null)" || return 1
+    ids="$("$bin" steps --for update 2>/dev/null)" || return 1
+    printf '%s\n' "$ids" | grep -m1 -- "$suffix\$"
 }
 
 BRANCH="${1:-main}"
@@ -274,7 +282,10 @@ echo "---------------------------------------------"
 if [[ "${CAELESTIA_SKIP_DEPLOY:-0}" == "1" ]]; then
     info "Skipping deploy-configs per user settings."
 else
-    run_step 900 03-deploy-configs || die "Config deployment failed or timed out."
+    DEPLOY_STEP="$(update_step_id deploy-configs)" \
+        || die "The installer could not say which step deploys the configuration."
+    [[ -n "$DEPLOY_STEP" ]] || die "The installer names no deploy-configs step."
+    run_step 900 "$DEPLOY_STEP" || die "Config deployment failed or timed out."
 fi
 echo "PROGRESS: 3/5: Configuration files deployed."
 
@@ -286,7 +297,10 @@ echo "---------------------------------------------"
 if [[ "${CAELESTIA_SKIP_BUILD:-0}" == "1" ]]; then
     info "Skipping build-shell per user settings."
 else
-    run_step 3600 08-build-shell || die "Shell build failed or timed out."
+    BUILD_STEP="$(update_step_id build-shell)" \
+        || die "The installer could not say which step builds the shell."
+    [[ -n "$BUILD_STEP" ]] || die "The installer names no build-shell step."
+    run_step 3600 "$BUILD_STEP" || die "Shell build failed or timed out."
 
     QML_BASE="$HOME/.local/lib/qt6/qml"
     CONFIG_MODULE_DIR="$QML_BASE/Caelestia/Config"

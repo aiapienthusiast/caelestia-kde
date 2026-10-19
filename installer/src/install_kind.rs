@@ -91,10 +91,7 @@ fn bin_dir_for(kind: Kind) -> PathBuf {
 
 fn qml_import_path_for(kind: Kind) -> String {
     match kind {
-        Kind::Package => format!(
-            "/usr/lib/qt6/qml:{}",
-            shell_config_dir_for(kind).display()
-        ),
+        Kind::Package => format!("/usr/lib/qt6/qml:{}", shell_config_dir_for(kind).display()),
         Kind::Source => {
             let home = paths::home();
             format!(

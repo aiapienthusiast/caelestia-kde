@@ -28,90 +28,35 @@ class InstallerTests(unittest.TestCase):
         for rel_path in INSTALLER_ENTRYPOINTS:
             self.assertTrue((ROOT / rel_path).is_file(), f"Missing installer entrypoint: {rel_path.as_posix()}")
 
-    def test_every_step_names_an_implementation_that_is_there(self) -> None:
-        """A step's `run:` names a function in the crate, so both halves have to resolve.
-
-        Every step is native now, so the table is the only place the installer says what it
-        runs; a function renamed away, or a module that is not a module, is what this
-        catches. The ids alongside it are what the step lists and the docs call a step by.
-        """
-        steps_text = (ROOT / "installer" / "src" / "steps" / "mod.rs").read_text(encoding="utf-8")
-        runs = re.findall(r"run: ([a-z_]+)::([a-z_]+),", steps_text)
-        ids = re.findall(r'id: "([^"]+)"', steps_text)
-
-        self.assertTrue(runs, "No installer steps found in installer/src/steps/mod.rs")
-        self.assertEqual(
-            len(runs), len(ids), "every step runs exactly one implementation"
-        )
-
-        for module, function in runs:
-            source = ROOT / "installer" / "src" / "steps" / f"{module}.rs"
-            if not source.is_file():
-                source = ROOT / "installer" / "src" / f"{module}.rs"
-            if not source.is_file():
-                source = ROOT / "installer" / "src" / module / "mod.rs"
-            self.assertTrue(
-                source.is_file(),
-                f"installer/src/{module} is not a module",
-            )
-            self.assertIn(
-                f"pub fn {function}(",
-                source.read_text(encoding="utf-8"),
-                f"{module}::{function} is not defined",
-            )
-
-    def test_every_step_declares_an_id(self) -> None:
-        """A step is addressed by id, so every step needs one, and no two may collide."""
-        steps_text = (ROOT / "installer" / "src" / "steps" / "mod.rs").read_text(encoding="utf-8")
-        ids = re.findall(r'id: "([^"]+)"', steps_text)
-        self.assertTrue(ids, "No step ids found in installer/src/steps/mod.rs")
-
-        names = re.findall(r'name: "([^"]+)"', steps_text)
-        self.assertEqual(len(ids), len(names), "every step needs exactly one id")
-
-        duplicates = {step_id for step_id in ids if ids.count(step_id) > 1}
-        self.assertFalse(duplicates, f"Duplicate installer step ids: {duplicates}")
-
-    def test_no_duplicate_step_names(self) -> None:
-        """The step table must not define two steps with the same display name."""
-        steps_text = (ROOT / "installer" / "src" / "steps" / "mod.rs").read_text(encoding="utf-8")
-        display_names = re.findall(r'name: "([^"]+)"', steps_text)
-        self.assertTrue(display_names, "No step names found in installer/src/steps/mod.rs")
-
-        seen: dict[str, int] = {}
-        for name in display_names:
-            seen[name] = seen.get(name, 0) + 1
-
-        duplicates = {name: count for name, count in seen.items() if count > 1}
-        self.assertFalse(
-            duplicates,
-            f"Duplicate installer step names: {duplicates}",
-        )
-
     def test_every_step_list_is_asked_of_the_installer(self) -> None:
         """The step table is the one list of steps; nothing else may keep its own copy.
 
-        The lists used to be scraped out of five files with seven regexes. Now the installer
-        answers `steps --for packaged|update` from the same table it runs, so the only thing
-        left to check here is that the launchers ask rather than restate: an id typed into a
-        shell script is exactly what drifted before.
+        Whether every `run:` resolves, and whether ids and names are unique, is settled by the
+        compiler and by `steps/mod.rs`'s own tests - reading the source here to prove it a
+        second time only made a behaviour-preserving refactor fail. What is left is the thing
+        those cannot see: a shell launcher typing an id instead of asking for it.
         """
         table = (ROOT / "installer" / "src" / "steps" / "mod.rs").read_text(encoding="utf-8")
         native = set(re.findall(r'id: "([^"]+)"', table))
         self.assertTrue(native, "No step ids found in installer/src/steps/mod.rs")
 
-        launcher = (ROOT / "src" / "bin" / "caelestia").read_text(encoding="utf-8")
-        self.assertIn(
-            "steps --for packaged",
-            launcher,
-            "the packaged launcher should ask the installer which steps to run",
-        )
-        # A restated id in the launcher is the copy this check exists to prevent.
-        restated = {
-            step_id for step_id in native
-            if re.search(rf"^\s+{re.escape(step_id)}\s*$", launcher, re.MULTILINE)
-        }
-        self.assertEqual(restated, set(), "src/bin/caelestia restates step ids it should ask for")
+        for launcher_path, purpose in [
+            (ROOT / "src" / "bin" / "caelestia", "packaged"),
+            (ROOT / "src" / "bin" / "caelestia-update", "update"),
+        ]:
+            launcher = launcher_path.read_text(encoding="utf-8")
+            self.assertIn(
+                f"steps --for {purpose}",
+                launcher,
+                f"{launcher_path.name} should ask the installer which steps to run",
+            )
+            restated = {
+                step_id for step_id in native
+                if re.search(rf"^\s+{re.escape(step_id)}\s*$", launcher, re.MULTILINE)
+            }
+            self.assertEqual(
+                restated, set(), f"{launcher_path.name} restates step ids it should ask for"
+            )
 
     def test_the_update_fallback_sparsifies_only_paths_the_updater_writes(self) -> None:
         """The build step's repair adds to the sparse-checkout list src/bin/caelestia-update owns.

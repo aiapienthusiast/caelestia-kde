@@ -113,7 +113,10 @@ impl Status {
 
     /// A step that will not be run again: whatever went wrong, it is settled.
     pub fn settles(self) -> bool {
-        matches!(self, Status::Ok | Status::Warn | Status::Skipped | Status::Ignored)
+        matches!(
+            self,
+            Status::Ok | Status::Warn | Status::Skipped | Status::Ignored
+        )
     }
 
     /// A step the user should be told about: it finished badly, or it did not finish.
@@ -482,7 +485,10 @@ mod tests {
 
     #[test]
     fn the_whole_table_is_what_an_install_runs_in_order() {
-        assert_eq!(ids(Purpose::Install), STEPS.iter().map(|step| step.id).collect::<Vec<_>>());
+        assert_eq!(
+            ids(Purpose::Install),
+            STEPS.iter().map(|step| step.id).collect::<Vec<_>>()
+        );
         assert_eq!(ids(Purpose::Install).len(), STEPS.len());
     }
 

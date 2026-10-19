@@ -27,7 +27,6 @@ impl Bundle {
     fn path(&self) -> &Path {
         &self.root
     }
-
 }
 
 impl Drop for Bundle {

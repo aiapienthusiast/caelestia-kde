@@ -201,17 +201,12 @@ pub fn removable(distro: crate::distro::Distro) -> Vec<&'static str> {
         crate::distro::Distro::Debian => (debian::REMOVABLE, debian::LEGACY),
         crate::distro::Distro::Unknown => return Vec::new(),
     };
-    let mut names = names(removable);
-    names.extend(names_of(legacy));
-    names.sort_unstable();
-    names.dedup();
-    names
+    let mut offered = names(removable);
+    offered.extend(names(legacy));
+    offered.sort_unstable();
+    offered.dedup();
+    offered
 }
-
-fn names_of(list: &'static str) -> Vec<&'static str> {
-    list.split_whitespace().collect()
-}
-
 
 pub fn grouped(
     group: Group,
@@ -515,12 +510,18 @@ mod tests {
     ) -> (&'static str, &'static str, &'static str, &'static str) {
         match distro {
             crate::distro::Distro::Arch => (arch::CORE, arch::SHELL, arch::THEMES, arch::UTILITIES),
-            crate::distro::Distro::Fedora => {
-                (fedora::CORE, fedora::SHELL, fedora::THEMES, fedora::UTILITIES)
-            }
-            crate::distro::Distro::Debian => {
-                (debian::CORE, debian::SHELL, debian::THEMES, debian::UTILITIES)
-            }
+            crate::distro::Distro::Fedora => (
+                fedora::CORE,
+                fedora::SHELL,
+                fedora::THEMES,
+                fedora::UTILITIES,
+            ),
+            crate::distro::Distro::Debian => (
+                debian::CORE,
+                debian::SHELL,
+                debian::THEMES,
+                debian::UTILITIES,
+            ),
             crate::distro::Distro::Unknown => ("", "", "", ""),
         }
     }
@@ -529,7 +530,9 @@ mod tests {
     /// Fedora's COPR set and Debian's fallbacks. They install real names too.
     fn elsewhere(distro: crate::distro::Distro) -> Vec<&'static str> {
         let lists: &[&'static str] = match distro {
-            crate::distro::Distro::Fedora => &[fedora::COPR_CORE, fedora::COPR_SHELL, fedora::COPR_ALL],
+            crate::distro::Distro::Fedora => {
+                &[fedora::COPR_CORE, fedora::COPR_SHELL, fedora::COPR_ALL]
+            }
             crate::distro::Distro::Debian => &[
                 debian::FALLBACK_CORE,
                 debian::FALLBACK_SHELL,

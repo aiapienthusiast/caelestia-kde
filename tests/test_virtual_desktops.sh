@@ -26,8 +26,10 @@ test_the_update_path_reaches_the_rule_through_a_step() {
         "an update re-applies the tweaks step, which applies the rule"
     assert_file_contains "$REPO_ROOT/installer/src/steps/build_shell.rs" 'run_step(context, "06-services")' \
         "building the shell re-applies the services step"
-    assert_file_contains "$REPO_ROOT/src/bin/caelestia-update" "run_step 3600 08-build-shell" \
+    assert_file_contains "$REPO_ROOT/src/bin/caelestia-update" 'run_step 3600 "$BUILD_STEP"' \
         "and a packaged update reaches both by building the shell"
+    assert_file_contains "$REPO_ROOT/src/bin/caelestia-update" "steps --for update" \
+        "with the steps asked of the installer, not restated here"
 }
 
 test_the_shell_helper_is_gone_with_its_callers() {

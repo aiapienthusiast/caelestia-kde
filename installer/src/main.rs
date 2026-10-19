@@ -154,7 +154,8 @@ fn print_steps(purpose: steps::Purpose) -> Outcome {
     Outcome::Ok
 }
 
-fn run_step(id: &str, bundle: Option<PathBuf>, debug: bool) -> Outcome {    DEBUG.store(debug, Ordering::Relaxed);
+fn run_step(id: &str, bundle: Option<PathBuf>, debug: bool) -> Outcome {
+    DEBUG.store(debug, Ordering::Relaxed);
 
     let requested = bundle.or_else(|| std::env::var_os("BUNDLE_DIR").map(PathBuf::from));
     let bundle = Bundle::discover(requested);

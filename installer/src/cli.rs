@@ -166,9 +166,10 @@ fn parse_steps(args: &[OsString]) -> Result<Invocation, String> {
     while let Some(arg) = args.next() {
         match arg.to_str() {
             Some("-h") | Some("--help") => return Ok(Invocation::Help),
-            Some("--ids") => {}
             Some("--for") => {
-                let which = args.next().ok_or("--for needs a purpose: install or packaged")?;
+                let which = args
+                    .next()
+                    .ok_or("--for needs a purpose: install or packaged")?;
                 let which = which.to_str().ok_or("--for reads text, not bytes")?;
                 purpose = match crate::steps::Purpose::parse(which) {
                     Some(purpose) => purpose,
