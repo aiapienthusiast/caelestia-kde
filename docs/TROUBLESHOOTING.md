@@ -733,6 +733,24 @@ step, and the next lock picks the new package up:
 caelestia-install step 08-build-shell
 ```
 
+**The lock screen wears colours the shell does not have:**
+
+The screen reads the palette from `$XDG_STATE_HOME/caelestia/scheme.json`, which the
+colour step writes, and wears the shell's own default palette until that file exists.
+A lock screen that is pink while the shell is not has no scheme file:
+
+```bash
+ls -l ~/.local/state/caelestia/scheme.json
+caelestia scheme get -n
+caelestia scheme set -n dynamic    # writes the palette for the current wallpaper
+```
+
+The install writes it from step 09, so an absent file means that step could not find
+the `caelestia` command, which it now asks for at `~/.local/bin/caelestia` before
+looking on `PATH`: a session that started before the install does not have that
+directory on `PATH`. The next lock picks the file up, since the greeter reads it once
+at startup.
+
 ---
 
 ## 8. Post-Install Issues
