@@ -10,7 +10,7 @@ pub fn run(context: &Context) -> Result<(), Failure> {
     output::info("Installing KDE theme applications");
     println!();
 
-    if context.flag("INSTALL_KVANTUM", true) {
+    if context.overridden("INSTALL_KVANTUM", true) {
         if distro::detect() == Distro::Debian {
             if !pkg::install_first(&["qt6-style-kvantum", "kvantum"]) {
                 return Err(Failure::Reported);

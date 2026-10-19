@@ -285,7 +285,7 @@ fn deploy(source: &Path, target: &Path, deployed: &Path, backup: &Path) {
 }
 
 fn deploy_thunar(context: &Context, dots: &Path, home: &Path) {
-    if !context.flag("INSTALL_THUNAR", false) {
+    if !context.overridden("INSTALL_THUNAR", false) {
         output::skip("Thunar integration files disabled by user choice");
         return;
     }

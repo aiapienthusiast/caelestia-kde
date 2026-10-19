@@ -128,9 +128,15 @@ impl Session {
     }
 
     /// Record a status by hand: the wizard's retry, skip and ignore answers land here.
+    /// Set a step's status. A step that goes back to `Pending` is going to run again, so the time
+    /// it took before is no longer its time.
     pub fn set_status(&mut self, index: usize, status: Status) {
+        let pending = status == Status::Pending;
         if let Some(slot) = self.statuses.get_mut(index) {
             *slot = status;
+        }
+        if let (true, Some(slot)) = (pending, self.durations.get_mut(index)) {
+            *slot = None;
         }
     }
 
@@ -228,9 +234,7 @@ impl Session {
                     return events;
                 }
                 Err(problem) => {
-                    self.statuses[index] = Status::Failed;
-                    self.durations[index] = Some(Duration::ZERO);
-                    self.started = None;
+                    self.settle(index, Status::Failed);
                     events.push(Event::Broken { index, problem });
                     return events;
                 }
@@ -284,8 +288,7 @@ impl Session {
     /// Run the step the cursor is on again, whatever the last run said about it.
     pub fn retry(&mut self) {
         if self.cursor < self.steps.len() {
-            self.statuses[self.cursor] = Status::Pending;
-            self.durations[self.cursor] = None;
+            self.set_status(self.cursor, Status::Pending);
         }
     }
 

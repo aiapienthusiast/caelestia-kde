@@ -27,7 +27,7 @@ pub fn run(context: &Context) -> Result<(), Failure> {
     output::info("Applying KWin window rules");
     println!();
 
-    if !context.flag("APPLY_WINDOW_RULES", true) {
+    if !context.overridden("APPLY_WINDOW_RULES", true) {
         output::skip("Skipping window rules");
         return Ok(());
     }

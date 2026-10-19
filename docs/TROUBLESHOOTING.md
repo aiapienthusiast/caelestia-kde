@@ -405,7 +405,7 @@ ls -la ~/.local/share/plasma/shells/caelestia.desktop/contents/lockscreen/LockSc
 
 | Symptom | Cause |
 |---|---|
-| Plasma style unchanged | `APPLY_DARKLY` was set to `false` in the configuration menu |
+| Plasma style unchanged | `APPLY_DARKLY=false` was set when the step was run by hand |
 | Window decorations missing | The installer tries `org.kde.darkly` library, falls back silently to `org.kde.breeze` |
 | `lookandfeeltool --apply "Darkly"` failed | The `darkly` package may not be installed (AUR/COPR/prebuilt packages) |
 

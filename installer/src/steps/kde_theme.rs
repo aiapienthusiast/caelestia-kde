@@ -24,7 +24,7 @@ pub fn run(context: &Context) -> Result<(), Failure> {
 }
 
 fn apply_darkly(context: &Context) {
-    if !context.flag("APPLY_DARKLY", true) {
+    if !context.overridden("APPLY_DARKLY", true) {
         output::skip("Skipping Darkly theme");
         return;
     }
@@ -101,7 +101,7 @@ fn apply_fonts(context: &Context) {
         return;
     }
 
-    if !context.flag("APPLY_DARKLY", true) {
+    if !context.overridden("APPLY_DARKLY", true) {
         output::skip(
             "Skipping Darkly LNF as Darkly theme was opted out. (Fonts must be applied manually)",
         );

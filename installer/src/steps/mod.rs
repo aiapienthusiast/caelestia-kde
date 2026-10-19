@@ -204,9 +204,16 @@ impl Context {
         self.answer(name)
     }
 
+    /// A switch, as the run answered it.
     pub fn flag(&self, name: &str, fallback: bool) -> bool {
-        self.bool_of(name)
-            .or_else(|| std::env::var(name).ok().map(|value| value == "true"))
+        self.bool_of(name).unwrap_or(fallback)
+    }
+
+    /// A step-local switch that is not one of the install's answers, such as the ones a step offers
+    /// so it can be re-run by hand. It can only come from the environment.
+    pub fn overridden(&self, name: &str, fallback: bool) -> bool {
+        std::env::var(name)
+            .map(|value| value == "true")
             .unwrap_or(fallback)
     }
 
