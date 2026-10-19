@@ -287,6 +287,8 @@ pub struct App {
     pub auth: Option<AuthMethod>,
     pub password: String,
     pub(crate) checking: Option<std::sync::mpsc::Receiver<bool>>,
+    /// A rehearsal walks the table without running anything. Only a test sets this.
+    #[cfg(test)]
     pub pretend: bool,
     pub attempts: usize,
     pub fingerprint_spent: bool,
@@ -380,6 +382,7 @@ impl App {
             auth: None,
             password: String::new(),
             checking: None,
+            #[cfg(test)]
             pretend: false,
             attempts: 0,
             fingerprint_spent: false,
@@ -541,8 +544,21 @@ impl App {
         self.detection.installed
     }
 
+    /// A rehearsal run walks the table without running anything. Only a test asks for one, so in
+    /// production this is always false and the branches below it fold away.
+    fn rehearsing(&self) -> bool {
+        #[cfg(test)]
+        {
+            self.pretend
+        }
+        #[cfg(not(test))]
+        {
+            false
+        }
+    }
+
     pub fn refresh_detection(&mut self) {
-        if self.pretend {
+        if self.rehearsing() {
             return;
         }
         self.detection = Detection::read();
@@ -848,13 +864,14 @@ impl App {
     }
 
     pub fn begin_install(&mut self) {
-        if !self.pretend && self.inhibitor.is_none() {
+        if !self.rehearsing() && self.inhibitor.is_none() {
             self.inhibitor = Some(Inhibitor::acquire());
         }
         self.stage = Stage::Run;
         self.run.reset(self.step_environment(), &self.answers);
-        self.run.set_pretend(self.pretend);
-        let recorded = if self.pretend {
+        #[cfg(test)]
+        self.run.rehearse(self.pretend);
+        let recorded = if self.rehearsing() {
             Ok(())
         } else {
             crate::update::save_answers(&self.answers)
@@ -952,7 +969,7 @@ impl App {
                         self.paused = true;
                         return;
                     }
-                    if self.pretend {
+                    if self.rehearsing() {
                         self.log
                             .push(LogLine::ok(format!("{} finished", STEPS[index].name)));
                     }

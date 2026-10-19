@@ -147,14 +147,14 @@ impl App {
                 self.problem = Some("Type the password first.".to_string());
                 return;
             }
-            if !self.pretend && privileges::locked_out() {
+            if !self.rehearsing() && privileges::locked_out() {
                 self.problem =
                     Some("Locked out for a few minutes after too many tries.".to_string());
                 return;
             }
         }
         let (sender, receiver) = std::sync::mpsc::channel();
-        if self.pretend {
+        if self.rehearsing() {
             let _ = sender.send(true);
         } else {
             let secret = self.password.clone();
@@ -206,7 +206,7 @@ impl App {
         if self.auth == Some(AuthMethod::Fingerprint) {
             return "No finger was recognized. Type your password instead.".to_string();
         }
-        if !self.pretend && privileges::on_the_last_entry() {
+        if !self.rehearsing() && privileges::on_the_last_entry() {
             "Not accepted. A wrong entry now locks the account.".to_string()
         } else {
             "That password was not accepted.".to_string()
@@ -214,7 +214,7 @@ impl App {
     }
 
     fn accept_password(&mut self) {
-        if !self.pretend {
+        if !self.rehearsing() {
             let credential = if self.auth == Some(AuthMethod::Fingerprint) {
                 Credential::fingerprint()
             } else {

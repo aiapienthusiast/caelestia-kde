@@ -97,7 +97,9 @@ impl Session {
     }
 
     /// Walk the table without running anything, for the screens and the tests.
-    pub fn set_pretend(&mut self, on: bool) {
+    /// Walk the whole table without running anything, for a test that needs the shape of a run.
+    #[cfg(test)]
+    pub fn rehearse(&mut self, on: bool) {
         self.pretend = on;
     }
 
@@ -339,7 +341,7 @@ mod tests {
             Vec::new(),
             answers,
         );
-        session.set_pretend(true);
+        session.rehearse(true);
         session
     }
 
