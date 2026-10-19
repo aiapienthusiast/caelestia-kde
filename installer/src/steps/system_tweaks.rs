@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::copy;
+use crate::install_kind;
 use crate::output;
 use crate::paths;
 use crate::privileges;
@@ -320,40 +321,56 @@ fn profile_files(directory: &Path) -> Vec<PathBuf> {
     files
 }
 
+/// The command this install has just put down, asked for by path before name: the session the
+/// installer runs in started before the command existed, so its PATH need not have the checkout's
+/// bin directory on it. The command resolves its own helpers from its directory, so a path is
+/// enough to make it work.
+fn caelestia_command() -> Option<PathBuf> {
+    let installed = install_kind::bin_dir().join("caelestia");
+    if process::is_executable(&installed) {
+        Some(installed)
+    } else {
+        process::locate("caelestia")
+    }
+}
+
 fn default_scheme() {
     output::info("Setting default Caelestia color scheme...");
 
-    if process::available("caelestia") {
-        let current = process::capture("caelestia", &["scheme", "get", "-n"]).unwrap_or_default();
-        if !current.is_empty() && current != "dynamic" {
-            output::info(&format!(
-                "Keeping user-selected Caelestia color scheme ({current})."
-            ));
-            output::ok("Default Caelestia color scheme kept.");
-            return;
-        }
-
-        let wallpaper = paths::state_dir()
-            .join("caelestia")
-            .join("wallpaper")
-            .join("path.txt");
-        if let Some(image) = fs::read_to_string(&wallpaper)
-            .ok()
-            .map(|image| image.trim().to_string())
-            && Path::new(&image).is_file()
-        {
-            let _ = process::status_with_timeout(
-                "caelestia",
-                &["wallpaper", "-f", &image],
-                SCHEME_TIMEOUT,
-            );
-        }
-        let _ = process::status_with_timeout(
-            "caelestia",
-            &["scheme", "set", "-n", "dynamic"],
-            SCHEME_TIMEOUT,
+    let Some(command) = caelestia_command() else {
+        output::warn(
+            "The caelestia command is missing, so no color scheme was written; the shell and the lock screen keep their own colors until one is set.",
         );
+        return;
+    };
+    let command = command.to_string_lossy().to_string();
+
+    let current = process::capture(&command, &["scheme", "get", "-n"]).unwrap_or_default();
+    if !current.is_empty() && current != "dynamic" {
+        output::info(&format!(
+            "Keeping user-selected Caelestia color scheme ({current})."
+        ));
+        output::ok("Default Caelestia color scheme kept.");
+        return;
     }
+
+    let wallpaper = paths::state_dir()
+        .join("caelestia")
+        .join("wallpaper")
+        .join("path.txt");
+    if let Some(image) = fs::read_to_string(&wallpaper)
+        .ok()
+        .map(|image| image.trim().to_string())
+        && Path::new(&image).is_file()
+    {
+        let _ =
+            process::status_with_timeout(&command, &["wallpaper", "-f", &image], SCHEME_TIMEOUT);
+    }
+    let _ = process::status_with_timeout(
+        &command,
+        &["scheme", "set", "-n", "dynamic"],
+        SCHEME_TIMEOUT,
+    );
     output::ok("Default Caelestia color scheme set.");
 }
 
