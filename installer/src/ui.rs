@@ -379,7 +379,8 @@ pub fn progress(
     Line::from(spans)
 }
 
-/// A one-column scrollbar, drawn only where there is something to scroll.
+/// A one-column scrollbar, drawn only where there is something to scroll. `marks` are rows of the
+/// whole log that went wrong, so the track shows where the trouble is before it is scrolled to.
 pub fn scrollbar(
     frame: &mut Frame,
     area: Rect,
@@ -387,15 +388,27 @@ pub fn scrollbar(
     total: usize,
     theme: &Theme,
     glyphs: Glyphs,
+    marks: &[(usize, Style)],
 ) {
     if area.height == 0 || area.width == 0 || total <= area.height as usize {
         return;
     }
     let viewport = area.height as usize;
     let (from, to) = thumb_range(offset, total, viewport);
+    // The thumb wins the row it is standing on: a mark inside it would be read as part of the
+    // window rather than as a place in the log.
+    let mut marked: Vec<Option<Style>> = vec![None; viewport];
+    for (row, style) in marks {
+        let at = (row * viewport / total).min(viewport - 1);
+        if at < from || at >= to {
+            marked[at] = Some(*style);
+        }
+    }
     let lines: Vec<Line> = (0..viewport)
         .map(|row| {
-            if row >= from && row < to {
+            if let Some(style) = marked[row] {
+                Line::from(Span::styled(glyphs.mark().to_string(), style))
+            } else if row >= from && row < to {
                 Line::from(Span::styled(glyphs.thumb().to_string(), theme.accent()))
             } else {
                 Line::from(Span::styled(glyphs.track().to_string(), theme.rule()))

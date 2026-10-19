@@ -180,6 +180,14 @@ impl Glyphs {
         }
     }
 
+    /// A line of the log that went wrong, as a tick on the scrollbar's track.
+    pub fn mark(self) -> char {
+        match self.set {
+            Set::Unicode => '•',
+            Set::Ascii => 'o',
+        }
+    }
+
     pub fn border(self) -> border::Set<'static> {
         match self.set {
             Set::Unicode => border::PLAIN,

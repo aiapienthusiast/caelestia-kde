@@ -368,6 +368,10 @@ pub struct App {
     pub log_follow: bool,
     pub log_scroll: usize,
     pub log_loud_only: bool,
+    /// Which of the lines that went wrong `n` and `p` are standing on, counted as a row of the log
+    /// as it is shown. Cleared by any other way of moving through the log, so the next jump starts
+    /// from what the pane is showing.
+    pub log_problem: Option<usize>,
     /// Which of the confirm overlay's buttons is highlighted.
     pub confirm_focus: usize,
     pub area: Rect,
@@ -483,6 +487,7 @@ impl App {
             log_follow: true,
             log_scroll: 0,
             log_loud_only: false,
+            log_problem: None,
             confirm_focus: 0,
             area: Rect::new(0, 0, 0, 0),
             spinner: 0,
@@ -674,6 +679,55 @@ impl App {
         ui::log_rows(self.run_layout().log).max(1) as usize
     }
 
+    /// The rows of the log as it is shown that went wrong, in order. These are what `n` and `p`
+    /// step through, what the heading counts, and what the scrollbar marks.
+    pub fn problem_rows(&self) -> Vec<usize> {
+        self.visible_log()
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.is_loud())
+            .map(|(row, _)| row)
+            .collect()
+    }
+
+    /// Stand on the next or the previous line that went wrong, and put it a third of the way down
+    /// the pane: a warning read at the bottom edge is a warning read twice.
+    fn jump_to_problem(&mut self, forward: bool, rows: usize) {
+        let problems = self.problem_rows();
+        let (Some(&first), Some(&last)) = (problems.first(), problems.last()) else {
+            self.notice = Some("nothing in the log went wrong".to_string());
+            return;
+        };
+        let from = self.log_problem.unwrap_or_else(|| {
+            if self.log_follow {
+                usize::MAX
+            } else {
+                self.log_window_for(rows).0
+            }
+        });
+        let target = if forward {
+            problems
+                .iter()
+                .copied()
+                .find(|row| *row > from)
+                .unwrap_or(first)
+        } else {
+            problems
+                .iter()
+                .copied()
+                .rev()
+                .find(|row| *row < from)
+                .unwrap_or(last)
+        };
+        let at = problems.iter().position(|row| *row == target).unwrap_or(0);
+
+        self.log_follow = false;
+        self.log_scroll = target.saturating_sub(rows / 3);
+        self.scroll_log(0, rows);
+        self.log_problem = Some(target);
+        self.notice = Some(format!("problem {} of {}", at + 1, problems.len()));
+    }
+
     pub fn run_layout(&self) -> ui::RunLayout {
         ui::run_layout(ui::body(self.area))
     }
@@ -794,12 +848,19 @@ impl App {
         let glyphs = self.glyphs;
         match self.overlay {
             Some(Overlay::Keys) => vec![ui::key(glyphs.escape(), "close")],
-            Some(Overlay::Log) => vec![
-                ui::key(glyphs.up_down(), "scroll"),
-                ui::key("w", "loud only"),
-                ui::key("f", "follow"),
-                ui::key(glyphs.escape(), "close"),
-            ],
+            Some(Overlay::Log) => {
+                let mut keys = vec![
+                    ui::key(glyphs.up_down(), "scroll"),
+                    ui::key("w", "loud only"),
+                    ui::key("f", "follow"),
+                ];
+                if !self.problem_rows().is_empty() {
+                    keys.push(ui::key("n", "next problem"));
+                    keys.push(ui::key("p", "previous"));
+                }
+                keys.push(ui::key(glyphs.escape(), "close"));
+                keys
+            }
             Some(Overlay::Failure) => vec![
                 ui::key("r", "retry"),
                 ui::key("s", "skip"),
@@ -862,13 +923,22 @@ impl App {
                     ui::key("l", "log"),
                     ui::key("q", "quit"),
                 ],
-                Stage::Run => vec![
-                    ui::key(glyphs.up_down(), "scroll"),
-                    ui::key("f", "follow"),
-                    ui::key("w", "loud only"),
-                    ui::key("l", "log"),
-                    ui::key("q", "quit"),
-                ],
+                Stage::Run => {
+                    let mut keys = vec![
+                        ui::key(glyphs.up_down(), "scroll"),
+                        ui::key("f", "follow"),
+                        ui::key("w", "loud only"),
+                    ];
+                    // A key that would only walk a log with nothing wrong in it is not a key to
+                    // advertise.
+                    if !self.problem_rows().is_empty() {
+                        keys.push(ui::key("n", "next problem"));
+                        keys.push(ui::key("p", "previous"));
+                    }
+                    keys.push(ui::key("l", "log"));
+                    keys.push(ui::key("q", "quit"));
+                    keys
+                }
                 Stage::Done => {
                     let mut keys = Vec::new();
                     // A key that would only answer "nothing failed" is not a key to advertise.
@@ -1369,10 +1439,15 @@ impl App {
             KeyCode::Home | KeyCode::Char('g') => {
                 self.log_follow = false;
                 self.log_scroll = 0;
+                self.log_problem = None;
             }
-            KeyCode::End => self.log_follow = true,
+            KeyCode::End => {
+                self.log_follow = true;
+                self.log_problem = None;
+            }
             KeyCode::Char('f') => {
                 self.log_follow = !self.log_follow;
+                self.log_problem = None;
                 self.notice = Some(if self.log_follow {
                     "following the log".to_string()
                 } else {
@@ -1380,6 +1455,8 @@ impl App {
                 });
             }
             KeyCode::Char('w') => self.toggle_loud_only(),
+            KeyCode::Char('n') => self.jump_to_problem(true, rows),
+            KeyCode::Char('p') => self.jump_to_problem(false, rows),
             KeyCode::Char('l') => self.overlay = Some(Overlay::Log),
             KeyCode::Char('?') => self.overlay = Some(Overlay::Keys),
             KeyCode::Char('q') => self.ask(Confirm::Quit),
@@ -1390,6 +1467,7 @@ impl App {
 
     fn scroll_log(&mut self, step: isize, rows: usize) {
         self.log_follow = false;
+        self.log_problem = None;
         let furthest = self.visible_log().len().saturating_sub(rows) as isize;
         self.log_scroll = (self.log_scroll as isize + step).clamp(0, furthest) as usize;
     }
@@ -1397,6 +1475,7 @@ impl App {
     fn toggle_loud_only(&mut self) {
         self.log_loud_only = !self.log_loud_only;
         self.log_scroll = 0;
+        self.log_problem = None;
         self.notice = Some(if self.log_loud_only {
             "showing warnings and errors only".to_string()
         } else {
@@ -1465,10 +1544,19 @@ impl App {
             KeyCode::Home | KeyCode::Char('g') => {
                 self.log_follow = false;
                 self.log_scroll = 0;
+                self.log_problem = None;
             }
-            KeyCode::End | KeyCode::Char('G') => self.log_follow = true,
-            KeyCode::Char('f') => self.log_follow = !self.log_follow,
+            KeyCode::End | KeyCode::Char('G') => {
+                self.log_follow = true;
+                self.log_problem = None;
+            }
+            KeyCode::Char('f') => {
+                self.log_follow = !self.log_follow;
+                self.log_problem = None;
+            }
             KeyCode::Char('w') => self.toggle_loud_only(),
+            KeyCode::Char('n') => self.jump_to_problem(true, rows),
+            KeyCode::Char('p') => self.jump_to_problem(false, rows),
             _ => {}
         }
         Flow::Continue
@@ -1642,6 +1730,7 @@ impl App {
         self.log.clear();
         self.log_scroll = 0;
         self.log_follow = true;
+        self.log_problem = None;
         self.failure = None;
         self.paused = false;
         self.start_next();
@@ -1669,6 +1758,7 @@ impl App {
         self.failure = None;
         self.paused = false;
         self.log_follow = true;
+        self.log_problem = None;
         self.start_next();
     }
 
@@ -2957,6 +3047,53 @@ mod tests {
         assert_eq!(app.log_scroll, rows, "a page is the pane, not a guess");
         press(&mut app, KeyCode::End);
         assert!(app.log_follow, "end goes back to following");
+    }
+
+    #[test]
+    fn n_and_p_walk_the_lines_that_went_wrong() {
+        let mut app = run_with(&[Status::Running]);
+        app.log = (0..200)
+            .map(|line| match line {
+                20 => LogLine::parse("  [WARN]  a slow mirror"),
+                120 => LogLine::parse("  [ERR]   a package failed"),
+                180 => LogLine::parse("  [WARN]  another slow mirror"),
+                _ => LogLine::parse(&format!("  [INFO]  line {line}")),
+            })
+            .collect();
+        app.log_follow = true;
+
+        // Following the tail, the first press lands on the first line that went wrong and puts it
+        // in the window rather than at its edge.
+        char_key(&mut app, 'n');
+        assert!(!app.log_follow, "a jump is a reason to stop following");
+        assert_eq!(app.log_problem, Some(20));
+        assert_eq!(app.notice.as_deref(), Some("problem 1 of 3"));
+        let (start, rows) = app.log_window_for(app.log_rows());
+        assert!((start..start + rows).contains(&20), "the warning is shown");
+
+        char_key(&mut app, 'n');
+        assert_eq!(app.log_problem, Some(120));
+        assert_eq!(app.notice.as_deref(), Some("problem 2 of 3"));
+        char_key(&mut app, 'p');
+        assert_eq!(app.log_problem, Some(20));
+
+        // Either end wraps, so a key pressed once too often still goes somewhere useful.
+        char_key(&mut app, 'p');
+        assert_eq!(app.log_problem, Some(180));
+        assert_eq!(app.notice.as_deref(), Some("problem 3 of 3"));
+
+        // Any other way of moving lets the next jump start from what the pane shows.
+        press(&mut app, KeyCode::PageUp);
+        assert_eq!(app.log_problem, None);
+    }
+
+    #[test]
+    fn a_log_with_nothing_wrong_in_it_says_so_rather_than_jumping() {
+        let mut app = run_with(&[Status::Running]);
+        app.log = vec![LogLine::parse("  [INFO]  chatter")];
+        char_key(&mut app, 'n');
+        assert!(app.log_problem.is_none());
+        assert_eq!(app.notice.as_deref(), Some("nothing in the log went wrong"));
     }
 
     #[test]

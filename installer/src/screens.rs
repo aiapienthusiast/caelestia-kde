@@ -1185,6 +1185,14 @@ fn log_pane(frame: &mut Frame, app: &App, area: Rect, rows: usize) {
             theme.warn_text(),
         ));
     }
+    let problems = app.problem_rows().len();
+    if problems > 0 {
+        badge.push(Span::styled("  ·  ".to_string(), theme.muted()));
+        badge.push(Span::styled(
+            format!("{} to jump to", ui::plural(problems, "problem", "problems")),
+            theme.warn_text(),
+        ));
+    }
     ui::prose(frame, heading, vec![Line::from(badge)], theme.body());
 
     let follow_width = 7.min(area.width);
@@ -1228,7 +1236,14 @@ fn log_pane(frame: &mut Frame, app: &App, area: Rect, rows: usize) {
     }
     ui::prose(frame, text_area, lines, theme.body());
     if let Some(bar_area) = bar_area {
-        ui::scrollbar(frame, bar_area, start, total, theme, glyphs);
+        let marks: Vec<(usize, ratatui::style::Style)> = app
+            .visible_log()
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.is_loud())
+            .map(|(row, line)| (row, line.style(theme)))
+            .collect();
+        ui::scrollbar(frame, bar_area, start, total, theme, glyphs, &marks);
     }
 }
 
@@ -2833,6 +2848,46 @@ mod tests {
                 .all(|row| !row.contains('!') && !row.contains('✗')),
             "and chatter stays plain: {chatter:?}"
         );
+    }
+
+    #[test]
+    fn the_log_counts_what_went_wrong_and_offers_to_walk_it() {
+        let mut app = running(
+            &[Status::Running],
+            &[
+                "  [INFO]  chatter",
+                "  [WARN]  a slow mirror",
+                "  [ERR]   a package failed",
+            ],
+        );
+        let text = render(&mut app, 166, 48);
+        assert!(text.contains("2 problems to jump to"), "{text}");
+        assert!(text.contains("n next problem"), "{text}");
+        assert!(text.contains("p previous"), "{text}");
+    }
+
+    #[test]
+    fn a_long_log_marks_the_lines_that_went_wrong_on_its_scrollbar() {
+        let mut app = running(&[Status::Running], &["  [INFO]  chatter"]);
+        app.log = (0..300)
+            .map(|line| {
+                if line == 150 {
+                    LogLine::parse("  [ERR]   a package failed")
+                } else {
+                    LogLine::parse(&format!("  [INFO]  line {line}"))
+                }
+            })
+            .collect();
+        let text = render(&mut app, 100, 40);
+        // The scrollbar is the last column of the log pane.
+        let layout = ui::run_layout(ui::body(app.area));
+        let column = (layout.log.x + layout.log.width - 1) as usize;
+        let bar: String = text
+            .lines()
+            .filter_map(|row| row.chars().nth(column))
+            .collect();
+        assert!(bar.contains('•'), "the failure is marked: {bar:?}");
+        assert!(bar.contains('█'), "and the window is still drawn: {bar:?}");
     }
 
     #[test]
