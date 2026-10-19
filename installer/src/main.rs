@@ -24,6 +24,7 @@ mod plan;
 mod privileges;
 mod process;
 mod report;
+mod run;
 mod runner;
 mod screens;
 mod signals;

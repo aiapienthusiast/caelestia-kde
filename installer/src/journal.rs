@@ -66,7 +66,7 @@ impl Journal {
         Self::at(path_for(plan))
     }
 
-    fn at(path: PathBuf) -> Self {
+    pub fn at(path: PathBuf) -> Self {
         let steps = read(&path);
         Self { path, steps }
     }

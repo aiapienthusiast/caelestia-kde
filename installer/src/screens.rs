@@ -1148,7 +1148,7 @@ fn log_line(line: &LogLine, theme: &Theme, glyphs: Glyphs) -> Line<'static> {
 }
 
 fn steps_with(app: &App, status: Status) -> Vec<usize> {
-    app.statuses
+    app.statuses()
         .iter()
         .enumerate()
         .filter(|(_, each)| **each == status)
@@ -2247,7 +2247,7 @@ mod tests {
         let mut app = app();
         app.stage = Stage::Run;
         for (index, status) in statuses.iter().enumerate() {
-            app.statuses[index] = *status;
+            app.set_status(index, *status);
         }
         app.log = log.iter().map(|line| LogLine::parse(line)).collect();
         app
@@ -2664,7 +2664,7 @@ mod tests {
     fn the_failure_card_says_what_to_do_and_what_each_answer_costs() {
         let mut app = app();
         app.stage = Stage::Run;
-        app.statuses[0] = Status::Failed;
+        app.set_status(0, Status::Failed);
         app.failure = Some(crate::app::FailureCard::new(
             &STEPS[0],
             &[LogLine::parse("  [ERR]   the mirror is unreachable")],
@@ -2701,7 +2701,7 @@ mod tests {
     fn the_summary_says_what_is_installed_and_what_to_do_with_it() {
         let mut app = app();
         app.stage = Stage::Done;
-        app.statuses = vec![Status::Ok; STEPS.len()];
+        app.fill_statuses(Status::Ok);
         app.landed = Some(landed());
         let text = render(&mut app, 110, 32);
 
@@ -2723,7 +2723,7 @@ mod tests {
     fn the_summary_is_not_a_score_of_the_run() {
         let mut app = app();
         app.stage = Stage::Done;
-        app.statuses = vec![Status::Ok; STEPS.len()];
+        app.fill_statuses(Status::Ok);
         app.landed = Some(landed());
         let text = render(&mut app, 110, 32);
 
@@ -2735,12 +2735,12 @@ mod tests {
     fn the_summary_does_not_offer_a_retry_it_cannot_do() {
         let mut app = app();
         app.stage = Stage::Done;
-        app.statuses = vec![Status::Ok; STEPS.len()];
+        app.fill_statuses(Status::Ok);
         app.landed = Some(landed());
         let text = render(&mut app, 110, 32);
         assert!(!text.contains("retry"), "nothing to retry: {text}");
 
-        app.statuses[3] = Status::Ignored;
+        app.set_status(3, Status::Ignored);
         let text = render(&mut app, 110, 32);
         assert!(
             text.contains("r retry failed"),
@@ -2752,7 +2752,7 @@ mod tests {
     fn the_summary_offers_to_log_out_for_the_reader() {
         let mut app = app();
         app.stage = Stage::Done;
-        app.statuses = vec![Status::Ok; STEPS.len()];
+        app.fill_statuses(Status::Ok);
         app.landed = Some(landed());
         let text = render(&mut app, 110, 32);
 
@@ -2768,7 +2768,7 @@ mod tests {
     fn the_logout_button_is_filled_like_every_other_button() {
         let mut app = color_app();
         app.stage = Stage::Done;
-        app.statuses = vec![Status::Ok; STEPS.len()];
+        app.fill_statuses(Status::Ok);
         app.landed = Some(landed());
         let accent = app.theme.color(Role::Accent);
         let buffer = cells(&mut app, 110, 32);
@@ -2790,8 +2790,8 @@ mod tests {
     fn the_summary_does_not_offer_a_logout_it_will_not_do() {
         let mut app = app();
         app.stage = Stage::Done;
-        app.statuses = vec![Status::Ok; STEPS.len()];
-        app.statuses[4] = Status::Failed;
+        app.fill_statuses(Status::Ok);
+        app.set_status(4, Status::Failed);
         app.landed = Some(landed());
         let text = render(&mut app, 110, 32);
 
@@ -2803,7 +2803,7 @@ mod tests {
     fn the_logout_card_says_what_ending_the_session_does() {
         let mut app = app();
         app.stage = Stage::Done;
-        app.statuses = vec![Status::Ok; STEPS.len()];
+        app.fill_statuses(Status::Ok);
         app.ask(crate::app::Confirm::LogOut);
         let text = render(&mut app, 100, 30);
 
@@ -2820,9 +2820,9 @@ mod tests {
     fn the_summary_does_not_read_as_a_success_when_it_was_not() {
         let mut app = app();
         app.stage = Stage::Done;
-        app.statuses = vec![Status::Ok; STEPS.len()];
-        app.statuses[2] = Status::Failed;
-        app.statuses[5] = Status::Ignored;
+        app.fill_statuses(Status::Ok);
+        app.set_status(2, Status::Failed);
+        app.set_status(5, Status::Ignored);
         app.landed = Some(landed());
         let text = render(&mut app, 110, 32);
         assert!(text.contains("1 failed step"), "{text}");
@@ -2843,8 +2843,8 @@ mod tests {
     fn the_summary_counts_read_like_english() {
         let mut app = app();
         app.stage = Stage::Done;
-        app.statuses = vec![Status::Ok; STEPS.len()];
-        app.statuses[1] = Status::Warn;
+        app.fill_statuses(Status::Ok);
+        app.set_status(1, Status::Warn);
         let text = render(&mut app, 110, 32);
         assert!(text.contains("finished with 1 warning."), "{text}");
         assert!(!text.contains("1 steps"), "no plurals of one: {text}");
@@ -2855,8 +2855,8 @@ mod tests {
     fn the_summary_says_a_warning_once_and_names_the_step_that_raised_it() {
         let mut app = app();
         app.stage = Stage::Done;
-        app.statuses = vec![Status::Ok; STEPS.len()];
-        app.statuses[1] = Status::Warn;
+        app.fill_statuses(Status::Ok);
+        app.set_status(1, Status::Warn);
         let text = render(&mut app, 110, 32);
 
         assert_eq!(
@@ -2875,7 +2875,7 @@ mod tests {
     fn the_confirm_card_says_what_will_happen_to_a_running_step() {
         let mut app = app();
         app.stage = Stage::Run;
-        app.statuses[0] = Status::Running;
+        app.set_status(0, Status::Running);
         app.ask(crate::app::Confirm::Quit);
         let text = render(&mut app, 100, 30);
         assert!(text.contains("Stop the install here?"), "{text}");
@@ -2940,7 +2940,7 @@ mod tests {
         for stage in stages {
             let mut app = app();
             app.stage = stage;
-            app.statuses[0] = Status::Running;
+            app.set_status(0, Status::Running);
             let text = render(&mut app, ui::MIN_WIDTH, ui::MIN_HEIGHT);
             assert!(!text.trim().is_empty(), "{stage:?} drew nothing");
             assert!(
@@ -2955,7 +2955,7 @@ mod tests {
         for (width, height) in [(60u16, 20u16), (80, 24), (100, 30), (200, 50)] {
             let mut app = app();
             app.stage = Stage::Run;
-            app.statuses = vec![Status::Ok; STEPS.len()];
+            app.fill_statuses(Status::Ok);
             app.failure = Some(crate::app::FailureCard::new(&STEPS[0], &[]));
             app.overlay = Some(Overlay::Failure);
             let text = render(&mut app, width, height);

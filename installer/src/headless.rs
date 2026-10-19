@@ -1,13 +1,13 @@
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::exit::Outcome;
 use crate::journal::Journal;
 use crate::menu::Answers;
 use crate::output;
 use crate::privileges;
-use crate::runner::Running;
-use crate::steps::{self, STEPS, Status, Step};
+use crate::run::{Event, Session, SkipReason};
+use crate::steps::{self, STEPS, Status};
 
 const POLL: Duration = Duration::from_millis(50);
 
@@ -21,7 +21,7 @@ pub fn run(bundle: &Path, answers: &Answers, resume: bool) -> Outcome {
     }
 
     let plan = crate::journal::plan_id(answers);
-    let mut journal = Journal::for_plan(&plan);
+    let journal = Journal::for_plan(&plan);
     if !resume {
         journal.clear();
     }
@@ -38,8 +38,6 @@ pub fn run(bundle: &Path, answers: &Answers, resume: bool) -> Outcome {
             }
         }
     }
-    let log = crate::app::log_path();
-    let env = steps::environment(answers, bundle);
 
     let planned = STEPS
         .iter()
@@ -48,45 +46,37 @@ pub fn run(bundle: &Path, answers: &Answers, resume: bool) -> Outcome {
     let mut ran = 0;
     let mut resumed = 0;
 
-    for step in STEPS.iter() {
-        if steps::is_skipped(step, answers) {
-            output::skip(&format!("{} is switched off", step.name));
-            journal.record(step.id, Status::Skipped, 0);
-            continue;
-        }
-        if resume && journal.done(step.id) {
-            output::skip(&format!("{} was already done", step.name));
-            resumed += 1;
+    let mut session = Session::new(
+        bundle,
+        crate::app::log_path(),
+        steps::environment(answers, bundle),
+        answers,
+    )
+    .resuming(journal);
+
+    loop {
+        if !session.is_running() {
+            let events = session.advance();
+            if events.is_empty() {
+                break;
+            }
+            if let Some(outcome) = report(&session, events, &mut ran, &mut resumed) {
+                return outcome;
+            }
             continue;
         }
 
-        output::info(&format!("{}  {}", step.id, step.name));
-        let started = Instant::now();
-        match execute(step, bundle, &log, &env) {
-            Ok(Status::Ok) => {
-                journal.record(step.id, Status::Ok, started.elapsed().as_secs());
-                output::ok(step.name);
-            }
-            Ok(Status::Warn) => {
-                journal.record(step.id, Status::Warn, started.elapsed().as_secs());
-                output::warn(step.name);
-            }
-            Ok(Status::Skipped) => {
-                journal.record(step.id, Status::Skipped, started.elapsed().as_secs());
-                output::skip(step.name);
-            }
-            Ok(_) => {
-                journal.record(step.id, Status::Failed, started.elapsed().as_secs());
-                output::err(&format!("{} failed", step.name));
-                return Outcome::Failed;
-            }
-            Err(problem) => {
-                journal.record(step.id, Status::Failed, started.elapsed().as_secs());
-                output::err(&format!("{}: {problem}", step.name));
-                return Outcome::Failed;
-            }
+        if crate::signals::terminated() {
+            session.abandon();
+            output::err("interrupted");
+            return Outcome::Failed;
         }
-        ran += 1;
+
+        let events = session.pump();
+        match report(&session, events, &mut ran, &mut resumed) {
+            Some(outcome) => return outcome,
+            None => std::thread::sleep(POLL),
+        }
     }
 
     if resumed > 0 {
@@ -99,38 +89,50 @@ pub fn run(bundle: &Path, answers: &Answers, resume: bool) -> Outcome {
     Outcome::Ok
 }
 
-fn execute(
-    step: &Step,
-    bundle: &Path,
-    log: &Path,
-    env: &[(&'static str, String)],
-) -> Result<Status, String> {
-    let mut running = Running::spawn_native(bundle, step.id, log, env)?;
-    let mut lines: Vec<String> = Vec::new();
-    let mut printed = 0;
-
-    loop {
-        running.drain(&mut lines);
-        while printed < lines.len() {
-            println!("{}", lines[printed].trim_end());
-            printed += 1;
-        }
-
-        if crate::signals::terminated() {
-            running.stop();
-            return Err("interrupted".to_string());
-        }
-
-        match running.poll()? {
-            Some(status) => {
-                running.drain(&mut lines);
-                while printed < lines.len() {
-                    println!("{}", lines[printed].trim_end());
-                    printed += 1;
+/// Print what happened, and say whether the run has to stop.
+fn report(
+    session: &Session,
+    events: Vec<Event>,
+    ran: &mut usize,
+    resumed: &mut usize,
+) -> Option<Outcome> {
+    for event in events {
+        match event {
+            Event::Skipped { index, reason } => {
+                let step = &session.steps()[index];
+                match reason {
+                    SkipReason::SwitchedOff => {
+                        output::skip(&format!("{} is switched off", step.name));
+                    }
+                    SkipReason::AlreadyDone => {
+                        output::skip(&format!("{} was already done", step.name));
+                        *resumed += 1;
+                    }
                 }
-                return Ok(running.outcome(status));
             }
-            None => std::thread::sleep(POLL),
+            Event::Started { index } => {
+                let step = &session.steps()[index];
+                output::info(&format!("{}  {}", step.id, step.name));
+            }
+            Event::Output { line, .. } => println!("{}", line.trim_end()),
+            Event::Finished { index, status } => {
+                let step = &session.steps()[index];
+                if status.is_failure() {
+                    output::err(&format!("{} failed", step.name));
+                    return Some(Outcome::Failed);
+                }
+                if status == Status::Warn {
+                    output::warn(step.name);
+                } else {
+                    output::ok(step.name);
+                }
+                *ran += 1;
+            }
+            Event::Broken { index, problem } => {
+                output::err(&format!("{}: {problem}", session.steps()[index].name));
+                return Some(Outcome::Failed);
+            }
         }
     }
+    None
 }

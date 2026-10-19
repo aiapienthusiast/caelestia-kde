@@ -1,7 +1,7 @@
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
@@ -12,7 +12,6 @@ use crate::glyphs::Glyphs;
 use crate::logline::LogLine;
 use crate::menu::{self, Answers, Entry};
 use crate::privileges::{self, Credential, Inhibitor};
-use crate::runner::Running;
 use crate::signals;
 use crate::steps::{self, STEPS, Status};
 use crate::theme::Theme;
@@ -293,8 +292,7 @@ pub struct App {
     pub notice: Option<String>,
     pub failure: Option<FailureCard>,
     pub paused: bool,
-    pub statuses: Vec<Status>,
-    pub current: usize,
+    run: crate::run::Session,
     pub log: Vec<LogLine>,
     pub log_follow: bool,
     pub log_scroll: usize,
@@ -303,13 +301,10 @@ pub struct App {
     pub confirm_focus: usize,
     pub area: Rect,
     pub spinner: usize,
-    durations: Vec<Option<Duration>>,
-    running_since: Option<Instant>,
     leaving: Option<Outcome>,
     handoff: Option<Handoff>,
     credential: Option<Credential>,
     inhibitor: Option<Inhibitor>,
-    running: Option<Running>,
     pub repaint: bool,
     pub landed: Option<Landed>,
 }
@@ -357,6 +352,7 @@ impl App {
         }
         let baseline = answers.clone();
         let fingerprint = privileges::fingerprint_ready();
+        let run = crate::run::Session::new(&bundle, log_path.clone(), Vec::new(), &answers);
         Self {
             bundle,
             log_path,
@@ -389,8 +385,7 @@ impl App {
             notice: None,
             failure: None,
             paused: false,
-            statuses: vec![Status::Pending; STEPS.len()],
-            current: 0,
+            run,
             log: Vec::new(),
             log_follow: true,
             log_scroll: 0,
@@ -399,13 +394,10 @@ impl App {
             confirm_focus: 0,
             area: Rect::new(0, 0, 0, 0),
             spinner: 0,
-            durations: vec![None; STEPS.len()],
-            running_since: None,
             leaving: None,
             handoff: None,
             credential: None,
             inhibitor: None,
-            running: None,
             repaint: false,
             landed: None,
         }
@@ -466,28 +458,57 @@ impl App {
     }
 
     pub fn finished(&self) -> usize {
-        self.statuses
+        self.run
+            .statuses()
             .iter()
             .filter(|status| !matches!(status, Status::Pending | Status::Running))
             .count()
     }
 
+    pub fn statuses(&self) -> &[Status] {
+        self.run.statuses()
+    }
+
+    #[cfg(test)]
+    pub fn status(&self, index: usize) -> Status {
+        self.run.status(index)
+    }
+
+    #[cfg(test)]
+    pub fn set_status(&mut self, index: usize, status: Status) {
+        self.run.set_status(index, status);
+    }
+
+    /// Mark every step the same, for a test that only needs the shape.
+    #[cfg(test)]
+    pub fn fill_statuses(&mut self, status: Status) {
+        self.run.fill(status);
+    }
+
+    #[cfg(test)]
+    pub fn current(&self) -> usize {
+        self.run.cursor()
+    }
+
     pub fn total_elapsed(&self) -> Duration {
-        self.durations.iter().flatten().sum::<Duration>()
-            + self
-                .running_since
-                .map(|since| since.elapsed())
-                .unwrap_or_default()
+        self.run.total_elapsed()
     }
 
     pub fn running_step(&self) -> Option<usize> {
-        self.statuses
+        self.run
+            .statuses()
             .iter()
             .position(|status| *status == Status::Running)
     }
 
     pub fn tally(&self) -> Tally {
-        let count = |status: Status| self.statuses.iter().filter(|each| **each == status).count();
+        let count = |status: Status| {
+            self.run
+                .statuses()
+                .iter()
+                .filter(|each| **each == status)
+                .count()
+        };
         Tally {
             warn: count(Status::Warn),
             failed: count(Status::Failed),
@@ -601,7 +622,8 @@ impl App {
     }
 
     pub fn next_step(&self) -> Option<usize> {
-        self.statuses
+        self.run
+            .statuses()
             .iter()
             .position(|status| *status == Status::Pending)
     }
@@ -644,7 +666,7 @@ impl App {
     }
 
     fn busy(&self) -> bool {
-        self.running.is_some() || self.running_step().is_some()
+        self.run.is_running() || self.running_step().is_some()
     }
 
     fn stop_and_leave(&mut self) -> Flow {
@@ -653,10 +675,7 @@ impl App {
     }
 
     fn stop_running(&mut self) {
-        if let Some(mut running) = self.running.take() {
-            running.stop();
-        }
-        self.running_since = None;
+        self.run.abandon();
     }
 
     pub fn tick(&mut self) {
@@ -669,7 +688,7 @@ impl App {
         if self.stage == Stage::Privilege {
             self.check_password();
         }
-        if self.stage == Stage::Run && self.running.is_some() {
+        if self.stage == Stage::Run && self.run.is_running() {
             self.progress();
         }
     }
@@ -1355,24 +1374,18 @@ impl App {
         self.paused = false;
         match choice {
             0 => {
-                self.statuses[self.current] = Status::Pending;
-                self.durations[self.current] = None;
+                self.run.retry();
                 self.start_next();
             }
             1 => {
-                self.statuses[self.current] = Status::Skipped;
-                self.current += 1;
+                self.run.skip_current();
                 self.start_next();
             }
             2 => {
-                self.statuses[self.current] = Status::Ignored;
-                self.current += 1;
+                self.run.ignore_current();
                 self.start_next();
             }
-            _ => {
-                self.statuses[self.current] = Status::Failed;
-                return Flow::Done(Outcome::Failed);
-            }
+            _ => return Flow::Done(Outcome::Failed),
         }
         Flow::Continue
     }
@@ -1462,9 +1475,8 @@ impl App {
             self.inhibitor = Some(Inhibitor::acquire());
         }
         self.stage = Stage::Run;
-        self.statuses = vec![Status::Pending; STEPS.len()];
-        self.durations = vec![None; STEPS.len()];
-        self.current = 0;
+        self.run.reset(self.step_environment(), &self.answers);
+        self.run.set_pretend(self.pretend);
         self.log.clear();
         self.log_scroll = 0;
         self.log_follow = true;
@@ -1476,7 +1488,8 @@ impl App {
 
     pub fn retry_failed(&mut self) {
         let failed: Vec<usize> = self
-            .statuses
+            .run
+            .statuses()
             .iter()
             .enumerate()
             .filter(|(_, status)| matches!(status, Status::Failed | Status::Ignored))
@@ -1487,65 +1500,15 @@ impl App {
             return;
         }
         for index in &failed {
-            self.statuses[*index] = Status::Pending;
-            self.durations[*index] = None;
+            self.run.set_status(*index, Status::Pending);
         }
-        self.current = failed[0];
+        self.run.cursor_to(failed[0]);
         self.stage = Stage::Run;
         self.failure = None;
         self.paused = false;
         self.log_follow = true;
         self.log_problem = None;
         self.start_next();
-    }
-
-    pub fn start_next(&mut self) {
-        while self.current < STEPS.len() {
-            let index = self.current;
-            if self.statuses[index] != Status::Pending {
-                self.current += 1;
-                continue;
-            }
-            if steps::is_skipped(&STEPS[index], &self.answers) {
-                self.statuses[index] = Status::Skipped;
-                self.durations[index] = Some(Duration::ZERO);
-                self.log.push(LogLine::skip(format!(
-                    "{} is switched off in the options",
-                    STEPS[index].name
-                )));
-                self.current += 1;
-                continue;
-            }
-            if self.pretend {
-                self.statuses[index] = Status::Ok;
-                self.durations[index] = Some(Duration::from_secs(2));
-                self.log
-                    .push(LogLine::ok(format!("{} finished", STEPS[index].name)));
-                self.current += 1;
-                continue;
-            }
-            self.statuses[index] = Status::Running;
-            self.running_since = Some(Instant::now());
-            let env = self.step_environment();
-            let step = &STEPS[index];
-            match Running::spawn_native(&self.bundle, step.id, &self.log_path, &env) {
-                Ok(running) => {
-                    self.running = Some(running);
-                    return;
-                }
-                Err(problem) => {
-                    self.statuses[index] = Status::Failed;
-                    self.log.push(LogLine::error(problem));
-                    self.failure = Some(FailureCard::new(step, &self.log));
-                    self.paused = true;
-                    return;
-                }
-            }
-        }
-        self.stage = Stage::Done;
-        self.landed = Some(Landed::read(&self.bundle));
-        self.credential = None;
-        self.inhibitor = None;
     }
 
     pub fn step_environment(&self) -> Vec<(&'static str, String)> {
@@ -1556,42 +1519,64 @@ impl App {
         env
     }
 
+    /// Ask the session for the next step, and act on whatever it reports.
+    pub fn start_next(&mut self) {
+        let events = self.run.advance();
+        let finished = self.run.is_complete();
+        self.apply(events);
+        if finished && !self.paused {
+            self.stage = Stage::Done;
+            self.landed = Some(Landed::read(&self.bundle));
+            self.credential = None;
+            self.inhibitor = None;
+        }
+    }
+
     fn progress(&mut self) {
-        let Some(mut running) = self.running.take() else {
-            return;
-        };
-        let mut fresh: Vec<String> = Vec::new();
-        running.drain(&mut fresh);
-        self.log
-            .extend(fresh.iter().map(|line| LogLine::parse(line)));
-        match running.poll() {
-            Ok(Some(status)) => {
-                let outcome = running.outcome(status);
-                self.statuses[self.current] = outcome;
-                self.durations[self.current] = Some(
-                    self.running_since
-                        .take()
-                        .map(|since| since.elapsed())
-                        .unwrap_or_default(),
-                );
-                self.repaint = true;
-                if outcome.is_failure() {
-                    self.failure = Some(FailureCard::new(&STEPS[self.current], &self.log));
-                    self.paused = true;
-                } else {
-                    self.current += 1;
-                    self.start_next();
+        let events = self.run.pump();
+        let settled = !self.run.is_running();
+        self.apply(events);
+        if settled && !self.paused && self.stage == Stage::Run {
+            self.start_next();
+        }
+    }
+
+    /// Turn what the session did into what the wizard shows.
+    fn apply(&mut self, events: Vec<crate::run::Event>) {
+        for event in events {
+            match event {
+                crate::run::Event::Skipped { index, reason } => {
+                    let name = STEPS[index].name;
+                    self.log.push(match reason {
+                        crate::run::SkipReason::SwitchedOff => {
+                            LogLine::skip(format!("{name} is switched off in the options"))
+                        }
+                        crate::run::SkipReason::AlreadyDone => {
+                            LogLine::skip(format!("{name} was already done"))
+                        }
+                    });
                 }
-            }
-            Ok(None) => self.running = Some(running),
-            Err(problem) => {
-                self.statuses[self.current] = Status::Failed;
-                self.repaint = true;
-                self.durations[self.current] =
-                    self.running_since.take().map(|since| since.elapsed());
-                self.log.push(LogLine::error(problem));
-                self.failure = Some(FailureCard::new(&STEPS[self.current], &self.log));
-                self.paused = true;
+                crate::run::Event::Started { .. } => self.repaint = true,
+                crate::run::Event::Output { line, .. } => self.log.push(LogLine::parse(&line)),
+                crate::run::Event::Finished { index, status } => {
+                    self.repaint = true;
+                    if status.is_failure() {
+                        self.failure = Some(FailureCard::new(&STEPS[index], &self.log));
+                        self.paused = true;
+                        return;
+                    }
+                    if self.pretend {
+                        self.log
+                            .push(LogLine::ok(format!("{} finished", STEPS[index].name)));
+                    }
+                }
+                crate::run::Event::Broken { index, problem } => {
+                    self.repaint = true;
+                    self.log.push(LogLine::error(problem));
+                    self.failure = Some(FailureCard::new(&STEPS[index], &self.log));
+                    self.paused = true;
+                    return;
+                }
             }
         }
     }
@@ -1722,7 +1707,7 @@ mod tests {
         let mut app = app();
         app.stage = Stage::Run;
         for (index, status) in statuses.iter().enumerate() {
-            app.statuses[index] = *status;
+            app.set_status(index, *status);
         }
         app
     }
@@ -2253,7 +2238,7 @@ mod tests {
     fn stopping_a_run_does_not_put_the_stopping_button_under_the_highlight() {
         let mut app = app();
         app.stage = Stage::Run;
-        app.statuses[0] = Status::Running;
+        app.set_status(0, Status::Running);
         char_key(&mut app, 'q');
         assert_eq!(app.confirm, Some(Confirm::Quit));
         assert_eq!(app.confirm_focus, 1, "the safe answer is the focused one");
@@ -2375,7 +2360,9 @@ mod tests {
             app.stage
         );
         assert!(
-            app.statuses.iter().any(|status| *status != Status::Pending),
+            app.statuses()
+                .iter()
+                .any(|status| *status != Status::Pending),
             "and the steps are under way"
         );
         assert_eq!(
@@ -2434,7 +2421,7 @@ mod tests {
         assert_eq!(app.running_step(), Some(1));
         assert_eq!(app.next_step(), Some(2));
 
-        app.statuses[1] = Status::Ok;
+        app.set_status(1, Status::Ok);
         assert_eq!(app.running_step(), None);
         assert_eq!(app.next_step(), Some(2), "the next step is still named");
     }
@@ -2442,7 +2429,7 @@ mod tests {
     #[test]
     fn the_way_on_from_a_failure_is_a_decision_rather_than_a_dismissal() {
         let mut app = run_with(&[Status::Failed]);
-        app.current = 0;
+        app.run.cursor_to(0);
         app.failure = Some(FailureCard::new(&STEPS[0], &[]));
         app.paused = true;
         app.overlay = Some(Overlay::Failure);
@@ -2450,8 +2437,8 @@ mod tests {
         press(&mut app, KeyCode::Esc);
         assert_eq!(app.overlay, None);
         assert!(app.paused);
-        assert_eq!(app.statuses[0], Status::Failed);
-        assert_eq!(app.current, 0, "and nothing advanced past it");
+        assert_eq!(app.status(0), Status::Failed);
+        assert_eq!(app.current(), 0, "and nothing advanced past it");
 
         assert_eq!(press(&mut app, KeyCode::Enter), Flow::Continue);
         assert_eq!(app.overlay, Some(Overlay::Failure));
@@ -2460,11 +2447,11 @@ mod tests {
     #[test]
     fn stopping_at_a_failure_ends_the_session_as_a_failure() {
         let mut app = run_with(&[Status::Failed]);
-        app.current = 0;
+        app.run.cursor_to(0);
         app.failure = Some(FailureCard::new(&STEPS[0], &[]));
         app.overlay = Some(Overlay::Failure);
         assert_eq!(char_key(&mut app, 'q'), Flow::Done(Outcome::Failed));
-        assert_eq!(app.statuses[0], Status::Failed);
+        assert_eq!(app.status(0), Status::Failed);
     }
 
     #[test]
@@ -2472,13 +2459,13 @@ mod tests {
         for (key, expected) in [('s', Status::Skipped), ('i', Status::Ignored)] {
             let last = STEPS.len() - 1;
             let mut app = run_with(&[Status::Failed]);
-            app.current = last;
-            app.statuses[last] = Status::Failed;
+            app.run.cursor_to(last);
+            app.set_status(last, Status::Failed);
             app.failure = Some(FailureCard::new(&STEPS[last], &[]));
             app.overlay = Some(Overlay::Failure);
 
             char_key(&mut app, key);
-            assert_eq!(app.statuses[last], expected);
+            assert_eq!(app.status(last), expected);
             assert_eq!(app.stage, Stage::Done);
             assert!(!app.paused);
         }
@@ -2487,8 +2474,8 @@ mod tests {
     #[test]
     fn an_ignored_step_is_still_reported_as_a_failure_of_the_session() {
         let mut app = app();
-        app.statuses = vec![Status::Ok; STEPS.len()];
-        app.statuses[2] = Status::Ignored;
+        app.fill_statuses(Status::Ok);
+        app.set_status(2, Status::Ignored);
         app.stage = Stage::Done;
         assert_eq!(app.tally().unresolved(), 1);
         assert_eq!(press(&mut app, KeyCode::Enter), Flow::Done(Outcome::Failed));
@@ -2497,8 +2484,8 @@ mod tests {
     #[test]
     fn a_clean_install_finishes_with_a_success() {
         let mut app = app();
-        app.statuses = vec![Status::Ok; STEPS.len()];
-        app.statuses[1] = Status::Warn;
+        app.fill_statuses(Status::Ok);
+        app.set_status(1, Status::Warn);
         app.stage = Stage::Done;
         assert_eq!(app.tally().unresolved(), 0);
         assert_eq!(press(&mut app, KeyCode::Enter), Flow::Done(Outcome::Ok));
@@ -2510,11 +2497,11 @@ mod tests {
         app.begin_install();
         assert_eq!(app.stage, Stage::Done);
         assert!(
-            app.statuses
+            app.statuses()
                 .iter()
                 .all(|status| matches!(status, Status::Ok | Status::Skipped)),
             "every step either ran or was switched off: {:?}",
-            app.statuses
+            app.statuses()
         );
         assert_eq!(app.finished(), STEPS.len());
         assert!(app.total_elapsed() > Duration::ZERO);
@@ -2524,18 +2511,18 @@ mod tests {
     fn retrying_from_the_summary_goes_back_to_the_run() {
         let mut app = app();
         app.begin_install();
-        app.statuses[4] = Status::Ignored;
+        app.set_status(4, Status::Ignored);
         app.stage = Stage::Done;
 
         char_key(&mut app, 'r');
-        assert_ne!(app.statuses[4], Status::Ignored, "the step was tried again");
+        assert_ne!(app.status(4), Status::Ignored, "the step was tried again");
         assert_eq!(app.stage, Stage::Done, "and the walk carried on to the end");
     }
 
     #[test]
     fn retrying_when_nothing_failed_says_so() {
         let mut app = app();
-        app.statuses = vec![Status::Ok; STEPS.len()];
+        app.fill_statuses(Status::Ok);
         app.stage = Stage::Done;
         char_key(&mut app, 'r');
         assert_eq!(app.stage, Stage::Done);
@@ -2545,7 +2532,7 @@ mod tests {
     #[test]
     fn logging_out_is_asked_for_before_the_session_ends() {
         let mut app = app();
-        app.statuses = vec![Status::Ok; STEPS.len()];
+        app.fill_statuses(Status::Ok);
         app.stage = Stage::Done;
 
         assert_eq!(char_key(&mut app, 'o'), Flow::Continue);
@@ -2573,8 +2560,8 @@ mod tests {
     #[test]
     fn a_run_that_did_not_finish_is_not_logged_out_of() {
         let mut app = app();
-        app.statuses = vec![Status::Ok; STEPS.len()];
-        app.statuses[4] = Status::Failed;
+        app.fill_statuses(Status::Ok);
+        app.set_status(4, Status::Failed);
         app.stage = Stage::Done;
 
         assert!(
