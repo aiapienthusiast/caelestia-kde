@@ -59,7 +59,11 @@ pub fn run(context: &Context) -> Result<(), Failure> {
 
     prepare_ccache();
 
-    if context.variable("CAELESTIA_SETUP_RUNNING").as_deref() != Some("1") {
+    // An update runs a short plan of its own and leaves the prerequisites to this step; an install
+    // marked as fresh runs every step from the plan, in order. Repairing them here as well would
+    // ask 10-autostart to point the session at a shell this step has not built yet, which is a
+    // failure the run then reports as a warning of this step.
+    if context.variable("CAELESTIA_FRESH_INSTALL").as_deref() != Some("1") {
         standalone_update(context, &shell_dir)?;
     }
 
