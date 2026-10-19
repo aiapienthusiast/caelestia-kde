@@ -74,14 +74,25 @@ impl Session {
         environment: Vec<(&'static str, String)>,
         answers: &Answers,
     ) -> Self {
+        Self::over(&STEPS, bundle, log, environment, answers)
+    }
+
+    /// A run over part of the table, for a caller that has already decided what it needs to do.
+    pub fn over(
+        steps: &'static [Step],
+        bundle: &Path,
+        log: PathBuf,
+        environment: Vec<(&'static str, String)>,
+        answers: &Answers,
+    ) -> Self {
         Self {
             bundle: bundle.to_path_buf(),
             log,
             environment,
             answers: answers.clone(),
-            steps: &STEPS,
-            statuses: vec![Status::Pending; STEPS.len()],
-            durations: vec![None; STEPS.len()],
+            steps,
+            statuses: vec![Status::Pending; steps.len()],
+            durations: vec![None; steps.len()],
             cursor: 0,
             running: None,
             started: None,
@@ -96,8 +107,7 @@ impl Session {
         self
     }
 
-    /// Walk the table without running anything, for the screens and the tests.
-    /// Walk the whole table without running anything, for a test that needs the shape of a run.
+    /// Walk the table without running anything, for a test that needs the shape of a run.
     #[cfg(test)]
     pub fn rehearse(&mut self, on: bool) {
         self.pretend = on;
@@ -357,6 +367,31 @@ mod tests {
             })
         );
         assert_eq!(session.status(0), Status::Skipped);
+    }
+
+    #[test]
+    fn a_session_can_be_given_the_part_of_the_table_it_was_asked_for() {
+        let steps: &'static [Step] = &STEPS[2..4];
+        let mut session = Session::over(
+            steps,
+            Path::new("/bundle"),
+            PathBuf::from("/tmp/caelestia-test.log"),
+            Vec::new(),
+            &answers(&[]),
+        );
+        session.rehearse(true);
+
+        loop {
+            let events = session.advance();
+            if events.is_empty() {
+                break;
+            }
+        }
+
+        assert_eq!(session.steps().len(), 2);
+        assert_eq!(session.steps()[0].id, STEPS[2].id);
+        assert!(session.is_complete());
+        assert_eq!(session.statuses(), &[Status::Ok, Status::Ok]);
     }
 
     #[test]
