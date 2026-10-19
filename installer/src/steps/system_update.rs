@@ -30,7 +30,7 @@ pub fn run(context: &Context) -> Result<(), Failure> {
         let _ = fs::remove_file(&stamp);
     }
 
-    if context.flag(super::SKIP_SYSTEM_UPDATE, false) {
+    if super::switches_off("00a-system-update", context) {
         output::info("Skipping full system update (SKIP_SYSTEM_UPDATE=true).");
         return Ok(());
     }

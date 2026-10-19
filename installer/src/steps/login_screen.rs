@@ -47,7 +47,7 @@ with open(cli_path, "w") as f:
 "##;
 
 pub fn run(context: &Context) -> Result<(), Failure> {
-    if !context.flag(super::SYNC_LOGIN_SCREEN, true) {
+    if super::switches_off("05-login-screen", context) {
         output::skip("Login screen colours and wallpaper not selected.");
         return Ok(());
     }

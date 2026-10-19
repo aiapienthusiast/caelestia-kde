@@ -448,18 +448,41 @@ fn answer_is_true(answers: &Answers, name: &str) -> bool {
     answers.get(name).map(String::as_str) == Some("true")
 }
 
-/// Which steps the plan leaves out. The bodies ask the same questions of the environment, because
-/// a step run on its own (`step <id>`) never passes through here, and that second check is the
-/// safety net rather than a second policy: both read the constants above.
-pub fn is_skipped(step: &Step, answers: &Answers) -> bool {
-    match step.id {
-        "00a-system-update" => answer_is_true(answers, SKIP_SYSTEM_UPDATE),
-        "05-login-screen" => !answer_is_true(answers, SYNC_LOGIN_SCREEN),
-        "11-optional-apps" => !OPTIONAL_APP_ANSWERS
-            .iter()
-            .any(|answer| answer_is_true(answers, answer)),
-        _ => false,
+/// The one switch a step hangs on: the answer's name, and whether the step stands down when that
+/// answer is true. The plan and the step's own body both read this table, so a step the plan marks
+/// "switched off" is the same step that does nothing when run on its own.
+fn switch(step_id: &str) -> Option<(&'static str, bool)> {
+    match step_id {
+        "00a-system-update" => Some((SKIP_SYSTEM_UPDATE, true)),
+        "05-login-screen" => Some((SYNC_LOGIN_SCREEN, false)),
+        _ => None,
     }
+}
+
+/// Whether one of the optional apps was asked for; the step stands down when none was.
+fn any_optional_app(asked: impl Fn(&'static str) -> bool) -> bool {
+    OPTIONAL_APP_ANSWERS.iter().any(|answer| asked(answer))
+}
+
+/// Which steps the plan leaves out, from the answers the wizard collected.
+pub fn is_skipped(step: &Step, answers: &Answers) -> bool {
+    if step.id == "11-optional-apps" {
+        return !any_optional_app(|answer| answer_is_true(answers, answer));
+    }
+    switch(step.id).is_some_and(|(name, stands_down_when_true)| {
+        answer_is_true(answers, name) == stands_down_when_true
+    })
+}
+
+/// Whether a step was told to stand down, from the environment a run on its own carries. The same
+/// table as `is_skipped`, which is why a body no longer reads its own switch by hand.
+pub fn switches_off(step_id: &str, context: &Context) -> bool {
+    if step_id == "11-optional-apps" {
+        return !any_optional_app(|answer| context.flag(answer, false));
+    }
+    switch(step_id).is_some_and(|(name, stands_down_when_true)| {
+        context.flag(name, !stands_down_when_true) == stands_down_when_true
+    })
 }
 
 #[cfg(test)]
