@@ -157,6 +157,9 @@ jobs:
       - name: Cross-check QML config references against C++ declarations
         run: python3 .github/scripts/check_config_references.py
 
+      - name: Check the lock screen falls back to the shell's palette
+        run: python3 .github/scripts/check_lockscreen_palette.py
+
   actionlint:
     runs-on: ubuntu-latest
     steps:
