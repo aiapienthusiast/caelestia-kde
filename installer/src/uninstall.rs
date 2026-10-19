@@ -586,6 +586,8 @@ impl Uninstaller {
     fn remove_shell_installation(&self) {
         section("Step 3 - Remove Shell Installation");
 
+        // An uninstall is about the layout the installer put down, which is the source one unless
+        // this very binary runs from a package: the packaged tree belongs to the package manager.
         for relative in [
             ".config/quickshell/caelestia",
             ".local/lib/caelestia",

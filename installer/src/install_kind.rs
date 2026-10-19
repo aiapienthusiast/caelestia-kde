@@ -59,6 +59,22 @@ pub fn shell_config() -> PathBuf {
     shell_config_for(kind())
 }
 
+/// The directory the shell is installed into: `~/.config/quickshell/caelestia` for a checkout,
+/// `/etc/xdg/quickshell/caelestia` for a package. `shell_config` is the entry point inside it.
+pub fn shell_config_dir() -> PathBuf {
+    shell_config_dir_for(kind())
+}
+
+fn shell_config_dir_for(kind: Kind) -> PathBuf {
+    match kind {
+        Kind::Package => PathBuf::from("/etc/xdg/quickshell/caelestia"),
+        Kind::Source => paths::home()
+            .join(".config")
+            .join("quickshell")
+            .join("caelestia"),
+    }
+}
+
 fn lib_dir_for(kind: Kind) -> PathBuf {
     match kind {
         Kind::Package => PathBuf::from("/usr/lib/caelestia"),
@@ -75,7 +91,10 @@ fn bin_dir_for(kind: Kind) -> PathBuf {
 
 fn qml_import_path_for(kind: Kind) -> String {
     match kind {
-        Kind::Package => "/usr/lib/qt6/qml:/etc/xdg/quickshell/caelestia".to_string(),
+        Kind::Package => format!(
+            "/usr/lib/qt6/qml:{}",
+            shell_config_dir_for(kind).display()
+        ),
         Kind::Source => {
             let home = paths::home();
             format!(
@@ -85,24 +104,14 @@ fn qml_import_path_for(kind: Kind) -> String {
                     .join("qt6")
                     .join("qml")
                     .display(),
-                home.join(".config")
-                    .join("quickshell")
-                    .join("caelestia")
-                    .display()
+                shell_config_dir_for(kind).display()
             )
         }
     }
 }
 
 fn shell_config_for(kind: Kind) -> PathBuf {
-    match kind {
-        Kind::Package => PathBuf::from("/etc/xdg/quickshell/caelestia/shell.qml"),
-        Kind::Source => paths::home()
-            .join(".config")
-            .join("quickshell")
-            .join("caelestia")
-            .join("shell.qml"),
-    }
+    shell_config_dir_for(kind).join("shell.qml")
 }
 
 #[cfg(test)]

@@ -197,27 +197,22 @@ fn run(args: Args) -> Outcome {
     trace(&format!("bundle dir: {}", bundle.root().display()));
 
     match args.action {
-        PresetAction::Update => {
-            let branch = std::env::var("CAELESTIA_UPDATE_BRANCH")
-                .ok()
-                .filter(|value| !value.is_empty());
-            match update::run(bundle.root(), branch) {
-                Ok(()) => Outcome::Ok,
-                Err(Failure::Message(problem)) => {
-                    output::err(&problem);
-                    Outcome::Failed
-                }
-                Err(Failure::Reported) => Outcome::Failed,
-            }
-        }
-        PresetAction::Uninstall => match uninstall::run(bundle.root()) {
-            Ok(()) => Outcome::Ok,
-            Err(Failure::Message(problem)) => {
-                output::err(&problem);
-                Outcome::Failed
-            }
-            Err(Failure::Reported) => Outcome::Failed,
-        },
+        // A preset is the same handoff the wizard hands to: one place decides what running an
+        // update or an uninstall means.
+        PresetAction::Update => handoff(
+            &bundle,
+            app::Session {
+                outcome: Outcome::Ok,
+                handoff: Some(Handoff::Update),
+            },
+        ),
+        PresetAction::Uninstall => handoff(
+            &bundle,
+            app::Session {
+                outcome: Outcome::Ok,
+                handoff: Some(Handoff::Uninstall),
+            },
+        ),
         PresetAction::Wizard => {
             if args.plan {
                 return print_plan(&bundle, &args);
@@ -269,25 +264,11 @@ fn handoff(bundle: &Bundle, session: Session) -> Outcome {
             let branch = std::env::var("CAELESTIA_UPDATE_BRANCH")
                 .ok()
                 .filter(|value| !value.is_empty());
-            match update::run(bundle.root(), branch) {
-                Ok(()) => Outcome::Ok,
-                Err(Failure::Message(problem)) => {
-                    output::err(&problem);
-                    Outcome::Failed
-                }
-                Err(Failure::Reported) => Outcome::Failed,
-            }
+            attempted(update::run(bundle.root(), branch))
         }
         Some(Handoff::Uninstall) => {
             trace("handoff: uninstall");
-            match uninstall::run(bundle.root()) {
-                Ok(()) => Outcome::Ok,
-                Err(Failure::Message(problem)) => {
-                    output::err(&problem);
-                    Outcome::Failed
-                }
-                Err(Failure::Reported) => Outcome::Failed,
-            }
+            attempted(uninstall::run(bundle.root()))
         }
         Some(Handoff::LogOut) => {
             trace("handoff: log out");
@@ -299,5 +280,18 @@ fn handoff(bundle: &Bundle, session: Session) -> Outcome {
                 }
             }
         }
+    }
+}
+
+/// A preset either finished or it did not. `Failure::Reported` already printed its own message, so
+/// only a fresh one is echoed here; both endings are the same exit either way.
+fn attempted(result: Result<(), Failure>) -> Outcome {
+    match result {
+        Ok(()) => Outcome::Ok,
+        Err(Failure::Message(problem)) => {
+            output::err(&problem);
+            Outcome::Failed
+        }
+        Err(Failure::Reported) => Outcome::Failed,
     }
 }

@@ -18,10 +18,30 @@ const LOCK: &str = "caelestia-update.lock";
 const CHANNELS: [&str; 2] = ["main", "dev"];
 const DEFAULT_CHANNEL: &str = "main";
 
-const STEPS: [(&str, bool); 3] = [
-    ("03-deploy-configs", true),
-    ("08-build-shell", true),
-    ("09-system-tweaks", false),
+/// What an update rebuilds, in order, with what the user is told before each one and whether a
+/// failure stops the update. The policy is the table; the loop below only carries it out.
+struct Repair {
+    id: &'static str,
+    announce: &'static str,
+    required: bool,
+}
+
+const STEPS: [Repair; 3] = [
+    Repair {
+        id: "03-deploy-configs",
+        announce: "",
+        required: true,
+    },
+    Repair {
+        id: "08-build-shell",
+        announce: "Building the Caelestia shell UI...",
+        required: true,
+    },
+    Repair {
+        id: "09-system-tweaks",
+        announce: "Re-applying system tweaks...",
+        required: false,
+    },
 ];
 
 pub fn run(bundle: &Path, requested: Option<String>) -> Result<(), Failure> {
@@ -72,19 +92,15 @@ pub fn run(bundle: &Path, requested: Option<String>) -> Result<(), Failure> {
     report.section("Rebuilding what the update changed");
     load_answers(&paths::home());
 
-    for (id, fatal) in STEPS {
-        if id == "08-build-shell" {
-            output::info("Building the Caelestia shell UI...");
+    for repair in &STEPS {
+        if !repair.announce.is_empty() {
+            output::info(repair.announce);
         }
-        if id == "09-system-tweaks" {
-            output::info("Re-applying system tweaks...");
-        }
-
-        if let Err(problem) = run_step(bundle, id, fatal) {
-            if fatal {
+        if let Err(problem) = run_step(bundle, repair.id) {
+            if repair.required {
                 return Err(problem);
             }
-            output::warn(&format!("{id} reported errors (non-fatal)."));
+            output::warn(&format!("{} reported errors (non-fatal).", repair.id));
         }
     }
 
@@ -113,7 +129,7 @@ pub fn published_version(bundle: &Path) -> Option<update_state::Installed> {
 }
 
 pub fn config_dir() -> PathBuf {
-    paths::home().join(".config/quickshell/caelestia")
+    install_kind::shell_config_dir()
 }
 
 fn revision_rows(
@@ -274,7 +290,7 @@ fn update_checkout(bundle: &Path, channel: &str) -> Result<(), Failure> {
         return Err(format!("Failed to pull from origin/{channel}").into());
     }
 
-    run_step(bundle, "02a-submodules", true)?;
+    run_step(bundle, "02a-submodules")?;
 
     if stashed {
         println!();
@@ -394,7 +410,7 @@ fn parse_answers(text: &str) -> Vec<(String, String)> {
     answers
 }
 
-fn run_step(bundle: &Path, id: &str, fatal: bool) -> Result<(), Failure> {
+fn run_step(bundle: &Path, id: &str) -> Result<(), Failure> {
     let Some(step) = steps::find(id) else {
         return Err(format!("no step is called '{id}'").into());
     };
@@ -405,12 +421,7 @@ fn run_step(bundle: &Path, id: &str, fatal: bool) -> Result<(), Failure> {
     if steps::run(step, &context) == 0 {
         return Ok(());
     }
-
-    if fatal {
-        Err(format!("the {id} step failed").into())
-    } else {
-        Err(Failure::Reported)
-    }
+    Err(format!("the {id} step failed").into())
 }
 
 fn restart_shell() {
@@ -605,13 +616,14 @@ not an assignment
     #[test]
     fn the_steps_an_update_runs_are_the_ones_the_table_names() {
         assert_eq!(
-            STEPS.map(|(id, _)| id),
+            STEPS.map(|repair| repair.id),
             ["03-deploy-configs", "08-build-shell", "09-system-tweaks"]
         );
-        for (id, fatal) in STEPS {
+        for repair in &STEPS {
+            let id = repair.id;
             assert!(steps::find(id).is_some(), "{id} is not a step");
             assert_eq!(
-                fatal,
+                repair.required,
                 id != "09-system-tweaks",
                 "{id}: only the tweaks step may fail without stopping the update"
             );
