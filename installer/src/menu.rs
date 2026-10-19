@@ -235,13 +235,18 @@ pub fn every_entry() -> Vec<&'static Entry> {
     all
 }
 
+/// Answers an install works out for itself rather than asking for. They are recorded with the rest
+/// so a step run on its own can still be handed them.
+const DERIVED: [&str; 1] = ["INSTALL_FISH"];
+
 /// Every id a run can be given an answer for. A step run on its own is handed its answers through
 /// the environment, and this is the list of names it looks for there.
 pub fn answer_ids() -> Vec<&'static str> {
     every_entry()
-        .iter()
+        .into_iter()
+        .filter(|entry| holds_an_answer(entry))
         .map(|entry| entry.id())
-        .filter(|id| !id.starts_with("preset_"))
+        .chain(DERIVED)
         .collect()
 }
 

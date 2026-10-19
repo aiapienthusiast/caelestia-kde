@@ -145,7 +145,7 @@ pub enum Handoff {
     LogOut,
 }
 
-pub struct Session {
+pub struct Ending {
     pub outcome: Outcome,
     pub handoff: Option<Handoff>,
 }
@@ -645,8 +645,8 @@ impl App {
         self.leaving
     }
 
-    pub fn session(&self, outcome: Outcome) -> Session {
-        Session {
+    pub fn ending(&self, outcome: Outcome) -> Ending {
+        Ending {
             outcome,
             handoff: self.handoff,
         }
@@ -854,6 +854,16 @@ impl App {
         self.stage = Stage::Run;
         self.run.reset(self.step_environment(), &self.answers);
         self.run.set_pretend(self.pretend);
+        let recorded = if self.pretend {
+            Ok(())
+        } else {
+            crate::update::save_answers(&self.answers)
+        };
+        if let Err(error) = recorded {
+            self.notice = Some(format!(
+                "could not record the answers for a later update: {error}"
+            ));
+        }
         self.log.clear();
         self.log_scroll = 0;
         self.log_follow = true;
@@ -980,10 +990,10 @@ pub fn run(
     log_path: PathBuf,
     env: Env,
     settings: &[(&'static str, String)],
-) -> Session {
+) -> Ending {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         eprintln!("caelestia-install: the installer needs a terminal to run");
-        return Session {
+        return Ending {
             outcome: Outcome::Environment,
             handoff: None,
         };
@@ -993,7 +1003,7 @@ pub fn run(
         Ok(terminal) => terminal,
         Err(error) => {
             eprintln!("caelestia-install: cannot open a terminal: {error}");
-            return Session {
+            return Ending {
                 outcome: Outcome::Environment,
                 handoff: None,
             };
@@ -1003,7 +1013,7 @@ pub fn run(
     app.apply_settings(settings);
     let outcome = event_loop(&mut terminal, &mut app);
     terminal.finish();
-    app.session(outcome)
+    app.ending(outcome)
 }
 
 fn event_loop(terminal: &mut crate::tui::Tui, app: &mut App) -> Outcome {
@@ -1578,8 +1588,8 @@ mod tests {
 
             press(&mut app, KeyCode::Enter);
             char_key(&mut app, 'y');
-            let session = app.session(Outcome::Ok);
-            assert_eq!(session.handoff, Some(handoff));
+            let ending = app.ending(Outcome::Ok);
+            assert_eq!(ending.handoff, Some(handoff));
             assert_eq!(app.leaving(), None, "the handoff is the caller's job");
         }
     }
@@ -1605,7 +1615,7 @@ mod tests {
         press(&mut app, KeyCode::Enter);
         press(&mut app, KeyCode::Enter);
         assert_eq!(
-            app.session(Outcome::Ok).handoff,
+            app.ending(Outcome::Ok).handoff,
             Some(Handoff::Uninstall),
             "the highlighted button is what enter chooses"
         );

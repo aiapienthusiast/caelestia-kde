@@ -42,7 +42,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use app::{Handoff, Session};
+use app::{Ending, Handoff};
 use bundle::Bundle;
 use cli::{Args, Invocation, PresetAction};
 use env::Env;
@@ -210,14 +210,14 @@ fn run(args: Args) -> Outcome {
         // update or an uninstall means.
         PresetAction::Update => handoff(
             &bundle,
-            app::Session {
+            app::Ending {
                 outcome: Outcome::Ok,
                 handoff: Some(Handoff::Update),
             },
         ),
         PresetAction::Uninstall => handoff(
             &bundle,
-            app::Session {
+            app::Ending {
                 outcome: Outcome::Ok,
                 handoff: Some(Handoff::Uninstall),
             },
@@ -229,12 +229,15 @@ fn run(args: Args) -> Outcome {
             if args.non_interactive {
                 signals::install();
                 let answers = plan::answers(&args.set);
+                if !args.resume {
+                    record_answers(&answers);
+                }
                 return headless::run(bundle.root(), &answers, args.resume);
             }
             trace("phase 1: home");
             let env = look(&args);
-            let session = app::run(bundle.root().to_path_buf(), app::log_path(), env, &args.set);
-            handoff(&bundle, session)
+            let ending = app::run(bundle.root().to_path_buf(), app::log_path(), env, &args.set);
+            handoff(&bundle, ending)
         }
     }
 }
@@ -251,6 +254,16 @@ fn print_plan(bundle: &Bundle, args: &Args) -> Outcome {
     Outcome::Ok
 }
 
+/// An unattended install records its answers for the same reason the wizard does: an update later
+/// re-runs the steps the way this run was configured.
+fn record_answers(answers: &menu::Answers) {
+    if let Err(error) = update::save_answers(answers) {
+        output::warn(&format!(
+            "Could not record the answers for a later update: {error}"
+        ));
+    }
+}
+
 fn look(args: &Args) -> Env {
     let mut env = Env::capture();
     if let Some(glyphs) = &args.look.glyphs {
@@ -265,9 +278,9 @@ fn look(args: &Args) -> Env {
     env
 }
 
-fn handoff(bundle: &Bundle, session: Session) -> Outcome {
-    match session.handoff {
-        None => session.outcome,
+fn handoff(bundle: &Bundle, ending: Ending) -> Outcome {
+    match ending.handoff {
+        None => ending.outcome,
         Some(Handoff::Update) => {
             trace("handoff: update");
             let branch = std::env::var("CAELESTIA_UPDATE_BRANCH")

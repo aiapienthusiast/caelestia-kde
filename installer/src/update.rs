@@ -395,19 +395,50 @@ fn ask_for_channel() -> Option<String> {
 /// The answers an install recorded, so an update re-runs the steps the way that install was
 /// configured. They are handed to the steps directly: feeding them through the process environment
 /// needed `set_var` and made the answers indistinguishable from ambient state.
+/// Record the answers an install was given, so an update re-runs the steps the way it was set up.
+pub fn save_answers(answers: &Answers) -> std::io::Result<()> {
+    save_answers_in(&paths::home(), answers)
+}
+
+fn save_answers_in(home: &Path, answers: &Answers) -> std::io::Result<()> {
+    let file = home.join(ANSWERS);
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let mut text =
+        String::from("# Written by the Caelestia installer. An update reads it to re-run\n");
+    text.push_str("# the steps the way this install was configured.\n");
+    let mut names: Vec<&str> = answers.keys().copied().collect();
+    names.sort_unstable();
+    for name in names {
+        text.push_str(name);
+        text.push('=');
+        if let Some(value) = answers.get(name) {
+            text.push_str(value);
+        }
+        text.push('\n');
+    }
+    std::fs::write(file, text)
+}
+
 fn load_answers(home: &Path) -> Answers {
     let file = home.join(ANSWERS);
     let Ok(text) = std::fs::read_to_string(&file) else {
         return Answers::new();
     };
 
+    let known = crate::menu::answer_ids();
     let mut answers = Answers::new();
     for (name, value) in parse_answers(&text) {
-        if let Some(id) = crate::menu::answer_ids()
-            .into_iter()
-            .find(|id| *id == name.as_str())
-        {
-            answers.insert(id, value);
+        match known.iter().find(|id| **id == name.as_str()) {
+            Some(id) => {
+                answers.insert(id, value);
+            }
+            None => output::warn(&format!(
+                "Ignoring '{name}' from {}: this installer has no such answer",
+                file.display()
+            )),
         }
     }
     answers
@@ -597,6 +628,36 @@ not an assignment
                 ("APPLY_LOCKSCREEN".to_string(), "false".to_string()),
             ]
         );
+    }
+
+    #[test]
+    fn the_answers_an_install_records_are_the_ones_an_update_reads_back() {
+        let home = TempDir::new("answers-round-trip").expect("a temporary directory");
+        let mut answers = Answers::new();
+        answers.insert("DEFAULT_SHELL", "zsh".to_string());
+        answers.insert("INSTALL_FISH", "false".to_string());
+        answers.insert("APPLY_LOCKSCREEN", "false".to_string());
+
+        save_answers_in(home.path(), &answers).expect("the answers are written");
+        let read = load_answers(home.path());
+
+        assert_eq!(read, answers);
+    }
+
+    #[test]
+    fn an_answer_this_installer_no_longer_knows_is_dropped() {
+        let home = TempDir::new("answers-unknown").expect("a temporary directory");
+        std::fs::create_dir_all(home.path().join(".config/caelestia-kde")).expect("the directory");
+        std::fs::write(
+            home.path().join(ANSWERS),
+            "DEFAULT_SHELL=zsh\nNO_SUCH_ANSWER=true\n",
+        )
+        .expect("the file");
+
+        let read = load_answers(home.path());
+
+        assert_eq!(read.len(), 1);
+        assert_eq!(read.get("DEFAULT_SHELL").map(String::as_str), Some("zsh"));
     }
 
     #[test]
