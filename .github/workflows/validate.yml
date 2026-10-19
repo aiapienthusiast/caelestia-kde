@@ -404,6 +404,35 @@ jobs:
           path: installer/target/x86_64-unknown-linux-musl/release/caelestia-install
           if-no-files-found: error
 
+  # `rust-version` in Cargo.toml is a promise to anyone reading the crate. The job above builds on
+  # whatever stable is current, which never tests that promise, so it is tested here against the
+  # exact version the crate names.
+  installer-msrv:
+    name: Installer builds on its stated minimum Rust
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Use the Rust version the crate claims
+        run: |
+          set -euo pipefail
+          version="$(sed -nE 's/^rust-version = "(.*)"/\1/p' installer/Cargo.toml)"
+          if [[ -z "$version" ]]; then
+            echo "::error::installer/Cargo.toml must state rust-version"
+            exit 1
+          fi
+          echo "Building with the stated minimum: $version"
+          rustup toolchain install "$version" --profile minimal
+          rustup default "$version"
+
+      - name: Build and test on that version
+        run: |
+          set -euo pipefail
+          rustc --version
+          cargo build --release --manifest-path installer/Cargo.toml
+          cargo test --manifest-path installer/Cargo.toml
+
   runtime-smoke:
     name: Installed QML runtime smoke
     runs-on: ubuntu-latest
@@ -482,6 +511,7 @@ jobs:
       - cpp-format
       - build-parity
       - installer
+      - installer-msrv
       - runtime-smoke
       - shell-sanitizers
     runs-on: ubuntu-latest
@@ -509,6 +539,7 @@ jobs:
           job_results[cpp-format]="${{ needs.cpp-format.result }}"
           job_results[build-parity]="${{ needs.build-parity.result }}"
           job_results[installer]="${{ needs.installer.result }}"
+          job_results[installer-msrv]="${{ needs.installer-msrv.result }}"
           job_results[runtime-smoke]="${{ needs.runtime-smoke.result }}"
           job_results[shell-sanitizers]="${{ needs.shell-sanitizers.result }}"
 
