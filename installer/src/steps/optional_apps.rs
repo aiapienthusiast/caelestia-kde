@@ -17,14 +17,7 @@ pub fn run(context: &Context) -> Result<(), Failure> {
     println!("  Optional Components");
     println!();
 
-    const PICKS: [&str; 6] = [
-        "INSTALL_VSCODE",
-        "INSTALL_ZED",
-        "INSTALL_SPICETIFY",
-        "INSTALL_DISCORD",
-        "INSTALL_TODOIST",
-        "INSTALL_FIREFOX_THEME",
-    ];
+    const PICKS: [&str; 6] = crate::apps::Apps::IDS;
     let picked = PICKS
         .iter()
         .filter(|name| context.flag(name, false))

@@ -217,24 +217,7 @@ fn clip(text: &str, width: usize) -> String {
 }
 
 fn wrap(text: &str, width: usize) -> Vec<String> {
-    let width = width.max(16);
-    let mut lines = Vec::new();
-    let mut current = String::new();
-    for word in text.split_whitespace() {
-        if current.is_empty() {
-            current.push_str(word);
-        } else if current.chars().count() + 1 + word.chars().count() <= width {
-            current.push(' ');
-            current.push_str(word);
-        } else {
-            lines.push(std::mem::take(&mut current));
-            current.push_str(word);
-        }
-    }
-    if !current.is_empty() {
-        lines.push(current);
-    }
-    lines
+    crate::ui::wrap(text, width, 16)
 }
 
 #[cfg(test)]

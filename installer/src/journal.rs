@@ -4,6 +4,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::menu::Answers;
+use crate::steps::Status;
 
 pub const PLAN_ID_VAR: &str = "CAELESTIA_PLAN_ID";
 
@@ -34,7 +35,7 @@ pub fn path_for(plan: &str) -> PathBuf {
     directory().join(format!("install-{plan}.journal"))
 }
 
-fn read(path: &Path) -> BTreeMap<String, String> {
+fn read(path: &Path) -> BTreeMap<String, Status> {
     let mut steps = BTreeMap::new();
     let Ok(text) = std::fs::read_to_string(path) else {
         return steps;
@@ -45,8 +46,10 @@ fn read(path: &Path) -> BTreeMap<String, String> {
             continue;
         }
         let mut fields = line.split('|');
-        if let (Some(id), Some(status)) = (fields.next(), fields.next()) {
-            steps.insert(id.to_string(), status.to_string());
+        if let (Some(id), Some(status)) = (fields.next(), fields.next())
+            && let Some(status) = Status::from_journal(status)
+        {
+            steps.insert(id.to_string(), status);
         }
     }
     steps
@@ -55,7 +58,7 @@ fn read(path: &Path) -> BTreeMap<String, String> {
 #[derive(Debug)]
 pub struct Journal {
     path: PathBuf,
-    steps: BTreeMap<String, String>,
+    steps: BTreeMap<String, Status>,
 }
 
 impl Journal {
@@ -76,15 +79,15 @@ impl Journal {
         let _ = std::fs::remove_file(&self.path);
     }
 
-    pub fn status(&self, step: &str) -> Option<&str> {
-        self.steps.get(step).map(String::as_str)
+    pub fn status(&self, step: &str) -> Option<Status> {
+        self.steps.get(step).copied()
     }
 
     pub fn done(&self, step: &str) -> bool {
-        matches!(self.status(step), Some("ok" | "warn" | "skipped"))
+        self.status(step).is_some_and(Status::settles)
     }
 
-    pub fn record(&mut self, step: &str, status: &str, seconds: u64) {
+    pub fn record(&mut self, step: &str, status: Status, seconds: u64) {
         if let Some(parent) = self.path.parent()
             && std::fs::create_dir_all(parent).is_err()
         {
@@ -97,21 +100,21 @@ impl Journal {
         else {
             return;
         };
-        if writeln!(file, "{step}|{status}|{seconds}").is_ok() {
-            self.steps.insert(step.to_string(), status.to_string());
+        if writeln!(file, "{step}|{}|{seconds}", status.as_journal()).is_ok() {
+            self.steps.insert(step.to_string(), status);
         }
     }
 
-    pub fn problems(&self) -> Vec<(&str, &str)> {
+    pub fn problems(&self) -> Vec<(&str, Status)> {
         self.steps
             .iter()
-            .filter(|(_, status)| !matches!(status.as_str(), "ok" | "skipped"))
-            .map(|(id, status)| (id.as_str(), status.as_str()))
+            .filter(|(_, status)| status.is_problem())
+            .map(|(id, status)| (id.as_str(), *status))
             .collect()
     }
 }
 
-pub fn unfinished() -> Vec<(String, String)> {
+pub fn unfinished() -> Vec<(String, Status)> {
     let Ok(entries) = std::fs::read_dir(directory()) else {
         return Vec::new();
     };
@@ -129,7 +132,7 @@ pub fn unfinished() -> Vec<(String, String)> {
     Journal::at(path)
         .problems()
         .into_iter()
-        .map(|(id, status)| (id.to_string(), status.to_string()))
+        .map(|(id, status)| (id.to_string(), status))
         .collect()
 }
 
@@ -140,7 +143,7 @@ fn newest(journals: Vec<(std::time::SystemTime, PathBuf)>) -> Option<PathBuf> {
         .map(|(_, path)| path)
 }
 
-pub fn record_here(step: &str, status: &str, seconds: u64) {
+pub fn record_here(step: &str, status: Status, seconds: u64) {
     let Some(plan) = std::env::var(PLAN_ID_VAR)
         .ok()
         .filter(|value| !value.is_empty())
@@ -188,7 +191,7 @@ mod tests {
     #[test]
     fn the_last_word_on_a_step_is_the_one_that_counts() {
         let (_work, journal) = a_journal("00a-system-update|failed|3\n00a-system-update|ok|4\n");
-        assert_eq!(journal.status("00a-system-update"), Some("ok"));
+        assert_eq!(journal.status("00a-system-update"), Some(Status::Ok));
         assert!(journal.done("00a-system-update"));
     }
 
@@ -201,18 +204,21 @@ mod tests {
         assert!(!journal.done("d"), "a failed step has everything to redo");
         assert!(!journal.done("missing"));
 
-        assert_eq!(journal.problems(), vec![("b", "warn"), ("d", "failed")]);
+        assert_eq!(
+            journal.problems(),
+            vec![("b", Status::Warn), ("d", Status::Failed)]
+        );
     }
 
     #[test]
     fn recording_appends_and_clearing_starts_again() {
         let (_work, mut journal) = a_journal("a|ok|1\n");
-        journal.record("b", "failed", 7);
+        journal.record("b", Status::Failed, 7);
 
         let text = std::fs::read_to_string(journal.path()).expect("the journal");
         assert!(text.contains("a|ok|1"), "{text}");
         assert!(text.contains("b|failed|7"), "{text}");
-        assert_eq!(journal.status("b"), Some("failed"));
+        assert_eq!(journal.status("b"), Some(Status::Failed));
 
         journal.clear();
         assert!(!journal.path().exists(), "clearing removes the file");
@@ -221,7 +227,7 @@ mod tests {
     #[test]
     fn a_line_nobody_can_read_is_skipped_rather_than_fatal() {
         let (_work, journal) = a_journal("nonsense\n\n# comment\nb|ok|2\n");
-        assert_eq!(journal.status("b"), Some("ok"));
+        assert_eq!(journal.status("b"), Some(Status::Ok));
         assert_eq!(journal.problems(), Vec::new());
     }
 }

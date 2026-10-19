@@ -28,11 +28,12 @@ pub fn run(bundle: &Path, answers: &Answers, resume: bool) -> Outcome {
     if resume {
         output::info(&format!("journal: {}", journal.path().display()));
         for (id, status) in journal.problems() {
-            if status == "warn" {
+            if status == Status::Warn {
                 output::info(&format!("{id} finished with a warning last time"));
             } else {
                 output::warn(&format!(
-                    "{id} stopped at {status} last time; running it again"
+                    "{id} stopped at {} last time; running it again",
+                    status.as_journal()
                 ));
             }
         }
@@ -50,7 +51,7 @@ pub fn run(bundle: &Path, answers: &Answers, resume: bool) -> Outcome {
     for step in STEPS.iter() {
         if steps::is_skipped(step, answers) {
             output::skip(&format!("{} is switched off", step.name));
-            journal.record(step.id, "skipped", 0);
+            journal.record(step.id, Status::Skipped, 0);
             continue;
         }
         if resume && journal.done(step.id) {
@@ -63,24 +64,24 @@ pub fn run(bundle: &Path, answers: &Answers, resume: bool) -> Outcome {
         let started = Instant::now();
         match execute(step, bundle, &log, &env) {
             Ok(Status::Ok) => {
-                journal.record(step.id, "ok", started.elapsed().as_secs());
+                journal.record(step.id, Status::Ok, started.elapsed().as_secs());
                 output::ok(step.name);
             }
             Ok(Status::Warn) => {
-                journal.record(step.id, "warn", started.elapsed().as_secs());
+                journal.record(step.id, Status::Warn, started.elapsed().as_secs());
                 output::warn(step.name);
             }
             Ok(Status::Skipped) => {
-                journal.record(step.id, "skipped", started.elapsed().as_secs());
+                journal.record(step.id, Status::Skipped, started.elapsed().as_secs());
                 output::skip(step.name);
             }
             Ok(_) => {
-                journal.record(step.id, "failed", started.elapsed().as_secs());
+                journal.record(step.id, Status::Failed, started.elapsed().as_secs());
                 output::err(&format!("{} failed", step.name));
                 return Outcome::Failed;
             }
             Err(problem) => {
-                journal.record(step.id, "failed", started.elapsed().as_secs());
+                journal.record(step.id, Status::Failed, started.elapsed().as_secs());
                 output::err(&format!("{}: {problem}", step.name));
                 return Outcome::Failed;
             }

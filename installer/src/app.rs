@@ -273,7 +273,7 @@ pub struct App {
     pub detection: Detection,
     pub reinstall_acknowledged: bool,
     pub installed_when_started: bool,
-    pub unfinished: Vec<(String, String)>,
+    pub unfinished: Vec<(String, Status)>,
     pub stage: Stage,
     pub overlay: Option<Overlay>,
     pub confirm: Option<Confirm>,
@@ -504,7 +504,7 @@ impl App {
     }
 
     pub fn is_changed(&self, entry: &Entry) -> bool {
-        menu::is_changed(entry, &self.apps, &self.answers, &self.baseline)
+        menu::is_changed(entry, &self.answers, &self.baseline)
     }
 
     pub fn action_enabled(&self, action: Action) -> bool {
@@ -1135,13 +1135,13 @@ impl App {
             KeyCode::Char('?') => self.overlay = Some(Overlay::Keys),
             KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => match self.selected() {
                 Some(entry) => {
-                    menu::change(entry, &self.apps, &mut self.answers);
+                    menu::change(entry, &mut self.answers);
                 }
                 None => self.next_question(),
             },
             KeyCode::Left | KeyCode::Char('h') => {
                 if let Some(entry) = self.selected() {
-                    menu::change(entry, &self.apps, &mut self.answers);
+                    menu::change(entry, &mut self.answers);
                 }
             }
             KeyCode::Enter => self.next_question(),
@@ -1177,7 +1177,7 @@ impl App {
         let Some(entry) = self.selected() else {
             return;
         };
-        if menu::reset(entry, &self.apps, &mut self.answers, &self.baseline) {
+        if menu::reset(entry, &mut self.answers, &self.baseline) {
             self.notice = Some(format!("{} reset", entry.title()));
         }
     }
@@ -1509,8 +1509,8 @@ impl App {
             if steps::is_skipped(&STEPS[index], &self.answers) {
                 self.statuses[index] = Status::Skipped;
                 self.durations[index] = Some(Duration::ZERO);
-                self.log.push(LogLine::parse(&format!(
-                    "  [SKIP]  {} is switched off in the options",
+                self.log.push(LogLine::skip(format!(
+                    "{} is switched off in the options",
                     STEPS[index].name
                 )));
                 self.current += 1;
@@ -1519,10 +1519,8 @@ impl App {
             if self.pretend {
                 self.statuses[index] = Status::Ok;
                 self.durations[index] = Some(Duration::from_secs(2));
-                self.log.push(LogLine::parse(&format!(
-                    "  [OK]    {} finished",
-                    STEPS[index].name
-                )));
+                self.log
+                    .push(LogLine::ok(format!("{} finished", STEPS[index].name)));
                 self.current += 1;
                 continue;
             }
@@ -1537,8 +1535,7 @@ impl App {
                 }
                 Err(problem) => {
                     self.statuses[index] = Status::Failed;
-                    self.log
-                        .push(LogLine::parse(&format!("  [ERR]   {problem}")));
+                    self.log.push(LogLine::error(problem));
                     self.failure = Some(FailureCard::new(step, &self.log));
                     self.paused = true;
                     return;
@@ -1592,8 +1589,7 @@ impl App {
                 self.repaint = true;
                 self.durations[self.current] =
                     self.running_since.take().map(|since| since.elapsed());
-                self.log
-                    .push(LogLine::parse(&format!("  [ERR]   {problem}")));
+                self.log.push(LogLine::error(problem));
                 self.failure = Some(FailureCard::new(&STEPS[self.current], &self.log));
                 self.paused = true;
             }

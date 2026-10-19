@@ -46,6 +46,28 @@ impl LogLine {
         }
     }
 
+    /// A line the installer itself writes, rather than one a child process printed. Building these
+    /// through `parse` meant formatting a line and reading it back to learn what it had just said.
+    pub fn new(kind: Kind, text: impl Into<String>) -> Self {
+        Self {
+            kind,
+            depth: 1,
+            text: cap(text.into()),
+        }
+    }
+
+    pub fn ok(text: impl Into<String>) -> Self {
+        Self::new(Kind::Ok, text)
+    }
+
+    pub fn skip(text: impl Into<String>) -> Self {
+        Self::new(Kind::Skip, text)
+    }
+
+    pub fn error(text: impl Into<String>) -> Self {
+        Self::new(Kind::Error, text)
+    }
+
     pub fn is_loud(&self) -> bool {
         matches!(self.kind, Kind::Warn | Kind::Error)
     }

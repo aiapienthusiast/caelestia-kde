@@ -97,30 +97,49 @@ pub fn run(context: &Context) -> Result<(), Failure> {
 
     cleanup_legacy_fonts(&home);
 
-    match context.variable("CAELESTIA_SKIP_DEPLOY").as_deref() {
-        Some("0") | None => {
-            if context.variable("APPLY_LOCKSCREEN").as_deref() != Some("false") {
-                cleanup_legacy_lockscreen(&home);
-                if install_lockscreen_greeter(bundle, &home) {
-                    configure_lockscreen_greeter(&home);
-                }
-            } else {
-                output::skip("Lock screen greeter disabled by user choice.");
+    match deploy_intent(context) {
+        Deploy::Both => {
+            cleanup_legacy_lockscreen(&home);
+            if install_lockscreen_greeter(bundle, &home) {
+                configure_lockscreen_greeter(&home);
             }
         }
-        _ => {
-            if context.variable("APPLY_LOCKSCREEN").as_deref() == Some("false") {
-                output::skip("Lock screen greeter disabled by user choice.");
-            } else {
-                output::info("KDE Lock Screen installation and configuration skipped.");
-            }
+        Deploy::WithoutLockScreen => {
+            output::info("KDE Lock Screen installation and configuration skipped.");
         }
+        Deploy::Nothing => output::skip("Deployment and the lock screen are switched off."),
+        Deploy::OnlyLockScreenOff => output::skip("Lock screen greeter disabled by user choice."),
     }
 
     output::ok(
         "Caelestia Shell and KDE Bridges built and installed successfully to user directory.",
     );
     Ok(())
+}
+
+/// What this step is being asked to put down. One decision, three answers: a plain install does
+/// both halves, a run that is only building the shell does the build and leaves the desktop alone,
+/// and the lock screen is the one part either of those can also be told to leave out.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Deploy {
+    Both,
+    WithoutLockScreen,
+    OnlyLockScreenOff,
+    Nothing,
+}
+
+fn deploy_intent(context: &Context) -> Deploy {
+    let deploying = context
+        .variable("CAELESTIA_SKIP_DEPLOY")
+        .as_deref()
+        .is_none_or(|value| value == "0");
+    let lock_screen = context.variable("APPLY_LOCKSCREEN").as_deref() != Some("false");
+    match (deploying, lock_screen) {
+        (true, true) => Deploy::Both,
+        (true, false) => Deploy::OnlyLockScreenOff,
+        (false, true) => Deploy::WithoutLockScreen,
+        (false, false) => Deploy::Nothing,
+    }
 }
 
 fn build_jobs() -> String {

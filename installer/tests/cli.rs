@@ -28,10 +28,6 @@ impl Bundle {
         &self.root
     }
 
-    fn with_scripts_dir(self) -> Self {
-        fs::create_dir_all(self.root.join("scripts")).expect("a scripts directory");
-        self
-    }
 }
 
 impl Drop for Bundle {
@@ -140,20 +136,8 @@ fn a_set_that_the_menu_cannot_answer_is_refused_before_anything_runs() {
 }
 
 #[test]
-fn a_bundle_without_step_scripts_is_reported_as_the_environment() {
-    let bundle = Bundle::new("bare");
-    let output = run(&[&bundle.path().to_string_lossy()]);
-    assert_eq!(code(&output), 4);
-    assert!(
-        stderr(&output).contains("step scripts not found"),
-        "{}",
-        stderr(&output)
-    );
-}
-
-#[test]
 fn the_wizard_refuses_to_start_without_a_terminal() {
-    let bundle = Bundle::new("with-scripts").with_scripts_dir();
+    let bundle = Bundle::new("bare");
     let output = run(&[&bundle.path().to_string_lossy()]);
     assert_eq!(code(&output), 4);
     assert!(
@@ -169,7 +153,7 @@ fn canceling_the_uninstall_leaves_the_install_alone() {
     use std::io::Write;
     use std::process::Stdio;
 
-    let bundle = Bundle::new("cancel-uninstall").with_scripts_dir();
+    let bundle = Bundle::new("cancel-uninstall");
     let home = bundle.path().join("home");
     let config = home.join(".config/caelestia");
     fs::create_dir_all(&config).expect("a configuration directory");
@@ -207,7 +191,7 @@ fn canceling_the_uninstall_leaves_the_install_alone() {
 
 #[test]
 fn the_phase_trace_only_appears_when_asked_for() {
-    let bundle = Bundle::new("trace").with_scripts_dir();
+    let bundle = Bundle::new("trace");
     let path = bundle.path().to_string_lossy().into_owned();
 
     let quiet = run(&[&path]);
@@ -228,7 +212,7 @@ fn the_phase_trace_only_appears_when_asked_for() {
 #[cfg(unix)]
 #[test]
 fn an_update_runs_in_the_installer_and_says_what_it_needs() {
-    let bundle = Bundle::new("update").with_scripts_dir();
+    let bundle = Bundle::new("update");
     let path = bundle.path().to_string_lossy().into_owned();
     let empty = bundle.path().join("no-tools");
     fs::create_dir_all(&empty).expect("an empty directory");
@@ -260,7 +244,7 @@ fn an_uninstall_with_nothing_to_remove_says_so_and_finishes() {
     use std::io::Write;
     use std::process::Stdio;
 
-    let bundle = Bundle::new("empty-uninstall").with_scripts_dir();
+    let bundle = Bundle::new("empty-uninstall");
     let home = bundle.path().join("home");
     let bin = bundle.path().join("bin");
     fs::create_dir_all(&home).expect("a home");
@@ -308,7 +292,7 @@ fn an_uninstall_with_nothing_to_remove_says_so_and_finishes() {
 
 #[test]
 fn a_plan_prints_the_steps_and_stops_before_running_them() {
-    let bundle = Bundle::new("plan").with_scripts_dir();
+    let bundle = Bundle::new("plan");
     let path = bundle.path().to_str().expect("a utf-8 path");
     let output = run(&["--plan", path]);
 
@@ -320,7 +304,7 @@ fn a_plan_prints_the_steps_and_stops_before_running_them() {
 
 #[test]
 fn a_dry_run_is_the_same_thing_as_a_plan() {
-    let bundle = Bundle::new("dry-run").with_scripts_dir();
+    let bundle = Bundle::new("dry-run");
     let path = bundle.path().to_str().expect("a utf-8 path");
 
     assert_eq!(
@@ -331,7 +315,7 @@ fn a_dry_run_is_the_same_thing_as_a_plan() {
 
 #[test]
 fn a_plan_takes_the_answers_it_is_given() {
-    let bundle = Bundle::new("plan-set").with_scripts_dir();
+    let bundle = Bundle::new("plan-set");
     let path = bundle.path().to_str().expect("a utf-8 path");
     let output = run(&["--plan", "--set", "SKIP_SYSTEM_UPDATE=true", path]);
 
@@ -343,7 +327,7 @@ fn a_plan_takes_the_answers_it_is_given() {
 
 #[test]
 fn the_plan_can_be_read_by_a_machine() {
-    let bundle = Bundle::new("plan-json").with_scripts_dir();
+    let bundle = Bundle::new("plan-json");
     let path = bundle.path().to_str().expect("a utf-8 path");
     let output = run(&["--plan", "--json", path]);
 
@@ -374,7 +358,7 @@ fn an_unattended_run_without_root_says_so_and_stops() {
         return;
     }
 
-    let bundle = Bundle::new("yes").with_scripts_dir();
+    let bundle = Bundle::new("yes");
     let path = bundle.path().to_str().expect("a utf-8 path");
     let output = run_with(
         &["--non-interactive", path],
@@ -405,7 +389,7 @@ fn an_unattended_run_refuses_the_flags_that_only_mean_something_to_the_wizard() 
 
 #[test]
 fn the_entry_points_bundle_flag_is_understood_by_the_main_run() {
-    let bundle = Bundle::new("bundle-flag").with_scripts_dir();
+    let bundle = Bundle::new("bundle-flag");
     let path = bundle.path().to_str().expect("a utf-8 path");
 
     let plan = run(&["--plan", "--bundle", path]);

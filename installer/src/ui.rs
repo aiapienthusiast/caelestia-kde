@@ -308,6 +308,29 @@ pub fn labeled(label: &str, value: String, theme: &Theme, width: usize) -> Line<
     ])
 }
 
+/// Prose broken into lines no wider than `width`, but never squeezed below `min`: a column too
+/// narrow to hold a word reads better with the word spilling than with it split.
+pub fn wrap(text: &str, width: usize, min: usize) -> Vec<String> {
+    let width = width.max(min);
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        if current.is_empty() {
+            current.push_str(word);
+        } else if current.chars().count() + 1 + word.chars().count() <= width {
+            current.push(' ');
+            current.push_str(word);
+        } else {
+            lines.push(std::mem::take(&mut current));
+            current.push_str(word);
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
+}
+
 pub fn progress(
     filled: usize,
     total: usize,

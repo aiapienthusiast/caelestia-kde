@@ -87,6 +87,39 @@ impl Status {
     pub fn is_failure(self) -> bool {
         matches!(self, Status::Failed)
     }
+
+    /// The word this status is written as in a journal. The journal is a file on disk, so the
+    /// spelling belongs here with the variants rather than at each writer and each reader.
+    pub fn as_journal(self) -> &'static str {
+        match self {
+            Status::Ok => "ok",
+            Status::Warn => "warn",
+            Status::Failed => "failed",
+            Status::Skipped | Status::Ignored => "skipped",
+            Status::Pending | Status::Running => "pending",
+        }
+    }
+
+    pub fn from_journal(word: &str) -> Option<Status> {
+        match word {
+            "ok" => Some(Status::Ok),
+            "warn" => Some(Status::Warn),
+            "failed" => Some(Status::Failed),
+            "skipped" => Some(Status::Skipped),
+            "pending" => Some(Status::Pending),
+            _ => None,
+        }
+    }
+
+    /// A step that will not be run again: whatever went wrong, it is settled.
+    pub fn settles(self) -> bool {
+        matches!(self, Status::Ok | Status::Warn | Status::Skipped | Status::Ignored)
+    }
+
+    /// A step the user should be told about: it finished badly, or it did not finish.
+    pub fn is_problem(self) -> bool {
+        matches!(self, Status::Warn | Status::Failed)
+    }
 }
 
 pub enum Failure {
@@ -344,23 +377,26 @@ pub fn run(step: &Step, context: &Context) -> i32 {
     }
 }
 
-const OPTIONAL_APP_ANSWERS: [&str; 6] = [
-    "INSTALL_VSCODE",
-    "INSTALL_ZED",
-    "INSTALL_SPICETIFY",
-    "INSTALL_DISCORD",
-    "INSTALL_TODOIST",
-    "INSTALL_FIREFOX_THEME",
-];
+/// The switches a step's own body reads as well as the plan. Spelling each name once means the
+/// plan's decision to skip a step and the step's decision to do nothing cannot drift apart.
+pub const SKIP_SYSTEM_UPDATE: &str = "SKIP_SYSTEM_UPDATE";
+pub const SYNC_LOGIN_SCREEN: &str = "SYNC_LOGIN_SCREEN";
+
+/// The optional apps, which are the apps the installer can theme: one list, owned by `apps`, so the
+/// Applications question, the bulk row and the step that installs them cannot disagree.
+pub const OPTIONAL_APP_ANSWERS: [&str; 6] = crate::apps::Apps::IDS;
 
 fn answer_is_true(answers: &Answers, name: &str) -> bool {
     answers.get(name).map(String::as_str) == Some("true")
 }
 
+/// Which steps the plan leaves out. The bodies ask the same questions of the environment, because
+/// a step run on its own (`step <id>`) never passes through here, and that second check is the
+/// safety net rather than a second policy: both read the constants above.
 pub fn is_skipped(step: &Step, answers: &Answers) -> bool {
     match step.id {
-        "00a-system-update" => answer_is_true(answers, "SKIP_SYSTEM_UPDATE"),
-        "05-login-screen" => !answer_is_true(answers, "SYNC_LOGIN_SCREEN"),
+        "00a-system-update" => answer_is_true(answers, SKIP_SYSTEM_UPDATE),
+        "05-login-screen" => !answer_is_true(answers, SYNC_LOGIN_SCREEN),
         "11-optional-apps" => !OPTIONAL_APP_ANSWERS
             .iter()
             .any(|answer| answer_is_true(answers, answer)),

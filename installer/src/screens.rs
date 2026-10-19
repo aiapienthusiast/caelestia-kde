@@ -1557,24 +1557,7 @@ fn notice(app: &App) -> Vec<Line<'static>> {
 }
 
 fn wrap(text: &str, width: usize) -> Vec<String> {
-    let width = width.max(20);
-    let mut lines: Vec<String> = Vec::new();
-    let mut current = String::new();
-    for word in text.split_whitespace() {
-        if current.is_empty() {
-            current.push_str(word);
-        } else if current.chars().count() + 1 + word.chars().count() <= width {
-            current.push(' ');
-            current.push_str(word);
-        } else {
-            lines.push(std::mem::take(&mut current));
-            current.push_str(word);
-        }
-    }
-    if !current.is_empty() {
-        lines.push(current);
-    }
-    lines
+    crate::ui::wrap(text, width, 20)
 }
 
 #[cfg(test)]
@@ -1617,7 +1600,7 @@ mod tests {
     fn app_that_stopped_at(step: &str) -> App {
         let mut app = app();
         app.detection.installed = true;
-        app.unfinished = vec![(step.to_string(), "failed".to_string())];
+        app.unfinished = vec![(step.to_string(), crate::steps::Status::Failed)];
         app
     }
 

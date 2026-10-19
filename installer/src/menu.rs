@@ -79,14 +79,7 @@ pub fn holds_an_answer(entry: &Entry) -> bool {
     matches!(entry, Entry::Toggle { .. } | Entry::Choice { .. })
 }
 
-const APP_THEMING: [&str; 6] = [
-    "INSTALL_VSCODE",
-    "INSTALL_ZED",
-    "INSTALL_SPICETIFY",
-    "INSTALL_DISCORD",
-    "INSTALL_TODOIST",
-    "INSTALL_FIREFOX_THEME",
-];
+const APP_THEMING: [&str; 6] = crate::apps::Apps::IDS;
 
 const APPEARANCE: [Entry; 4] = [
     Entry::Toggle {
@@ -285,19 +278,15 @@ pub fn baseline_of<'a>(entry: &Entry, baseline: &'a Answers) -> Option<&'a str> 
     }
 }
 
-pub fn members_here(entry: &Entry, apps: &crate::apps::Apps) -> Vec<&'static str> {
-    let _ = apps;
+/// The answers a bulk row stands for. Every app is offered whether or not it is installed - the
+/// installer is where it gets installed from - so nothing is filtered by what is present.
+pub fn members_here(entry: &Entry) -> Vec<&'static str> {
     entry.members().unwrap_or_default().to_vec()
 }
 
-pub fn is_changed(
-    entry: &Entry,
-    apps: &crate::apps::Apps,
-    answers: &Answers,
-    baseline: &Answers,
-) -> bool {
+pub fn is_changed(entry: &Entry, answers: &Answers, baseline: &Answers) -> bool {
     if entry.members().is_some() {
-        return members_here(entry, apps)
+        return members_here(entry)
             .iter()
             .any(|id| answers.get(id) != baseline.get(id));
     }
@@ -307,14 +296,9 @@ pub fn is_changed(
     }
 }
 
-pub fn reset(
-    entry: &Entry,
-    apps: &crate::apps::Apps,
-    answers: &mut Answers,
-    baseline: &Answers,
-) -> bool {
+pub fn reset(entry: &Entry, answers: &mut Answers, baseline: &Answers) -> bool {
     if entry.members().is_some() {
-        let members = members_here(entry, apps);
+        let members = members_here(entry);
         for id in &members {
             let start = baseline
                 .get(id)
@@ -334,25 +318,20 @@ pub fn reset(
     }
 }
 
-pub fn preset_on(entry: &Entry, apps: &crate::apps::Apps, answers: &Answers) -> bool {
+pub fn preset_on(entry: &Entry, answers: &Answers) -> bool {
     let Entry::Preset { on, .. } = entry else {
         return false;
     };
     let wanted = if *on { "true" } else { "false" };
-    let members = members_here(entry, apps);
+    let members = members_here(entry);
     !members.is_empty()
         && members
             .iter()
             .all(|id| answers.get(id).map(String::as_str) == Some(wanted))
 }
 
-pub fn preset_set(
-    entry: &Entry,
-    apps: &crate::apps::Apps,
-    answers: &mut Answers,
-    on: bool,
-) -> bool {
-    let members = members_here(entry, apps);
+pub fn preset_set(entry: &Entry, answers: &mut Answers, on: bool) -> bool {
+    let members = members_here(entry);
     for id in &members {
         answers.insert(*id, on.to_string());
     }
@@ -395,13 +374,13 @@ pub fn cycle(entry: &Entry, answers: &mut Answers, forward: bool) -> bool {
     true
 }
 
-pub fn change(entry: &Entry, apps: &crate::apps::Apps, answers: &mut Answers) -> bool {
+pub fn change(entry: &Entry, answers: &mut Answers) -> bool {
     let changed = match entry {
         Entry::Toggle { .. } => toggle(entry, answers),
         Entry::Choice { .. } => cycle(entry, answers, true),
         Entry::Preset { .. } => {
-            let on = preset_on(entry, apps, answers);
-            preset_set(entry, apps, answers, !on)
+            let on = preset_on(entry, answers);
+            preset_set(entry, answers, !on)
         }
         Entry::Submenu { .. } => false,
     };
@@ -467,7 +446,6 @@ mod tests {
     }
 
     struct Wizard {
-        apps: crate::apps::Apps,
         answers: Answers,
         baseline: Answers,
     }
@@ -484,11 +462,7 @@ mod tests {
                 answers.insert(id, answer.to_string());
             }
             let baseline = answers.clone();
-            Self {
-                apps,
-                answers,
-                baseline,
-            }
+            Self { answers, baseline }
         }
 
         fn value(&self, id: &str) -> Option<&str> {
@@ -496,23 +470,23 @@ mod tests {
         }
 
         fn changed(&self, id: &str) -> bool {
-            is_changed(entry(id), &self.apps, &self.answers, &self.baseline)
+            is_changed(entry(id), &self.answers, &self.baseline)
         }
 
         fn change(&mut self, id: &str) -> bool {
-            change(entry(id), &self.apps, &mut self.answers)
+            change(entry(id), &mut self.answers)
         }
 
         fn back(&mut self, id: &str) -> bool {
-            reset(entry(id), &self.apps, &mut self.answers, &self.baseline)
+            reset(entry(id), &mut self.answers, &self.baseline)
         }
 
         fn bulk_is_on(&self) -> bool {
-            preset_on(preset(), &self.apps, &self.answers)
+            preset_on(preset(), &self.answers)
         }
 
         fn set_bulk(&mut self, on: bool) -> bool {
-            preset_set(preset(), &self.apps, &mut self.answers, on)
+            preset_set(preset(), &mut self.answers, on)
         }
 
         fn visible(&self, id: &str) -> bool {

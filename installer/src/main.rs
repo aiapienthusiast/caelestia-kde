@@ -164,7 +164,11 @@ fn run_step(id: &str, bundle: Option<PathBuf>, debug: bool) -> Outcome {
     let code = steps::run(step, &context);
     journal::record_here(
         step.id,
-        if code == 0 { "ok" } else { "failed" },
+        if code == 0 {
+            steps::Status::Ok
+        } else {
+            steps::Status::Failed
+        },
         started.elapsed().as_secs(),
     );
     match code {
@@ -215,10 +219,6 @@ fn run(args: Args) -> Outcome {
             Err(Failure::Reported) => Outcome::Failed,
         },
         PresetAction::Wizard => {
-            if let Err(problem) = bundle.check_scripts() {
-                eprintln!("caelestia-install: {problem}");
-                return Outcome::Environment;
-            }
             if args.plan {
                 return print_plan(&bundle, &args);
             }
