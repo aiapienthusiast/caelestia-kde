@@ -165,18 +165,56 @@ pub struct Step {
 
 pub struct Context {
     pub bundle: PathBuf,
+    /// The answers this run was given, typed. A step asks for the one it needs instead of reading
+    /// the process environment, so the plan's view of an answer and the step's cannot differ.
+    answers: Answers,
 }
 
 impl Context {
-    pub fn variable(&self, name: &str) -> Option<String> {
-        std::env::var(name).ok().filter(|value| !value.is_empty())
+    pub fn new(bundle: PathBuf, answers: Answers) -> Self {
+        Self { bundle, answers }
+    }
+
+    /// The context a step run on its own is given: the answers arrive in its environment, and this
+    /// is the one place they are read back out of it.
+    pub fn from_environment(bundle: PathBuf) -> Self {
+        let mut answers = Answers::new();
+        for id in crate::menu::answer_ids() {
+            if let Ok(value) = std::env::var(id) {
+                answers.insert(id, value);
+            }
+        }
+        Self { bundle, answers }
+    }
+
+    pub fn answer(&self, name: &str) -> Option<&str> {
+        self.answers.get(name).map(String::as_str)
+    }
+
+    /// A switch, or `None` when the run said nothing about it.
+    pub fn bool_of(&self, name: &str) -> Option<bool> {
+        match self.answer(name) {
+            Some("true") => Some(true),
+            Some("false") => Some(false),
+            _ => None,
+        }
+    }
+
+    pub fn choice_of(&self, name: &str) -> Option<&str> {
+        self.answer(name)
     }
 
     pub fn flag(&self, name: &str, fallback: bool) -> bool {
-        match std::env::var(name) {
-            Ok(value) => value == "true",
-            Err(_) => fallback,
-        }
+        self.bool_of(name)
+            .or_else(|| std::env::var(name).ok().map(|value| value == "true"))
+            .unwrap_or(fallback)
+    }
+
+    /// An operational variable that is not an answer: what to build with, where to write, which
+    /// plan this run belongs to. Ambient state, read from the environment because that is what it
+    /// is.
+    pub fn variable(&self, name: &str) -> Option<String> {
+        std::env::var(name).ok().filter(|value| !value.is_empty())
     }
 }
 

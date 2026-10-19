@@ -235,6 +235,16 @@ pub fn every_entry() -> Vec<&'static Entry> {
     all
 }
 
+/// Every id a run can be given an answer for. A step run on its own is handed its answers through
+/// the environment, and this is the list of names it looks for there.
+pub fn answer_ids() -> Vec<&'static str> {
+    every_entry()
+        .iter()
+        .map(|entry| entry.id())
+        .filter(|id| !id.starts_with("preset_"))
+        .collect()
+}
+
 pub fn seed_answers(entries: &[Entry], answers: &mut Answers) {
     for entry in entries {
         match entry {

@@ -41,7 +41,7 @@ pub fn run(context: &Context) -> Result<(), Failure> {
     super::ensure_five_desktops(context)?;
     remove_panels(first_install);
     no_splash_screen();
-    default_shell();
+    default_shell(context);
     default_scheme();
     user_avatar_symlinks();
     reload_kde();
@@ -213,11 +213,12 @@ fn no_splash_screen() {
     output::ok("Plasma splash screen disabled.");
 }
 
-fn default_shell() {
-    let target = std::env::var("DEFAULT_SHELL")
-        .ok()
+fn default_shell(context: &Context) {
+    let target = context
+        .choice_of("DEFAULT_SHELL")
         .filter(|shell| !shell.is_empty())
-        .unwrap_or_else(|| "fish".to_string());
+        .unwrap_or("fish")
+        .to_string();
     output::info(&format!("Setting default shell to {target}..."));
 
     let Some(shell_path) = process::locate(&target).map(|path| path.to_string_lossy().to_string())

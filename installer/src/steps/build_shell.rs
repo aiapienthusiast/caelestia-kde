@@ -133,7 +133,7 @@ fn deploy_intent(context: &Context) -> Deploy {
         .variable("CAELESTIA_SKIP_DEPLOY")
         .as_deref()
         .is_none_or(|value| value == "0");
-    let lock_screen = context.variable("APPLY_LOCKSCREEN").as_deref() != Some("false");
+    let lock_screen = context.flag("APPLY_LOCKSCREEN", true);
     match (deploying, lock_screen) {
         (true, true) => Deploy::Both,
         (true, false) => Deploy::OnlyLockScreenOff,

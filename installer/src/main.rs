@@ -167,9 +167,7 @@ fn run_step(id: &str, bundle: Option<PathBuf>, debug: bool) -> Outcome {
     };
     trace(&format!("step {} ({})", step.id, step.name));
 
-    let context = steps::Context {
-        bundle: bundle.root().to_path_buf(),
-    };
+    let context = steps::Context::from_environment(bundle.root().to_path_buf());
     let started = std::time::Instant::now();
     let code = steps::run(step, &context);
     journal::record_here(

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::install_kind;
+use crate::menu::Answers;
 use crate::output;
 use crate::paths;
 use crate::process;
@@ -95,13 +96,13 @@ pub fn run(bundle: &Path, requested: Option<String>) -> Result<(), Failure> {
     update_checkout(bundle, &channel)?;
 
     report.section("Rebuilding what the update changed");
-    load_answers(&paths::home());
+    let answers = load_answers(&paths::home());
 
     for repair in &STEPS {
         if !repair.announce.is_empty() {
             output::info(repair.announce);
         }
-        if let Err(problem) = run_step(bundle, repair.id) {
+        if let Err(problem) = run_step(bundle, repair.id, &answers) {
             if repair.required {
                 return Err(problem);
             }
@@ -210,13 +211,17 @@ fn take_lock() -> Result<Option<std::fs::File>, Failure> {
         .ok()
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "/tmp".to_string());
-    let path = PathBuf::from(runtime).join(LOCK);
+    lock_at(&PathBuf::from(runtime).join(LOCK))
+}
 
+/// The lock itself, at a path the caller names. The environment decides where it lives, which is
+/// not something a test should have to share with every other test in the process.
+fn lock_at(path: &Path) -> Result<Option<std::fs::File>, Failure> {
     let Ok(file) = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(false)
-        .open(&path)
+        .open(path)
     else {
         return Err(format!("Could not open {} to take the update lock.", path.display()).into());
     };
@@ -295,7 +300,8 @@ fn update_checkout(bundle: &Path, channel: &str) -> Result<(), Failure> {
         return Err(format!("Failed to pull from origin/{channel}").into());
     }
 
-    run_step(bundle, "02a-submodules")?;
+    // The submodule fetch happens before the recorded answers are read: it needs none of them.
+    run_step(bundle, "02a-submodules", &Answers::new())?;
 
     if stashed {
         println!();
@@ -386,17 +392,25 @@ fn ask_for_channel() -> Option<String> {
     }
 }
 
-fn load_answers(home: &Path) {
+/// The answers an install recorded, so an update re-runs the steps the way that install was
+/// configured. They are handed to the steps directly: feeding them through the process environment
+/// needed `set_var` and made the answers indistinguishable from ambient state.
+fn load_answers(home: &Path) -> Answers {
     let file = home.join(ANSWERS);
     let Ok(text) = std::fs::read_to_string(&file) else {
-        return;
+        return Answers::new();
     };
 
+    let mut answers = Answers::new();
     for (name, value) in parse_answers(&text) {
-        // SAFETY: the update is single-threaded here - nothing else is running in this process
-        // while the steps read these back through the environment.
-        unsafe { std::env::set_var(name, value) };
+        if let Some(id) = crate::menu::answer_ids()
+            .into_iter()
+            .find(|id| *id == name.as_str())
+        {
+            answers.insert(id, value);
+        }
     }
+    answers
 }
 
 fn parse_answers(text: &str) -> Vec<(String, String)> {
@@ -415,14 +429,12 @@ fn parse_answers(text: &str) -> Vec<(String, String)> {
     answers
 }
 
-fn run_step(bundle: &Path, id: &str) -> Result<(), Failure> {
+fn run_step(bundle: &Path, id: &str, answers: &Answers) -> Result<(), Failure> {
     let Some(step) = steps::find(id) else {
         return Err(format!("no step is called '{id}'").into());
     };
 
-    let context = Context {
-        bundle: bundle.to_path_buf(),
-    };
+    let context = Context::new(bundle.to_path_buf(), answers.clone());
     if steps::run(step, &context) == 0 {
         return Ok(());
     }
@@ -638,11 +650,22 @@ not an assignment
     #[cfg(unix)]
     #[test]
     fn only_one_update_can_hold_the_lock_at_a_time() {
-        let Some(first) = take_lock().expect("the lock file can be opened") else {
-            return;
+        let work = crate::tmp::TempDir::new("caelestia-lock-test").expect("a temporary directory");
+        let path = work.path().join("update.lock");
+
+        let Some(first) = lock_at(&path).expect("the lock file can be opened") else {
+            panic!("nothing else holds {}", path.display());
         };
-        assert!(take_lock().expect("the lock file can be opened").is_none());
+        assert!(
+            lock_at(&path)
+                .expect("the lock file can be opened")
+                .is_none()
+        );
         drop(first);
-        assert!(take_lock().expect("the lock file can be opened").is_some());
+        assert!(
+            lock_at(&path)
+                .expect("the lock file can be opened")
+                .is_some()
+        );
     }
 }
