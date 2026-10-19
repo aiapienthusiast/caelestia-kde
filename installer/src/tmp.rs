@@ -5,8 +5,6 @@ pub struct TempDir {
     path: PathBuf,
 }
 
-/// The next directory name in this process. The pid keeps it unique across processes; the counter
-/// keeps it unique within one, so two calls at the same moment cannot be offered the same name.
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 impl TempDir {
@@ -17,8 +15,6 @@ impl TempDir {
         Self::new_in(&base, prefix)
     }
 
-    // A directory made in a caller's own tree: staging that has to share a filesystem with
-    // what it is about to be renamed onto.
     pub fn new_in(base: &Path, prefix: &str) -> Option<Self> {
         let serial = NEXT.fetch_add(1, Ordering::Relaxed);
         for attempt in 0..64u32 {

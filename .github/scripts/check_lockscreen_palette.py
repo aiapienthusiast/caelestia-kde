@@ -34,7 +34,6 @@ LOCK_SCREEN = (
     / "LockScreenUi.qml"
 )
 
-# Lock screen property -> the shell's palette property it stands for.
 PAIRS = {
     "clSurface": "m3surface",
     "clSurfaceFg": "m3onSurface",

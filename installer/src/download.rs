@@ -11,12 +11,8 @@ pub enum Verification {
     Unpublished,
 }
 
-/// How many times a download is tried before it is called a failure.
 const ATTEMPTS: u32 = 3;
 
-/// curl's exit codes for a failure worth trying again: DNS, connect, timeout, TLS handshake, a
-/// truncated transfer. An HTTP error such as 404 is an answer rather than an outage, so it is not
-/// retried - `verify` leans on that to report an unpublished checksum without waiting.
 fn transient(code: i32) -> bool {
     matches!(code, 6 | 7 | 18 | 28 | 35 | 52 | 55 | 56)
 }
@@ -29,8 +25,6 @@ pub fn fetch(url: &str, destination: &Path, extra: &[&str]) -> bool {
     args.push("-o");
     args.push(&destination_text);
 
-    // A flaky network is the common failure in the field and it is almost always the first
-    // attempt that loses, so the retry is here rather than in every caller.
     for attempt in 0..ATTEMPTS {
         let code = process::status("curl", &args, None).unwrap_or(-1);
         if code == 0 {
@@ -44,8 +38,6 @@ pub fn fetch(url: &str, destination: &Path, extra: &[&str]) -> bool {
     false
 }
 
-/// A download whose failure is expected: no retry, and nothing of curl's own left in the output
-/// whether it answers or not.
 fn probe(url: &str, destination: &Path) -> bool {
     let destination_text = destination.to_string_lossy().to_string();
     process::status_quietly(
@@ -79,8 +71,6 @@ pub fn verify(url: &str, file: &Path) -> Verification {
     let sidecar = work.path().join("published.sha256");
     let sidecar_url = format!("{url}.sha256");
 
-    // Asked quietly and only once: a release with no published checksum is an answer, not a
-    // fault, and curl saying "404" about it writes an error into a log where nothing went wrong.
     if !probe(&sidecar_url, &sidecar) {
         return Verification::Unpublished;
     }
@@ -159,8 +149,6 @@ mod tests {
 
     #[test]
     fn only_an_outage_is_worth_trying_again() {
-        // Connection and timeout failures are outages; a 404 is an answer and must not be retried,
-        // or asking whether a checksum was published costs seconds every time it was not.
         for code in [6, 7, 18, 28, 35, 52, 55, 56] {
             assert!(transient(code), "curl {code} is an outage");
         }
@@ -175,8 +163,6 @@ mod tests {
         let file = work.path().join("file");
         fs::write(&file, b"contents").expect("a file");
 
-        // A missing file rather than an unreachable host: an outage is retried and a missing
-        // page is not, and this test is about the missing page.
         assert_eq!(
             verify("file:///nonexistent/caelestia", &file),
             Verification::Unpublished

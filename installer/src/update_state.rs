@@ -3,24 +3,11 @@ use std::path::Path;
 
 use crate::process;
 
-// The shell's update state, four files under the installed config directory:
-//
-//   .current_commit   the revision the running shell was built from
-//   .update_branch    the tracked update channel (main or dev only)
-//   .current_version  the version.env of that revision
-//   .checkout         where that revision was built from
-//
-// `scripts/lib/update-state.sh` is the same contract for the readers that are still shell
-// (the updater and the Nexus updates page); the names and the validation are that file's, so
-// a Rust writer and a shell reader agree.
-
 const COMMIT: &str = ".current_commit";
 const BRANCH: &str = ".update_branch";
 const VERSION: &str = ".current_version";
 const CHECKOUT: &str = ".checkout";
 
-// Only main and dev are channels. A checkout parked on a feature branch must not silently
-// re-point the update channel (#565): anything else leaves the tracked branch alone.
 pub fn set_branch(config: &Path, branch: &str) -> bool {
     if !matches!(branch, "main" | "dev") {
         return false;
@@ -31,8 +18,6 @@ pub fn set_branch(config: &Path, branch: &str) -> bool {
     fs::write(config.join(BRANCH), format!("{branch}\n")).is_ok()
 }
 
-// Names what is actually installed. A build that was skipped has nothing to record, and a
-// tree that is not a checkout has no revision to name.
 pub fn record_installed_revision(bundle: &Path, config: &Path) -> bool {
     record(
         bundle,
@@ -77,16 +62,12 @@ fn record(bundle: &Path, config: &Path, build_skipped: bool) -> bool {
     true
 }
 
-/// The revision the config directory says is installed, as the update screen needs to name it.
 pub struct Installed {
     pub version: String,
     pub commit: String,
     pub branch: String,
 }
 
-/// What is installed right now: the version file first, the commit and the branch beside it. All
-/// three are what `record_installed_revision` wrote, so this reads the same facts the shell's own
-/// update page does.
 pub fn installed(config: &Path) -> Option<Installed> {
     let version = read_value(config, VERSION)?;
     Some(Installed {
@@ -246,8 +227,6 @@ mod tests {
         let work = TempDir::new("caelestia-update-state-test").expect("a temporary directory");
         let repo = checkout(&work, "repo");
         let config = work.path().join("config");
-        // In the commit but not in the working tree, which is what a tree an update replaced
-        // looks like when it carries less than the commit does.
         fs::remove_file(repo.join(".github/version.env")).expect("the version file goes");
 
         assert!(record(&repo, &config, false));

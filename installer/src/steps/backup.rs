@@ -66,9 +66,6 @@ pub fn run(context: &Context) -> Result<(), Failure> {
 
     let _ = process::succeeds(&konsave, &["-r", PROFILE, "-f"], None);
 
-    // The profile is the desktop as it was before Caelestia. Saving it again on a second install
-    // would capture Caelestia's own desktop - and a restore that hands back the thing it was
-    // meant to undo is worse than no backup at all. The first one wins.
     if konsave_profile_exists(&home, PROFILE) {
         output::skip(&format!(
             "The desktop from before Caelestia was installed is already saved as '{PROFILE}'."
@@ -103,8 +100,6 @@ pub fn run(context: &Context) -> Result<(), Failure> {
     Ok(())
 }
 
-/// Whether konsave already holds a profile by this name: it keeps them as directories under the
-/// user's config, one per profile.
 fn konsave_profile_exists(home: &Path, profile: &str) -> bool {
     home.join(".config")
         .join("konsave")

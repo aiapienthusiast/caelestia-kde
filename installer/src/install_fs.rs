@@ -5,9 +5,6 @@ use std::path::{Path, PathBuf};
 use crate::process;
 use crate::tmp::TempDir;
 
-// Swaps a whole tree in for another in one rename, so a reader never sees a half-copied
-// destination and a failure leaves the previous tree in place. `required` names a file the
-// new tree has to contain before it is allowed to replace anything.
 pub fn atomic_replace_tree(src: &Path, dest: &Path, required: Option<&str>) -> io::Result<()> {
     if !src.is_dir() {
         return Err(io::Error::other(format!(
@@ -60,8 +57,6 @@ pub fn atomic_replace_tree(src: &Path, dest: &Path, required: Option<&str>) -> i
     Ok(())
 }
 
-// A copy of a tree under `<root>/<prefix>-<stamp>`, pruned to the newest `keep` snapshots.
-// The stamp names the run rather than the content, so two in the same second do not collide.
 pub fn snapshot_dir(src: &Path, root: &Path, prefix: &str, keep: usize) -> io::Result<PathBuf> {
     if !src.is_dir() {
         return Err(io::Error::other(format!(

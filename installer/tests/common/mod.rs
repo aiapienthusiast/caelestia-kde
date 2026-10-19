@@ -1,10 +1,3 @@
-//! The KDE config tools, faked against one plain ini file.
-//!
-//! The installer writes window rules and lock-screen settings through `kwriteconfig6` and
-//! reads them back through `kreadconfig6`, and an uninstall reverses what it finds. Both
-//! integration suites need those two tools to behave the way they do on a desktop - one file,
-//! written and read back - rather than answer from a fixture.
-
 #![allow(dead_code)]
 
 #[cfg(unix)]
@@ -14,7 +7,6 @@ const CONFIG_TOOLS: &str = r##"
 import os
 import sys
 from pathlib import Path
-
 
 def arguments(argv):
     values = {"file": "kwinrulesrc", "group": "", "key": ""}
@@ -29,7 +21,6 @@ def arguments(argv):
             positional.append(argument)
             index += 1
     return values, positional
-
 
 def read(path):
     sections = {}
@@ -48,7 +39,6 @@ def read(path):
             sections[current][key.strip()] = value.strip()
     return sections
 
-
 def write(path, sections):
     lines = []
     for name, entries in sections.items():
@@ -59,7 +49,6 @@ def write(path, sections):
             lines.append("%s=%s" % (key, value))
         lines.append("")
     path.write_text("\n".join(lines))
-
 
 def main():
     mode = sys.argv[1]
@@ -89,11 +78,9 @@ def main():
     write(path, sections)
     return 0
 
-
 sys.exit(main())
 "##;
 
-/// The stubs, the file they share, and the log of what was asked of them.
 #[cfg(unix)]
 pub struct ConfigTools {
     pub program: PathBuf,
@@ -101,7 +88,6 @@ pub struct ConfigTools {
     pub calls: PathBuf,
 }
 
-/// Installs the two config tools into `bin`, which the caller has already made.
 #[cfg(unix)]
 pub fn config_tools(root: &Path, bin: &Path) -> ConfigTools {
     let program = root.join("kwinrules.py");
@@ -132,7 +118,6 @@ pub fn config_tools(root: &Path, bin: &Path) -> ConfigTools {
     }
 }
 
-/// The environment the two stubs need to find the program and the log.
 #[cfg(unix)]
 pub fn config_tools_environment(tools: &ConfigTools) -> Vec<(String, String)> {
     vec![
@@ -160,7 +145,6 @@ pub fn stub(bin: &Path, name: &str, body: &str) {
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("an executable");
 }
 
-/// Every call the stub was asked to make, in order.
 #[cfg(unix)]
 pub fn calls(tools: &ConfigTools) -> Vec<String> {
     std::fs::read_to_string(&tools.calls)

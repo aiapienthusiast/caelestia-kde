@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Keeps the Plasma Login screen in step with the desktop.
-#
-# Plasma Login draws its own screen - its greeter's QML is compiled into the greeter binary and no
-# theme of ours can be loaded - so what an install can reach is what it shows: the wallpaper and the
-# colour scheme, in the greeter user's own configuration. This helper writes those, and the desktop
-# calls it after every wallpaper or colour change.
 set -euo pipefail
 
 copy_user_file() {
@@ -188,8 +182,5 @@ if is_plasmalogin_active; then
     exit "$FAILED"
 fi
 
-# The screen Caelestia draws itself is the lock screen, and its sync belongs to the shell build.
-# A machine on another display manager has nothing here to keep in step, which is not a failure:
-# an install that was made before this helper existed can still be calling it.
 echo "No Plasma Login on this machine: its login screen takes nothing from Caelestia."
 exit 0

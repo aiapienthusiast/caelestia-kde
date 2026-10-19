@@ -11,8 +11,6 @@ use super::{
     retry_individually, run_visibly, run_xdg_user_dirs, wanted, with_clone,
 };
 
-// The lists are data: whitespace-separated, so a package does not take a line of
-// its own, and read back through `names`.
 pub(super) const CORE: &str = "
     cmake ninja-build ccache qt6-qttools-devel extra-cmake-modules libgcc glibc wl-clipboard
     cliphist wl-clip-persist inotify-tools wireplumber trash-cli jq aubio aubio-devel lm_sensors
@@ -60,14 +58,10 @@ pub fn run(context: &Context, group: Group) -> Result<(), Failure> {
     let copr_packages = match group {
         Group::Core => names(COPR_CORE),
         Group::Shell => names(COPR_SHELL),
-        // The utils group has no COPR packages of its own: what it asks for is either carried
-        // by the repositories or named by another group's list.
         Group::Themes | Group::Utils => Vec::new(),
         Group::All => names(COPR_ALL),
     };
 
-    // A COPR package is one the repositories do not carry yet, so dnf is asked for it with
-    // the repository it lives in rather than as part of the batch.
     if group.covers(Group::Core) {
         packages.extend(names(COPR_CORE));
     }
@@ -106,8 +100,6 @@ pub fn run(context: &Context, group: Group) -> Result<(), Failure> {
     install_copr_packages(context, &packages, &copr_packages, &mut failures);
 
     if group.covers(Group::Themes) {
-        // No Fedora package carries these in the shapes the shell asks for, so they come
-        // from upstream directly.
         install_custom_fonts(false, &mut failures);
 
         let darkly = wanted(
@@ -132,8 +124,6 @@ pub fn run(context: &Context, group: Group) -> Result<(), Failure> {
     Ok(())
 }
 
-// Fedora ships ffmpeg without the H264 codecs, and the shell records video: RPM Fusion is
-// what carries them. Enabling it swaps the free build out for the full one.
 fn enable_h264_codecs() {
     if process::succeeds("rpm", &["-q", "rpmfusion-free-release"], None) {
         return;
@@ -202,8 +192,6 @@ fn install_copr_packages(
             continue;
         }
 
-        // libcava is the other target no package manager can answer for: the prebuilt SDK
-        // provides it without being a package, and asking dnf for it just fails.
         if *package == "libcava" && toolchain::cava_sdk_installed() {
             continue;
         }
@@ -240,8 +228,6 @@ fn copr_fallback(context: &Context, package: &str) -> bool {
                 && elevated("dnf", &["install", "-y", "quickshell-git"])
         }
         "matugen" => matugen_helper(&context.bundle, "install_matugen_fedora"),
-        // Install the package that was asked for: the COPR also ships -ui, and reporting
-        // success for that would leave gpu-screen-recorder itself missing.
         "gpu-screen-recorder" => {
             enable("brycensranch/gpu-screen-recorder-git")
                 && elevated("dnf", &["install", "-y", "gpu-screen-recorder"])
@@ -331,9 +317,6 @@ fn manual_fallback(package: &str) -> bool {
     }
 }
 
-// Darkly is not in Fedora's repositories, so it is asked for in the order that keeps the
-// user's system manager aware of it: the package, then the author's COPR, and only then the
-// prebuilt RPM, which nothing will update.
 fn install_darkly(failures: &mut Failures) {
     if !process::available("darkly") && !pkg::present("darkly") {
         install_darkly_package(failures);
@@ -375,8 +358,6 @@ fn install_darkly_package(failures: &mut Failures) {
     }
 }
 
-// The release notes are quoted, so every URL in them ends at the next quote: the build for
-// this Fedora release is the one named after it, and any other Fedora build after that.
 fn darkly_rpm_asset_url() -> Option<String> {
     let release = process::capture(
         "curl",

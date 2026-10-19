@@ -1,8 +1,5 @@
 
 import QtQuick
-// Carried in the package and imported by directory: a module import is looked up in the engine's
-// own import path, and the greeter is a process of the session that started before any of this was
-// installed, so anything named as a module is looked for where it is not.
 import "Caelestia/Services"
 import "M3Shapes"
 

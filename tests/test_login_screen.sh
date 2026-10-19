@@ -12,9 +12,6 @@ CLI="$REPO_ROOT/src/bin/caelestia"
 
 PLASMA_LOGIN_HOOK="sudo /usr/local/bin/caelestia-greeter-sync --posthook"
 
-# The step syncs the Plasma Login screen: no theme of ours is installed anywhere, so what is
-# left to check here is the pairing between the step and the uninstall that undoes it, and the
-# shipped sync.sh, which the desktop calls rather than the installer.
 
 json_get() {
     python3 - "$@" <<'PYEOF'
@@ -65,8 +62,6 @@ test_uninstall_removes_the_same_hooks_the_installer_writes() {
     dir="$(new_tmpdir)"
     write_fixture "$dir/cli.json"
 
-    # The editor is a Python script in the crate; the test drives that same script at the
-    # fixture, so what it checks is what the uninstall runs.
     python3 - "$UNINSTALL_STEP" "$dir/uninstall.py" <<'PYEOF'
 import re, sys
 source = open(sys.argv[1]).read()
@@ -111,8 +106,6 @@ test_the_login_screen_command_runs_the_greeter_step() {
     mkdir -p "$data/scripts/lib"
     cp "$REPO_ROOT/scripts/lib/installer-bin.sh" "$data/scripts/lib/"
 
-    # The step is native, so the command reaches it the way every other step is reached:
-    # by id, through the resolver, which is what this stands in for.
     cat > "$data/caelestia-install" <<EOF
 #!/bin/bash
 printf '%s|%s|%s|%s\n' "\$1" "\$2" "\$BUNDLE_DIR" "\$CAELESTIA_INSTALL_KIND" > "$dir/ran"
@@ -137,8 +130,6 @@ display_manager_seen_by() {
 }
 
 test_the_shipped_sync_helper_reads_the_boot_alias() {
-    # sync.sh is shipped into the theme, not run by the installer, so it keeps its own copy
-    # of this - and it has to keep agreeing with the step on which manager is live.
     local dir stubs extracted
     dir="$(new_tmpdir)"
     stubs="$dir/bin"

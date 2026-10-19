@@ -1,14 +1,3 @@
-//! What a run has already done.
-//!
-//! An installer that takes ten minutes is an installer that gets interrupted, and a half-finished
-//! machine is the state where a user most needs to know what happened. Each step records its own
-//! outcome here as it finishes, so a run can be picked up where it stopped instead of repeating
-//! the work - and so anybody debugging a broken machine can see exactly how far it got.
-//!
-//! The file is append-only and line-oriented: a line per step, the last line for a step winning.
-//! A step that is killed mid-write leaves the previous line intact, which is the behaviour a
-//! journal wants.
-
 use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -16,12 +5,8 @@ use std::path::{Path, PathBuf};
 
 use crate::menu::Answers;
 
-/// Carries the plan's name to each step, so a step can record its own progress without being told
-/// anything else. Set by `steps::environment`.
 pub const PLAN_ID_VAR: &str = "CAELESTIA_PLAN_ID";
 
-/// Names the plan: the answers, and the version that acts on them. Change either and the journal
-/// starts over, because a step that was already done for one plan says nothing about another.
 pub fn plan_id(answers: &Answers) -> String {
     let mut text = format!("{}\n", crate::VERSION.trim());
     for (key, value) in answers {
@@ -41,8 +26,6 @@ pub fn plan_id(answers: &Answers) -> String {
     format!("{hash:016x}")
 }
 
-/// Where the journals live: the user's state directory, since this is a record of what happened
-/// rather than data the shell reads.
 pub fn directory() -> PathBuf {
     crate::paths::state_dir().join("caelestia")
 }
@@ -76,8 +59,6 @@ pub struct Journal {
 }
 
 impl Journal {
-    /// The journal for a plan, read if it is there. An unreadable file reads as an empty one: a
-    /// corrupt journal must never stop an install.
     pub fn for_plan(plan: &str) -> Self {
         Self::at(path_for(plan))
     }
@@ -91,8 +72,6 @@ impl Journal {
         &self.path
     }
 
-    /// Start this plan over. Called when a run is not resuming, so the journal describes the run
-    /// that is happening rather than a mixture of several.
     pub fn clear(&self) {
         let _ = std::fs::remove_file(&self.path);
     }
@@ -101,8 +80,6 @@ impl Journal {
         self.steps.get(step).map(String::as_str)
     }
 
-    /// A step that does not need running again: it finished, possibly with a warning, or the
-    /// answers switched it off.
     pub fn done(&self, step: &str) -> bool {
         matches!(self.status(step), Some("ok" | "warn" | "skipped"))
     }
@@ -125,7 +102,6 @@ impl Journal {
         }
     }
 
-    /// Steps that finished, worst first, for anything that wants to summarise a run.
     pub fn problems(&self) -> Vec<(&str, &str)> {
         self.steps
             .iter()
@@ -135,12 +111,6 @@ impl Journal {
     }
 }
 
-/// What the last run left unfinished. The shell's files can be on disk while the run that was
-/// putting them there stopped part way, and "installed" on its own would claim a machine is set up
-/// when it is not.
-///
-/// Only the newest journal is read: the others are earlier attempts, and a step that failed
-/// yesterday and succeeded since is not a fact about now.
 pub fn unfinished() -> Vec<(String, String)> {
     let Ok(entries) = std::fs::read_dir(directory()) else {
         return Vec::new();
@@ -163,7 +133,6 @@ pub fn unfinished() -> Vec<(String, String)> {
         .collect()
 }
 
-/// The most recently written journal, which is the last run.
 fn newest(journals: Vec<(std::time::SystemTime, PathBuf)>) -> Option<PathBuf> {
     journals
         .into_iter()
@@ -171,9 +140,6 @@ fn newest(journals: Vec<(std::time::SystemTime, PathBuf)>) -> Option<PathBuf> {
         .map(|(_, path)| path)
 }
 
-/// Record the step this process just ran, if it was started as part of a plan. Called by the
-/// `step` subcommand, which is why the journal works the same whether the run came from the
-/// wizard or from `--non-interactive`.
 pub fn record_here(step: &str, status: &str, seconds: u64) {
     let Some(plan) = std::env::var(PLAN_ID_VAR)
         .ok()
@@ -235,8 +201,6 @@ mod tests {
         assert!(!journal.done("d"), "a failed step has everything to redo");
         assert!(!journal.done("missing"));
 
-        // Done and clean are different questions: a warned step needs no second run, but anyone
-        // resuming deserves to hear that it warned.
         assert_eq!(journal.problems(), vec![("b", "warn"), ("d", "failed")]);
     }
 

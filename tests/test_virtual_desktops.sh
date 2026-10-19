@@ -7,9 +7,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# The rule that gives a fresh install five virtual desktops lives in the crate now, and the
-# crate tests its decision table (installer/src/steps/mod.rs, steps.rs). What is left here is
-# the wiring: which steps apply it, and that the update path reaches one of them.
 
 test_both_steps_that_apply_the_rule_are_native() {
     local step
@@ -39,9 +36,6 @@ test_the_shell_helper_is_gone_with_its_callers() {
 }
 
 test_the_install_entries_mark_the_run_and_the_update_does_not() {
-    # The marker lives in the shared environment builder rather than in app.rs, because the
-    # unattended path builds the same environment: a step must not behave one way under the
-    # wizard and another under --non-interactive.
     assert_contains "$(cat "$REPO_ROOT/installer/src/steps/mod.rs")" \
         '("CAELESTIA_FRESH_INSTALL", "1"' \
         "the TUI installer should mark the run it runs the steps for"

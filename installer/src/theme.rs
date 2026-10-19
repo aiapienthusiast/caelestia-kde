@@ -1,6 +1,3 @@
-// The visual language: roles rather than colors, and a palette per terminal capability. Every
-// role used for text clears 4.5:1 against its own surface; the tests hold that line.
-
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::env::Env;
@@ -11,8 +8,6 @@ pub const TAGLINE: &str = "A Material You desktop for KDE Plasma 6";
 pub const AUTHOR: &str = "By @ladybug-me";
 pub const CO_AUTHOR: &str = "Co-maintainer: 0xSolanaceae";
 
-/// The brand mark, drawn only where the whole of it fits. Full-cell blocks and box characters,
-/// not the `_`, `|` and `/` of line art, which leave gaps wherever a font does not join them.
 pub const SPLASH: [&str; 6] = [
     " ██████╗  █████╗  ███████╗ ██╗      ███████╗ ███████╗ ████████╗ ██╗  █████╗ ",
     "██╔════╝ ██╔══██╗ ██╔════╝ ██║      ██╔════╝ ██╔════╝ ╚══██╔══╝ ██║ ██╔══██╗",
@@ -52,7 +47,6 @@ impl Mode {
     }
 }
 
-/// What the terminal can actually render.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Depth {
     True,
@@ -64,9 +58,7 @@ pub enum Depth {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Role {
     Surface,
-    /// A block that stands off the surface, so a group of rows reads as one thing.
     Panel,
-    /// Text drawn on a filled accent: the footer bar, and the row the cursor is on.
     OnAccent,
     Foreground,
     Muted,
@@ -164,7 +156,6 @@ impl Theme {
         }
     }
 
-    /// The `t` key: the same terminal, the other mode.
     pub fn cycle(&mut self) {
         self.mode = self.mode.other();
         self.roles = roles(self.mode);
@@ -188,21 +179,14 @@ impl Theme {
             .add_modifier(modifier(role, self.depth))
     }
 
-    /// The surface itself, so every screen starts from the brand background rather than from
-    /// whatever the terminal was showing.
     pub fn surface(&self) -> Style {
         Style::default().bg(self.color(Role::Surface))
     }
 
-    /// A raised block: the background a group of rows sits on where a border would cost two lines
-    /// to say the same thing.
     pub fn panel(&self) -> Style {
         Style::default().bg(self.color(Role::Panel))
     }
 
-    /// The one filled surface in the program: the footer bar, and the row the cursor is on. Text
-    /// on it uses `OnAccent`, which swaps with the accent, so the fill carries its own text in
-    /// either theme. A terminal with no color gets weight instead of a fill it cannot draw.
     pub fn bar(&self) -> Style {
         if self.depth == Depth::Mono {
             return Style::default().add_modifier(Modifier::BOLD);
@@ -212,7 +196,6 @@ impl Theme {
             .fg(self.color(Role::OnAccent))
     }
 
-    /// The text on the filled bar, for everything that is not a key name.
     pub fn on_bar(&self) -> Style {
         if self.depth == Depth::Mono {
             return Style::default();
@@ -220,12 +203,10 @@ impl Theme {
         self.style(Role::OnAccent)
     }
 
-    /// A key name on the filled bar: the bold half of it.
     pub fn bar_key(&self) -> Style {
         self.on_bar().add_modifier(Modifier::BOLD)
     }
 
-    /// The frame around the whole screen, in the accent.
     pub fn frame(&self) -> Style {
         self.style(Role::Accent)
     }
@@ -274,7 +255,6 @@ impl Theme {
         self.style(Role::Ok)
     }
 
-    /// A failure the user chose to move past: still a failure, visibly quieter.
     pub fn ignored_text(&self) -> Style {
         self.style(Role::Ignored)
     }
@@ -299,7 +279,6 @@ fn role_of(status: Status) -> Role {
     }
 }
 
-/// A terminal with no color falls back to weight: loud things bold, quiet things dim.
 fn modifier(role: Role, depth: Depth) -> Modifier {
     if depth != Depth::Mono {
         return Modifier::empty();
@@ -315,11 +294,7 @@ fn modifier(role: Role, depth: Depth) -> Modifier {
 
 fn ansi(role: Role, mode: Mode) -> Color {
     match (mode, role) {
-        // Neither a fill nor a raised panel survives a basic sixteen, so both borrow the
-        // terminal's own background and the frame carries the structure instead.
         (_, Role::Surface | Role::Panel) => Color::Reset,
-        // The accent is the bright blue in the dark theme and the dark one in the light, so the
-        // text on it has to swap with it.
         (Mode::Dark, Role::OnAccent) => Color::Black,
         (Mode::Light, Role::OnAccent) => Color::White,
         (Mode::Dark, Role::Foreground | Role::Muted) => Color::Reset,
@@ -337,13 +312,10 @@ fn ansi(role: Role, mode: Mode) -> Color {
     }
 }
 
-/// The nearest of the 256-color palette, over the cube and the gray ramp but not the sixteen:
-/// those belong to the user's theme.
 fn indexed(rgb: Rgb) -> u8 {
     let Rgb(r, g, b) = rgb;
     let cube = (16 + 36 * cube_level(r) + 6 * cube_level(g) + cube_level(b)) as u8;
     let average = (u16::from(r) + u16::from(g) + u16::from(b)) / 3;
-    // The ramp is 8, 18, 28, ...: the nearest step, not the one below.
     let gray_step = (average.saturating_sub(8) + 5) / 10;
     let gray = 232 + gray_step.min(23) as u8;
 
@@ -354,7 +326,6 @@ fn indexed(rgb: Rgb) -> u8 {
     }
 }
 
-/// The cube is six levels per channel, not a linear ramp.
 fn cube_level(value: u8) -> usize {
     const LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
     let mut best = 0;
@@ -395,8 +366,6 @@ fn mode(env: &Env) -> Mode {
     if let Some(explicit) = env.theme.as_deref().and_then(Mode::parse) {
         return explicit;
     }
-    // `COLORFGBG` is written as foreground;background, so a bright background index is a light
-    // terminal. Without it, and without being told, a dark terminal is the safe assumption.
     match env.background_index() {
         Some(index) if index >= 8 => Mode::Light,
         _ => Mode::Dark,
@@ -482,8 +451,6 @@ mod tests {
 
     #[test]
     fn the_filled_bar_carries_its_own_text() {
-        // The footer is drawn *on* the accent, so its text is measured against the accent rather
-        // than against the surface the rest of the program is read on.
         for mode in [Mode::Dark, Mode::Light] {
             let roles = roles(mode);
             let contrast = ratio(roles.on_accent, roles.accent);
@@ -511,9 +478,6 @@ mod tests {
 
     #[test]
     fn the_palette_is_plain_and_reserves_colour_for_what_it_means() {
-        // Not the desktop's own scheme and not a decorative one: an installer is read next to
-        // an administrator's other tools, so the tones stay neutral and only the accent and the
-        // status roles carry any color at all.
         assert_eq!(roles(Mode::Dark).accent, Rgb(0x58, 0xa6, 0xff));
         assert_eq!(roles(Mode::Dark).surface, Rgb(0x0d, 0x11, 0x17));
         assert_eq!(roles(Mode::Light).accent, Rgb(0x09, 0x69, 0xda));
@@ -622,8 +586,6 @@ mod tests {
 
     #[test]
     fn sixteen_colour_terminals_share_hues_deliberately() {
-        // There is no soft red in the basic sixteen, so `Ignored` borrows `Error`'s and leans on
-        // its own glyph and its own label to stay apart.
         let theme = Theme::resolve(&env("xterm", None));
         assert_eq!(theme.depth, Depth::Ansi);
         assert_eq!(
@@ -636,7 +598,6 @@ mod tests {
 
     #[test]
     fn the_indexed_palette_picks_a_nearest_neighbour() {
-        // Exhaustive against the palette the function is allowed to choose from.
         for probe in [
             Rgb(0x0a, 0x0f, 0x0f),
             Rgb(0x9b, 0xd0, 0xcc),

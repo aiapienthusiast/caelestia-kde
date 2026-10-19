@@ -27,8 +27,6 @@ impl Distro {
         }
     }
 
-    /// What to call the distribution on screen: the family, not the individual release, because
-    /// that is all the installer cares about.
     pub fn label(self) -> &'static str {
         match self {
             Distro::Arch => "Arch-based Linux",

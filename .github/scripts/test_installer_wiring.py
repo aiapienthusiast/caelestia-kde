@@ -115,9 +115,6 @@ class InstallerTests(unittest.TestCase):
         listed = set(re.findall(r"scripts/([0-9][0-9a-z]*-[A-Za-z0-9._-]+)\.sh", steps_table))
         for path in lists:
             text = path.read_text(encoding="utf-8")
-            # scripts/<id>.sh, caelestia_run_step <id>, run_core_step <id>, run_step <s> <id>,
-            # the bare ids of a list that is passed to the resolver, and the Rust step runner
-            # naming a step it hands off to.
             listed |= set(re.findall(r"scripts/([0-9][0-9a-z]*-[A-Za-z0-9._-]+)\.sh", text))
             listed |= set(
                 re.findall(r"(?:caelestia_run_step|run_core_step)\s+([0-9][0-9a-z]*-[A-Za-z0-9._-]+)", text)
@@ -196,10 +193,6 @@ class InstallerTests(unittest.TestCase):
         }
         self.assertTrue(entries, "caelestia-update should still write the sparse-checkout list")
 
-        # ${CAELESTIA_ROOT_DIR} is the repository root and ${CMAKE_CURRENT_SOURCE_DIR} the
-        # directory of the CMakeLists.txt being read, both as shell/CMakeLists.txt spells
-        # them. Resolving the two is what tells an install rule for a path authored
-        # outside shell/ from one that sits inside it and travels with the tree.
         root_refs = re.compile(r"\$\{CAELESTIA_ROOT_DIR\}/([^\"\s)]+)")
         here_refs = re.compile(r"\$\{CMAKE_CURRENT_SOURCE_DIR\}/([^\"\s)]+)")
 

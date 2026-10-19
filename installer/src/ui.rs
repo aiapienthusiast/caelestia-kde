@@ -1,6 +1,3 @@
-// The chrome and the grid everything else is built on: one frame round the terminal, one filled
-// bar along its bottom, and the layout functions the screens and the key handlers share.
-
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
@@ -12,20 +9,15 @@ use crate::glyphs::Glyphs;
 use crate::steps::Status;
 use crate::theme::{NAME, Role, Theme};
 
-/// Below this the TUI says so rather than drawing a broken frame.
 pub const MIN_WIDTH: u16 = 60;
 pub const MIN_HEIGHT: u16 = 20;
 
-/// The widest a column of prose may get; the rest of the width goes to the frame and the panels.
 pub const PROSE_WIDTH: u16 = 96;
 
-/// The one left gutter every screen indents by.
 pub const INDENT: u16 = 2;
 
-/// The log pane's first row is a heading, not a line of log.
 const LOG_HEADER_ROWS: u16 = 1;
 
-/// One hint in the footer.
 pub struct Key {
     pub keys: &'static str,
     pub what: &'static str,
@@ -35,18 +27,15 @@ pub const fn key(keys: &'static str, what: &'static str) -> Key {
     Key { keys, what }
 }
 
-/// What the frame says on its top edge.
 pub struct Header {
     pub left: String,
     pub right: String,
 }
 
-/// What is left for a screen to draw in.
 pub struct Chrome {
     pub body: Rect,
 }
 
-/// Where the frame puts the body and the bar; drawing and paging both come through here.
 struct Rows {
     body: Rect,
     bar: Rect,
@@ -61,7 +50,6 @@ fn rows(area: Rect) -> Rows {
     }
 }
 
-/// Draw the frame and the bar. `None` when the terminal is too small, having said so.
 pub fn chrome(
     frame: &mut Frame,
     theme: &Theme,
@@ -94,7 +82,6 @@ pub fn chrome(
     })
 }
 
-/// The frame's top-left corner.
 fn where_you_are(theme: &Theme, header: &Header) -> Line<'static> {
     Line::from(vec![
         Span::styled(" ".to_string(), theme.title()),
@@ -103,17 +90,14 @@ fn where_you_are(theme: &Theme, header: &Header) -> Line<'static> {
     ])
 }
 
-/// The machine context, in the frame's top-right corner.
 fn what_this_is(theme: &Theme, header: &Header) -> Line<'static> {
     Line::from(Span::styled(format!(" {} ", header.right), theme.muted())).right_aligned()
 }
 
-/// The box a screen draws into; the key handlers ask for the same one.
 pub fn body(area: Rect) -> Rect {
     content(rows(area).body)
 }
 
-/// The body's box: every column the frame gave it, indented by the gutter.
 pub fn content(area: Rect) -> Rect {
     let indent = INDENT.min(area.width / 2);
     Rect {
@@ -124,7 +108,6 @@ pub fn content(area: Rect) -> Rect {
     }
 }
 
-/// The same area, started `rows` further down.
 pub fn dropped(area: Rect, rows: u16) -> Rect {
     let rows = rows.min(area.height.saturating_sub(1));
     Rect {
@@ -134,14 +117,10 @@ pub fn dropped(area: Rect, rows: u16) -> Rect {
     }
 }
 
-/// How far down a short block starts inside a tall area, so it is not pinned to the top edge.
 pub fn slack(area: Rect, height: u16) -> u16 {
     (area.height.saturating_sub(height) / 2).min(16)
 }
 
-/// A block of a fixed size, centred in the area in both directions and never larger than it. A
-/// composition of a fixed size has to be placed in the middle of the frame: pinned to a corner it
-/// reads as a screen that gave up part way through, however much room is left over.
 pub fn middle(area: Rect, width: u16, height: u16) -> Rect {
     let width = width.min(area.width).max(1);
     let height = height.min(area.height).max(1);
@@ -153,20 +132,16 @@ pub fn middle(area: Rect, width: u16, height: u16) -> Rect {
     }
 }
 
-/// The gap between columns, and the least room the second one gets before a screen stays one.
 const RAIL_GAP: u16 = 4;
 const PARTNER_MIN: u16 = 52;
 
-/// The narrowest a panel may be, so a panel around two short rows still reads as one.
 const MIN_PANEL: u16 = 24;
 
-/// The width a panel takes: as wide as its widest row, and never wider than the measure.
 pub fn panel_width(content: u16, room: u16) -> u16 {
     let cap = (PROSE_WIDTH + 2).min(room);
     (content + 2).clamp(MIN_PANEL.min(cap), cap)
 }
 
-/// A narrow column on the left and the rest beside it, where there is room for both.
 pub fn rail(area: Rect, width: u16) -> Option<(Rect, Rect)> {
     let width = width.min(area.width / 2);
     if area.width < width + RAIL_GAP + PARTNER_MIN {
@@ -182,7 +157,6 @@ pub fn rail(area: Rect, width: u16) -> Option<(Rect, Rect)> {
     ))
 }
 
-/// The rectangle a panel of `rows` content rows takes: its borders and nothing more.
 pub fn panel_rect(area: Rect, width: u16, rows: u16) -> Rect {
     Rect {
         width,
@@ -191,8 +165,6 @@ pub fn panel_rect(area: Rect, width: u16, rows: u16) -> Rect {
     }
 }
 
-/// A panel inside a screen. The border carries the role, so a panel that *is* the message looks
-/// like one before it is read. An untitled panel is a group of rows, not a section.
 pub fn section(
     frame: &mut Frame,
     rect: Rect,
@@ -225,10 +197,6 @@ pub fn section(
     inner
 }
 
-/// The row the cursor is on, filled right across its column. `bar` is the program's one filled
-/// surface, so a filled row and a filled footer are the same statement: this is the thing Enter
-/// acts on. Text on it uses `OnAccent`, which swaps with the accent, so the fill carries its own
-/// text in either theme.
 pub fn cursor_spans(theme: &Theme, spans: Vec<Span<'static>>, width: u16) -> Line<'static> {
     let used: usize = spans.iter().map(|span| span.content.chars().count()).sum();
     let mut styled: Vec<Span<'static>> = spans
@@ -242,14 +210,11 @@ pub fn cursor_spans(theme: &Theme, spans: Vec<Span<'static>>, width: u16) -> Lin
     Line::from(styled)
 }
 
-/// The row the cursor is on, for a row that is one piece of text.
 pub fn cursor_row(theme: &Theme, glyphs: Glyphs, text: &str, width: u16) -> Line<'static> {
     let text = fit(text, width as usize, glyphs.ellipsis());
     cursor_spans(theme, vec![Span::raw(text)], width)
 }
 
-/// A centered card of prose, sized to a measure. The caller wraps its lines to the same measure,
-/// since a line that does not fit is one the card clips.
 pub fn card(
     frame: &mut Frame,
     area: Rect,
@@ -279,7 +244,6 @@ pub struct RunLayout {
     pub log: Rect,
 }
 
-/// A centered modal.
 pub fn panel(
     frame: &mut Frame,
     area: Rect,
@@ -301,7 +265,6 @@ pub fn panel(
     )
 }
 
-/// The same modal, placed by the caller.
 pub fn frame_panel(
     frame: &mut Frame,
     rect: Rect,
@@ -323,7 +286,6 @@ pub fn frame_panel(
     inner
 }
 
-/// The gutter a status glyph sits in, so the names beside it never shift.
 pub fn gutter(text: &str, style: Style, glyphs: Glyphs) -> Span<'static> {
     Span::styled(
         format!(" {:>width$} ", text, width = glyphs.status_cell()),
@@ -331,7 +293,6 @@ pub fn gutter(text: &str, style: Style, glyphs: Glyphs) -> Span<'static> {
     )
 }
 
-/// The spinner where the terminal can show one, the static glyph where it cannot.
 pub fn running_glyph(app: &App) -> &'static str {
     if app.env.animates() {
         app.glyphs.spinner(app.spinner)
@@ -340,7 +301,6 @@ pub fn running_glyph(app: &App) -> &'static str {
     }
 }
 
-/// `label   value`, with the label in a fixed column.
 pub fn labeled(label: &str, value: String, theme: &Theme, width: usize) -> Line<'static> {
     Line::from(vec![
         Span::styled(format!("  {label:<width$}  "), theme.muted()),
@@ -348,7 +308,6 @@ pub fn labeled(label: &str, value: String, theme: &Theme, width: usize) -> Line<
     ])
 }
 
-/// A progress bar with its caption; the bar never grows past a readable length.
 pub fn progress(
     filled: usize,
     total: usize,
@@ -379,8 +338,6 @@ pub fn progress(
     Line::from(spans)
 }
 
-/// A one-column scrollbar, drawn only where there is something to scroll. `marks` are rows of the
-/// whole log that went wrong, so the track shows where the trouble is before it is scrolled to.
 pub fn scrollbar(
     frame: &mut Frame,
     area: Rect,
@@ -395,8 +352,6 @@ pub fn scrollbar(
     }
     let viewport = area.height as usize;
     let (from, to) = thumb_range(offset, total, viewport);
-    // The thumb wins the row it is standing on: a mark inside it would be read as part of the
-    // window rather than as a place in the log.
     let mut marked: Vec<Option<Style>> = vec![None; viewport];
     for (row, style) in marks {
         let at = (row * viewport / total).min(viewport - 1);
@@ -418,7 +373,6 @@ pub fn scrollbar(
     frame.render_widget(Paragraph::new(Text::from(lines)), area);
 }
 
-/// Where the thumb sits, as a range of rows. A pane that fits its content gets no thumb.
 pub fn thumb_range(offset: usize, total: usize, viewport: usize) -> (usize, usize) {
     if viewport == 0 {
         return (0, 0);
@@ -434,13 +388,10 @@ pub fn thumb_range(offset: usize, total: usize, viewport: usize) -> (usize, usiz
     (position, position + thumb)
 }
 
-/// How many rows of log fit in the pane.
 pub fn log_rows(log: Rect) -> u16 {
     log.height.saturating_sub(LOG_HEADER_ROWS)
 }
 
-/// Where the run screen puts the step it is on, its bar, anything that did not go cleanly, and the
-/// log. The log runs the full width: it is the only thing on the screen with something to read.
 pub fn run_layout(body: Rect) -> RunLayout {
     let rows = Layout::vertical([
         Constraint::Length(1),
@@ -458,7 +409,6 @@ pub fn run_layout(body: Rect) -> RunLayout {
     }
 }
 
-/// Render prose into a box, wrapping rather than clipping it.
 pub fn prose(frame: &mut Frame, area: Rect, lines: Vec<Line<'static>>, style: Style) {
     frame.render_widget(
         Paragraph::new(Text::from(lines))
@@ -468,13 +418,11 @@ pub fn prose(frame: &mut Frame, area: Rect, lines: Vec<Line<'static>>, style: St
     );
 }
 
-/// The same text, started a third of the way down a taller area.
 pub fn prose_middle(frame: &mut Frame, area: Rect, lines: Vec<Line<'static>>, style: Style) {
     let pad = slack(area, lines.len() as u16);
     prose(frame, dropped(area, pad), lines, style);
 }
 
-/// The full-screen log's own geometry; drawing and paging both ask for it here.
 pub fn log_overlay_rect(area: Rect) -> Rect {
     let width = area.width.saturating_sub(8).max(10);
     let height = area.height.saturating_sub(4).max(6);
@@ -497,7 +445,6 @@ pub fn log_overlay_rows(area: Rect) -> u16 {
         .saturating_sub(LOG_HEADER_ROWS)
 }
 
-/// Text cut to a column, with a marker rather than a silent chop.
 pub fn fit(text: &str, width: usize, ellipsis: &str) -> String {
     if text.chars().count() <= width {
         return text.to_string();
@@ -525,7 +472,6 @@ pub fn elapsed(seconds: u64) -> String {
     }
 }
 
-/// The filled bar along the bottom: the keys, and where the user is in the flow.
 fn status_bar(frame: &mut Frame, area: Rect, theme: &Theme, keys: &[Key], counter: Option<&str>) {
     if area.height == 0 {
         return;
@@ -551,8 +497,6 @@ fn status_bar(frame: &mut Frame, area: Rect, theme: &Theme, keys: &[Key], counte
     }
 }
 
-/// The keymap for a screen, whole groups only, dropping the least important hint first: the caller
-/// lists them in priority order.
 fn hints(theme: &Theme, keys: &[Key], width: u16) -> Line<'static> {
     let mut spans: Vec<Span<'static>> = Vec::new();
     let mut used = 0usize;
@@ -563,7 +507,6 @@ fn hints(theme: &Theme, keys: &[Key], width: u16) -> Line<'static> {
         if index > 0 && used + cost > width as usize {
             break;
         }
-        // On a fill, weight is the only channel left: keys bold, what they do plain.
         spans.push(Span::styled(
             if index == 0 {
                 " ".to_string()
@@ -657,7 +600,6 @@ mod tests {
         assert_eq!(block.height, 20);
         assert_eq!(block.y, area.y + 20, "and not pinned to the top edge");
 
-        // Nothing is placed outside the room it was given.
         let tight = middle(body(80, 20), 200, 40);
         assert_eq!((tight.width, tight.height), (80, 20));
         assert_eq!((tight.x, tight.y), (0, 0));
@@ -671,7 +613,6 @@ mod tests {
             assert!(chrome.width > 0 && chrome.height > 0, "{width}x{height}");
             assert!(chrome.x + chrome.width <= width, "{width}x{height}");
             assert!(chrome.y + chrome.height <= height, "{width}x{height}");
-            // The bar is the last row inside the frame.
             assert_eq!(rows(area).bar.y, height - 2, "{width}x{height}");
             assert_eq!(rows(area).body.height, height - 3, "{width}x{height}");
         }
@@ -691,7 +632,6 @@ mod tests {
                 layout.log.y + layout.log.height <= area.height,
                 "{height} rows overflow"
             );
-            // The step, the bar and the note are stacked from the top, in that order.
             assert_eq!(layout.step.y, 0);
             assert_eq!(layout.bar.y, 1);
             assert_eq!(layout.note.y, 2);

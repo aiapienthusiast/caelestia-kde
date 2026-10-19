@@ -16,15 +16,8 @@ use super::{
     retry_individually, run_visibly, run_xdg_user_dirs, wanted, with_clone,
 };
 
-// gpu-screen-recorder has no apt package, so the fallback below clones upstream and runs its
-// ./install.sh as root. That is only acceptable against a pinned revision: never point this
-// at master. To update, list the upstream tags with
-//   git ls-remote --tags https://repo.dec05eba.com/gpu-screen-recorder
-// bump the ref, and test the build before shipping it.
 const GPU_SCREEN_RECORDER_REF: &str = "6.1.3";
 
-// The lists are data: whitespace-separated, so a package does not take a line of
-// its own, and read back through `names`.
 pub(super) const CORE: &str = "
     cmake ninja-build ccache g++ build-essential qt6-l10n-tools qt6-tools-dev
     extra-cmake-modules wl-clipboard cliphist inotify-tools wireplumber trash-cli jq yq libc6
@@ -131,8 +124,6 @@ pub fn run(context: &Context, group: Group) -> Result<(), Failure> {
     Ok(())
 }
 
-// The fallback targets are set aside from the batch: each one is asked for on its own,
-// because a target apt does not carry at all would otherwise fail the whole transaction.
 fn install_batch(packages: &[&str], fallback_targets: &[&str], failures: &mut Failures) {
     let batch: Vec<&str> = packages
         .iter()
@@ -178,8 +169,6 @@ fn install_fallback_targets(context: &Context, targets: &[&str], failures: &mut 
         if pkg::present(package) || process::available(package) {
             continue;
         }
-        // The prebuilt SDK provides libcava without being a package, and asking apt for it
-        // just fails.
         if *package == "libcava" && toolchain::cava_sdk_installed() {
             continue;
         }
@@ -362,8 +351,6 @@ fn fallback(context: &Context, package: &str) -> bool {
             }
         }
         "adw-gtk3" => install_adw_gtk3(package),
-        // The matugen ladder is shared with the session's own startup task, which is why the
-        // installer asks that helper rather than carrying a second copy of it.
         "matugen" => matugen_helper(&context.bundle, "install_matugen_debian"),
         _ => false,
     }
@@ -380,8 +367,6 @@ fn add_ppa(repository: &str) -> bool {
     added
 }
 
-// The release notes are quoted, so every URL in them ends at the next quote and the asset for
-// this machine's architecture is the one whose name ends with it.
 fn install_cliphist(package: &str) -> bool {
     output::info("Downloading the cliphist binary from GitHub releases...");
 
@@ -521,8 +506,6 @@ fn install_adw_gtk3(package: &str) -> bool {
     true
 }
 
-// Darkly publishes a prebuilt package per distribution and release, so this machine's own
-// identity is what picks the one to ask for.
 fn install_darkly(failures: &mut Failures) {
     if !process::available("darkly") && !pkg::present("darkly") {
         match darkly_deb_asset_url() {
@@ -563,8 +546,6 @@ fn install_darkly(failures: &mut Failures) {
     }
 }
 
-// Upstream tags its packages per distribution and version, so the ones this machine could
-// take are named in order and the first that exists is the one.
 fn darkly_deb_asset_url() -> Option<String> {
     let released = process::capture(
         "curl",
@@ -653,8 +634,6 @@ fn install_rustup() {
     );
 }
 
-// A tool that installs into ~/.cargo/bin is only on PATH for a session the shells have been
-// told about, which is what the startup files are for.
 fn ensure_cargo_path_in_start_files() {
     let home = paths::home();
     let line = "export PATH=\"$HOME/.cargo/bin:$PATH\"";
@@ -687,8 +666,6 @@ fn rust_is_recent() -> bool {
         .is_some_and(|minor| minor >= 85)
 }
 
-// The tools below install into ~/.cargo/bin or ~/.local/bin, which a session that predates
-// them does not have on PATH: they are asked for by that path first.
 fn cargo_path() -> Option<PathBuf> {
     binary_in(&[".cargo/bin/cargo"], "cargo")
 }

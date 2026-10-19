@@ -1,7 +1,3 @@
-// What the process was told about its terminal, and what the user asked for. Read once at
-// startup and carried by the app, so every rendering decision is a pure function of this record
-// and can be tested without touching the process environment.
-
 use std::env;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -32,12 +28,10 @@ impl Env {
         }
     }
 
-    /// A terminal that cannot be trusted with escape sequences at all.
     pub fn is_dumb(&self) -> bool {
         matches!(self.term.as_deref(), Some("dumb"))
     }
 
-    /// The Linux virtual console: it draws box characters but no dingbats.
     pub fn is_console(&self) -> bool {
         matches!(self.term.as_deref(), Some("linux"))
     }
@@ -54,9 +48,6 @@ impl Env {
             .is_some_and(|value| value.contains("256"))
     }
 
-    /// The background color index a terminal advertises, when it advertises one. `COLORFGBG`
-    /// is written as `foreground;background` in the 16-color palette, so a bright index is a
-    /// light background.
     pub fn background_index(&self) -> Option<u8> {
         self.colorfgbg
             .as_deref()?
@@ -67,8 +58,6 @@ impl Env {
             .ok()
     }
 
-    /// Motion is decoration, so it is the first thing to go: no spinner on a dumb terminal, in
-    /// a monochrome session, or when the user has asked for stillness.
     pub fn animates(&self) -> bool {
         !self.no_animation && !self.is_dumb() && !self.no_color
     }

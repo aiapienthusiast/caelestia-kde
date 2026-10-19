@@ -127,10 +127,6 @@ fn has_content(directory: &Path) -> bool {
         .unwrap_or(false)
 }
 
-// The backup a previous step recorded is the one the installed dotfiles belong to, so
-// it is reused; anything else (a path outside the two roots, a stale record, an absent
-// directory) falls back to a fresh one under the bundle, or under the cache when the
-// bundle belongs to a package the user cannot write to.
 pub fn backup_dir(context: &Context) -> PathBuf {
     if let Some(explicit) = context.variable("BACKUP_DIR") {
         return PathBuf::from(explicit);
@@ -150,9 +146,6 @@ pub fn backup_dir(context: &Context) -> PathBuf {
         .join(crate::install_fs::timestamp().unwrap_or_else(|| "backup".to_string()))
 }
 
-/// The backup the last install used, for the screen that says where the settings it replaced went.
-/// Read from the record `backup_dir` keeps, and validated the same way: a path that is not a
-/// backup of this tree is not something to print and send somebody to.
 pub fn recorded_backup_dir(bundle: &Path) -> Option<PathBuf> {
     recorded_backup(&paths::cache_dir().join(CACHE), bundle)
 }
@@ -231,8 +224,6 @@ fn backup_configs(home: &Path, backup: &Path) {
         }
     }
 
-    // The desktop the install is about to replace. The panel layout above all: it is the piece a
-    // restored machine misses most when it is gone, and the uninstaller restores it from here.
     for name in KDE_CONFIGS {
         let source = home.join(".config").join(name);
         if source.is_file() {
@@ -359,8 +350,6 @@ fn deploy_bridge(context: &Context, home: &Path) {
             }
 
             let target = home.join(".local").join("bin").join(&name);
-            // `cp --remove-destination`: a bridge file that is a symlink is replaced,
-            // not written through.
             let _ = fs::remove_file(&target);
             let _ = copy::file(&entry.path(), &target);
         }
@@ -423,8 +412,6 @@ fn digest_of(line: &str) -> Option<String> {
         .filter(|digest| !digest.is_empty())
 }
 
-// The same value the shell recorded: sha256sum of every file in the directory, in order,
-// hashed together. The paths go in relative to the directory, as `find .` printed them.
 fn directory_checksum(directory: &Path) -> Option<String> {
     let mut files = Vec::new();
     collect_files(directory, Path::new("."), &mut files)?;

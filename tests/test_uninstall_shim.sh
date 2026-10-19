@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 # suite: isolated
-# The uninstall itself belongs to the installer; what is left in shell is the entry point, so
-# this covers the hand-off: which binary it finds, what it says to it, and what happens when
-# there is no binary to run.
 
 set -uo pipefail
 
@@ -71,8 +68,6 @@ test_without_a_binary_the_entry_point_says_so() {
     mkdir -p "$root/home"
     make_bundle "$root"
 
-    # A PATH with the system's own tools but no installer, a home with none either, and
-    # nothing to fetch one with: the resolver has no way to answer.
     status="$(
         HOME="$root/home" PATH="/usr/bin:/bin" CAELESTIA_NO_INSTALLER_FETCH=1 \
             bash "$root/uninstall.sh" > "$root/uninstall.log" 2>&1

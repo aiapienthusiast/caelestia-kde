@@ -11,24 +11,15 @@ const HELPER: &str = "askpass.sh";
 const PIPE: &str = "askpass.fifo";
 const WRAPPER: &str = "sudo";
 
-// The PAM stack sudo resolves here, and the module that answers a fingerprint prompt.
 const SUDO_PAM: &str = "/etc/pam.d/sudo";
 const PAM_DIRECTORY: &str = "/etc/pam.d";
 const FINGERPRINT_MODULE: &str = "pam_fprintd.so";
-// How deep an include chain is followed. These stacks are two or three files deep, and the bound
-// is what stops a stack that includes itself from being a hang.
 const PAM_DEPTH: usize = 4;
 
-// How long a verification may take before the installer stops waiting for sudo, how often that
-// wait is looked at, and how long the helper waits for the pipe before sudo gives up on it.
 const VERIFY_TIMEOUT: Duration = Duration::from_secs(30);
-// A finger takes longer to offer than a password takes to type, and the wait is the reader's, not
-// the user's: pam_fprintd answers with its own timeout, and giving up first would report a
-// failure the reader never made.
 const FINGERPRINT_TIMEOUT: Duration = Duration::from_secs(60);
 const VERIFY_TICK: Duration = Duration::from_millis(25);
 const SECRET_TIMEOUT: Duration = Duration::from_secs(15);
-// A pause before offering the pipe again after an open that failed for any other reason.
 const SERVE_PAUSE: Duration = Duration::from_millis(50);
 
 pub struct Credential {
@@ -62,10 +53,6 @@ impl Credential {
         })
     }
 
-    /// A credential for a machine that authorizes without a password. The helper it publishes
-    /// refuses, so the only thing that can carry sudo's exchange is a PAM module that needs no
-    /// password - the reader this route was chosen for. Nothing is stored, because on this route
-    /// there is no secret to store.
     pub fn fingerprint() -> Result<Self, String> {
         let dir = private_dir()?;
         publish(&dir, "#!/bin/bash\nexit 1\n")?;
@@ -87,16 +74,11 @@ impl Credential {
         ]
     }
 
-    /// The helper the steps' sudo will consult, for a check that has to run before the credential
-    /// is published.
     fn helper_path(&self) -> PathBuf {
         self.dir.join(HELPER)
     }
 }
 
-/// Write the pair sudo is pointed at: the helper that answers a password prompt, and the wrapper
-/// the steps find first on PATH so that their sudo goes through it. One place decides how that
-/// pointing is done, so the two routes cannot drift apart.
 fn publish(dir: &Path, helper: &str) -> Result<(), String> {
     let helper_path = dir.join(HELPER);
     write_private(&helper_path, helper)?;
@@ -109,9 +91,6 @@ fn publish(dir: &Path, helper: &str) -> Result<(), String> {
     )
 }
 
-/// Whether sudo takes the password. `sudo -S` reads one line and gets end of file for any retry,
-/// so a wrong password costs one PAM exchange instead of three, with no helper process and no pipe
-/// to lose. Bounded, so a sudo that never answers cannot hold the installer.
 pub fn accepts(secret: &str) -> bool {
     match sudo_binary() {
         Some(sudo) => sudo_accepts_with(&sudo, secret, VERIFY_TIMEOUT),
@@ -119,13 +98,6 @@ pub fn accepts(secret: &str) -> bool {
     }
 }
 
-/// Whether sudo can be had here without a password: the helper refuses to answer, so the only
-/// thing that can carry the exchange is a PAM module that needs none - the reader the fingerprint
-/// route was picked for. The helper is the one the steps will then use, so what is proved here is
-/// what they get.
-///
-/// A reader that is not offered, or a finger that is not given, fails this and costs the account an
-/// entry in the same tally a wrong password costs one: the stack has nothing else to try.
 pub fn accepts_fingerprint() -> bool {
     let Ok(credential) = Credential::fingerprint() else {
         return false;
@@ -141,9 +113,6 @@ pub fn accepts_fingerprint() -> bool {
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
-    // The same reasoning as the password check: its own process group so a check that has to be
-    // killed takes everything it started with it, and the installer's session so the authorization
-    // it wins is the one the steps then use.
     detach(&mut command);
 
     command
@@ -152,7 +121,6 @@ pub fn accepts_fingerprint() -> bool {
         .unwrap_or(false)
 }
 
-/// Wait for a check to answer, killing it and everything it started if the deadline passes first.
 fn wait_for_exit(mut child: std::process::Child, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
     loop {
@@ -169,20 +137,14 @@ fn wait_for_exit(mut child: std::process::Child, timeout: Duration) -> bool {
     }
 }
 
-// A refused password costs the account an entry in the PAM stack's tally, and once enough are
-// spent the stack stops taking the right password for a while. The tally and the rule that set it
-// are readable without root, so the installer uses the budget the machine actually has.
 const DEFAULT_DENY: usize = 3;
 const FAILLOCK_CONF: &str = "/etc/security/faillock.conf";
 
-/// Whether the system has already locked this account out, read without root: the tally lives in
-/// `faillock --user`, the rule in faillock.conf.
 pub fn locked_out() -> bool {
     let (counted, deny) = lockout();
     counted >= deny
 }
 
-/// Whether one more refused entry would lock the account.
 pub fn on_the_last_entry() -> bool {
     let (counted, deny) = lockout();
     counted + 1 >= deny
@@ -203,7 +165,6 @@ fn deny_in(conf: &str) -> Option<usize> {
         .and_then(|(_, value)| value.trim().parse().ok())
 }
 
-/// The rows of `faillock --user <user>` that are entries rather than its heading.
 fn counted_in(table: &str) -> usize {
     table
         .lines()
@@ -235,10 +196,6 @@ fn sudo_accepts_with(sudo: &Path, secret: &str, timeout: Duration) -> bool {
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
-    // Its own process group, so a check that has to be killed takes everything it started with it,
-    // but the same session as the installer: the authorization obtained here is the one the steps
-    // then use, and a machine that keys that to the terminal will not hand it to a session of its
-    // own.
     detach(&mut command);
 
     let Ok(mut child) = command.spawn() else {
@@ -247,8 +204,6 @@ fn sudo_accepts_with(sudo: &Path, secret: &str, timeout: Duration) -> bool {
     if let Some(mut input) = child.stdin.take() {
         let _ = input.write_all(secret.as_bytes());
         let _ = input.write_all(b"\n");
-        // Dropping the handle closes the pipe: sudo reads the one line, and anything it does
-        // for a second try finds nothing rather than waiting on a terminal nobody is at.
     }
     wait_for_exit(child, timeout)
 }
@@ -268,19 +223,11 @@ pub fn sudo_path() -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-// sudo reads the password from the helper, but questions it cannot answer through the helper -
-// "Sorry, try again." - it writes to /dev/tty, which is the terminal the installer is drawing the
-// frame on. A session of its own leaves it with no controlling terminal to reach.
-//
-// This is for the askpass route; the password route does not need a new session, because `-S`
-// reports on stderr and staying in the installer's session keeps the authorization usable.
 fn detach(command: &mut std::process::Command) {
     use std::os::unix::process::CommandExt;
     command.process_group(0);
 }
 
-// One signal to the group reaches sudo and the askpass helper it started; leaving the helper
-// behind would leave it waiting on a pipe that nobody feeds any more.
 fn end_group(child: &mut std::process::Child) {
     let group = child.id() as libc::pid_t;
     unsafe { libc::kill(-group, libc::SIGKILL) };
@@ -292,10 +239,6 @@ pub fn is_root() -> bool {
     unsafe { libc::getuid() == 0 }
 }
 
-/// What to ask sudo to be sure root is available right now: run something harmless, without a
-/// prompt. Not `-v`, which asks sudo to validate a ticket, and which a machine whose only rule is
-/// `NOPASSWD: ALL` answers with "a password is required" - so an installer using it would demand a
-/// password exactly where none is needed.
 fn cached_probe_args() -> [&'static str; 2] {
     ["-n", "true"]
 }
@@ -314,24 +257,11 @@ pub fn sudo_cached() -> bool {
         .unwrap_or(false)
 }
 
-/// Whether this machine can authorize with a fingerprint: sudo's own stack has a fingerprint
-/// module in it, fprintd has a reader to offer that module, and this user has a finger enrolled.
-/// All three, because a read that cannot succeed is not free — it is a failed authentication.
-///
-/// Read once: what the machine has is a property of the machine, not of a screen, and the answer
-/// costs processes either way.
 pub fn fingerprint_ready() -> bool {
     static READY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *READY.get_or_init(|| fingerprint_configured() && reader_present() && finger_enrolled())
 }
 
-/// Whether this user has a finger enrolled, believed only when it is said plainly.
-///
-/// The prints themselves live under a root-only directory and the daemon's answer may be refused
-/// rather than prompted for, where the polkit action has no policy, so the prints are asked for
-/// through the one command that reports them. Being wrong is what matters: a route offered on a
-/// guess costs a failed authentication to learn that nothing was ever enrolled, and that
-/// authentication spends the same tally a wrong password does.
 pub fn finger_enrolled() -> bool {
     if !crate::process::available("fprintd-list") {
         return false;
@@ -352,20 +282,12 @@ pub fn finger_enrolled() -> bool {
         .unwrap_or(false)
 }
 
-/// fprintd-list prints one ` - #N: <finger>` line per enrolled print, and the sentence "has no
-/// fingerprints enrolled" when there are none — a test for the word finger matches that sentence
-/// and offers a route that cannot work.
 fn prints_listed(answer: &str) -> bool {
     answer
         .lines()
         .any(|line| line.trim_start().starts_with("- #"))
 }
 
-/// Whether sudo's own stack has a fingerprint module in it.
-///
-/// The module is looked for in the stack sudo resolves rather than in `system-auth` alone, because
-/// where it lives depends on who set it up: CachyOS's hardware tooling writes it straight into the
-/// sudo service, where a check of `system-auth` would never see it.
 pub fn fingerprint_configured() -> bool {
     let Ok(text) = fs::read_to_string(SUDO_PAM) else {
         return false;
@@ -380,7 +302,6 @@ pub fn fingerprint_configured() -> bool {
     })
 }
 
-/// Whether a fingerprint module is anywhere in a PAM stack, following the includes it makes.
 fn pam_stack_has_fingerprint(
     text: &str,
     depth: usize,
@@ -399,8 +320,6 @@ fn pam_stack_has_fingerprint(
         if fields.contains(&FINGERPRINT_MODULE) {
             return true;
         }
-        // An include names another file here, by bare name or by path. `@include` is the spelling
-        // Debian and its children use, `include` the one the others do.
         let included = match fields.as_slice() {
             [directive, file, ..] if matches!(*directive, "@include" | "@substack") => Some(*file),
             [_kind, directive, file, ..] if matches!(*directive, "include" | "substack") => {
@@ -417,9 +336,6 @@ fn pam_stack_has_fingerprint(
     false
 }
 
-/// Whether fprintd has a reader to offer. Its manager lists the devices it found, and the listing
-/// needs no authorization to read - unlike the list of fingers enrolled on them, which is what
-/// makes this the question that can be asked from here.
 fn reader_present() -> bool {
     if !crate::process::available("busctl") {
         return false;
@@ -439,7 +355,6 @@ fn reader_present() -> bool {
         .unwrap_or(false)
 }
 
-/// The manager answers with the object paths of the devices it has. No paths is no reader.
 fn readers_listed(answer: &str) -> bool {
     answer.contains("/net/reactivated/Fprint/Device/")
 }
@@ -482,10 +397,6 @@ fn have_askpass() -> bool {
 }
 
 fn sudo_binary() -> Option<PathBuf> {
-    // CAELESTIA_SUDO_BIN names the sudo to escalate through, the same override the shell
-    // resolver next to this honors. It is taken as given rather than checked: an override that
-    // names nothing is a broken override, and running some other sudo in its place would report
-    // something the caller never asked about.
     if let Some(explicit) = std::env::var("CAELESTIA_SUDO_BIN")
         .ok()
         .filter(|explicit| !explicit.is_empty())
@@ -547,8 +458,6 @@ pub fn elevated(program: &str, args: &[&str], directory: Option<&Path>) -> Resul
         .map_err(|error| format!("could not run {program}: {error}"))
 }
 
-// Escalate only where no password can be needed: a terminal or pkexec route would ask, and a step
-// nobody is watching must not stall on a prompt. The caller warns and carries on.
 pub fn quiet(program: &str, args: &[&str], directory: Option<&Path>) -> Result<i32, String> {
     let method = escalation_method()
         .ok_or_else(|| "this installer has no way to become root here".to_string())?;
@@ -583,9 +492,6 @@ pub fn read_secret(pipe: &Path) -> Result<String, String> {
     read_secret_within(pipe, SECRET_TIMEOUT)
 }
 
-// sudo waits for this helper to finish before it goes on, so a helper that waited forever would
-// hang the installer waiting for sudo. The thread left blocked in the open below ends with this
-// process, which exits as soon as this wait is over.
 fn read_secret_within(pipe: &Path, timeout: Duration) -> Result<String, String> {
     let (sender, receiver) = std::sync::mpsc::channel();
     let path = pipe.to_path_buf();
@@ -622,10 +528,6 @@ fn make_fifo(pipe: &Path) -> Result<(), String> {
     Ok(())
 }
 
-// One helper reads one secret, and sudo asks again for each attempt, so the loop waits for the
-// next helper to appear on the pipe. A failed round is a round nobody asked for: leaving the loop
-// would strand the next helper on a pipe nothing feeds - which is how one wrong password used to
-// hang the installer for good.
 fn serve(pipe: PathBuf, secret: String, stop: Arc<AtomicBool>) -> JoinHandle<()> {
     thread::spawn(move || {
         while !stop.load(Ordering::Relaxed) {
@@ -788,11 +690,6 @@ fn spawn_inhibitor() -> Option<libc::pid_t> {
         .map(|child| child.id() as libc::pid_t)
 }
 
-// Blocking sleep is a polkit action, and a client polkit cannot tie to an active session is
-// asked to authenticate for it. That question goes to whatever is holding the desktop - on a
-// Caelestia desktop, the shell the user is looking at - so sleep is only asked for where it is
-// already allowed and nothing will be raised. Idle inhibition needs no authorization and is
-// what keeps an install from being suspended out from under it.
 fn inhibit_what() -> &'static str {
     if may_block_sleep() {
         "idle:sleep"
@@ -853,11 +750,6 @@ mod tests {
         Credential::install("hunter2", &exe).expect("a credential")
     }
 
-    // A stand-in for sudo: it announces itself first, then reads the password from stdin the way
-    // `sudo -S` does, answers as told, and leaves a note behind about the session it was run in
-    // and what it was given. Announcing first is what lets a test about a check that has to be
-    // abandoned know the process it is looking for had started, rather than racing a deadline
-    // against the machine's scheduling.
     fn fake_sudo(work: &Path, name: &str, answer: &str) -> PathBuf {
         let path = work.join(name);
         let report = work.join(format!("{name}.report"));
@@ -905,8 +797,6 @@ mod tests {
 
     #[test]
     fn a_warm_ticket_is_probed_with_a_command_and_not_with_a_validation() {
-        // `sudo -n -v` answers "a password is required" whenever the machine's only rule is
-        // NOPASSWD, which is the opposite of the question being asked here.
         assert_eq!(cached_probe_args(), ["-n", "true"]);
     }
 
@@ -916,7 +806,6 @@ mod tests {
         assert_eq!(shell_quote(Path::new("/tmp/it's")), "'/tmp/it'\\''s'");
     }
 
-    /// The stack as it is on a machine that has been set up for the reader, includes and all.
     fn read_stack(files: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
         let owned: Vec<(String, String)> = files
             .iter()
@@ -932,8 +821,6 @@ mod tests {
 
     #[test]
     fn a_fingerprint_module_in_the_stacks_own_file_is_found() {
-        // The shape CachyOS's hardware tooling writes: the module first, with its mark in a
-        // comment after it, in the sudo service itself rather than in system-auth.
         let stack = "auth sufficient pam_fprintd.so # chwd-fprintd\nauth include system-auth\n";
         let read = read_stack(&[("system-auth", "auth required pam_unix.so\n")]);
         assert!(pam_stack_has_fingerprint(stack, PAM_DEPTH, &read));
@@ -941,8 +828,6 @@ mod tests {
 
     #[test]
     fn a_fingerprint_module_reached_through_an_include_is_found() {
-        // The shape Fedora and Debian-family machines use: sudo includes a common file, and the
-        // module is in there.
         let stack = "@include common-auth\n@include common-account\n";
         let read = read_stack(&[
             ("common-auth", "auth sufficient pam_fprintd.so\n"),
@@ -960,7 +845,6 @@ mod tests {
         )]);
         assert!(!pam_stack_has_fingerprint(stack, PAM_DEPTH, &read));
 
-        // A file that is not there is not a match either, rather than a panic.
         assert!(!pam_stack_has_fingerprint(
             stack,
             PAM_DEPTH,
@@ -970,8 +854,6 @@ mod tests {
 
     #[test]
     fn a_stack_that_includes_itself_ends_rather_than_hanging() {
-        // A cycle reads as "not found". The depth bound is the only thing making that true, and
-        // this is what holds it.
         let read = read_stack(&[("loop", "auth include loop\n")]);
         assert!(!pam_stack_has_fingerprint(
             "auth include loop\n",
@@ -982,11 +864,9 @@ mod tests {
 
     #[test]
     fn only_a_listed_reader_counts_as_a_reader() {
-        // What the manager answered on the machine this was written against: one device, by path.
         assert!(readers_listed(
             "ao 1 \"/net/reactivated/Fprint/Device/0\"\n"
         ));
-        // No device is an empty array, and an answer that is not a list at all is not a reader.
         assert!(!readers_listed("ao 0\n"));
         assert!(!readers_listed(""));
         assert!(!readers_listed(
@@ -996,15 +876,11 @@ mod tests {
 
     #[test]
     fn only_a_listed_print_counts_as_an_enrolled_finger() {
-        // fprintd-list names every print on a line of its own.
         assert!(prints_listed(
             "User camus has 2 fingerprints enrolled:\n - #0: right-index-finger\n - #1: left-thumb\n"
         ));
-        // The sentence a machine with nothing enrolled prints carries the word "fingerprints" and
-        // must not be read as an answer: a route offered there costs a failed authentication.
         assert!(!prints_listed("User camus has no fingerprints enrolled.\n"));
         assert!(!prints_listed(""));
-        // A refused polkit action is not an answer either.
         assert!(!prints_listed(
             "Failed to list fingerprints: Not Authorized\n"
         ));
@@ -1016,8 +892,6 @@ mod tests {
         let helper = credential.helper_path();
         assert!(helper.is_file(), "{}", helper.display());
 
-        // It must refuse: a helper that answered would be a password this route does not have, and
-        // a route that cannot be won without a finger would then be won without one.
         let status = std::process::Command::new(&helper)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
@@ -1026,7 +900,6 @@ mod tests {
             .expect("the helper runs");
         assert!(!status.success(), "the helper must not answer");
 
-        // And the wrapper sends sudo at that helper, so the steps cannot answer either.
         let wrapper = fs::read_to_string(credential.dir.join(WRAPPER)).expect("the wrapper");
         assert!(wrapper.contains(&helper.display().to_string()), "{wrapper}");
         let environment = credential.environment();
@@ -1110,8 +983,6 @@ mod tests {
 
     #[test]
     fn the_lockout_budget_is_read_from_the_system_rather_than_guessed() {
-        // The rule and the tally are both readable without root, so the installer can spend
-        // exactly what the account was given and never the entry that locks it.
         assert_eq!(deny_in("deny = 5\nunlock_time = 600\n"), Some(5));
         assert_eq!(deny_in("# deny = 2\nunlock_time = 600\n"), None);
         assert_eq!(deny_in(""), None);
@@ -1147,10 +1018,6 @@ mod tests {
 
     #[test]
     fn sudo_is_run_in_a_group_of_its_own_but_the_installers_session() {
-        // A check that has to be killed must take its children with it, so it leads a process
-        // group. It must NOT take a session of its own: the authorization it obtains is the one
-        // the steps then use, and a machine that keys that to the terminal hands it only to a
-        // check that shares the installer's session. It also keeps /dev/tty out of sudo's reach.
         let work = a_work_dir();
         let sudo = fake_sudo(work.path(), "sudo", "exit 0");
         assert!(sudo_accepts_with(&sudo, "hunter2", Duration::from_secs(20)));
@@ -1170,15 +1037,9 @@ mod tests {
     #[test]
     fn a_check_that_is_never_answered_gives_up_and_takes_sudo_with_it() {
         let work = a_work_dir();
-        // exec, so the process that reported the pid is the one that hangs.
         let sudo = fake_sudo(work.path(), "sudo", "exec sleep 60");
 
         let started = Instant::now();
-        // Long enough that the stand-in has been scheduled and has announced itself, and short
-        // enough that a check which actually waited for it to finish would fail the bound below.
-        // A deadline much tighter than this measures the machine's scheduling under a loaded
-        // test run rather than the check's behavior: killed before its first line, the
-        // stand-in never reports and there is nothing to say it was taken with it.
         assert!(!sudo_accepts_with(&sudo, "hunter2", Duration::from_secs(4)));
         assert!(
             started.elapsed() < Duration::from_secs(20),
@@ -1192,8 +1053,6 @@ mod tests {
 
     #[test]
     fn a_helper_is_not_left_waiting_forever_for_a_password() {
-        // Nothing is serving this pipe, which is what an installer that stopped serving
-        // looks like from the helper's side.
         let work = a_work_dir();
         let pipe = work.path().join("unserved.fifo");
         make_fifo(&pipe).expect("a pipe to wait on");
@@ -1212,8 +1071,6 @@ mod tests {
 
     #[test]
     fn the_credential_answers_every_helper_that_asks() {
-        // sudo asks once for each attempt it makes, so the pipe has to keep serving after
-        // the first reader has taken its secret.
         let credential = a_credential();
         let pipe = credential.dir.join(PIPE);
         for attempt in 1..=5 {

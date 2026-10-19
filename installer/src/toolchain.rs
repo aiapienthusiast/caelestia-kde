@@ -2,9 +2,6 @@ use crate::distro::{self, Distro};
 use crate::privileges;
 use crate::process;
 
-// What the shell build can link against, in the same words the build stamp stores: a
-// pkg-config version, "sdk" for headers that are there without one, or "none". One probe,
-// so the stamp and the guard cannot disagree.
 pub fn cava_state() -> String {
     if let Some(version) = process::capture("pkg-config", &["--modversion", "libcava"])
         .filter(|version| !version.is_empty())
@@ -26,9 +23,6 @@ pub fn linguist_tools_available() -> bool {
     process::available("lrelease") || process::is_executable(std::path::Path::new(&fallback))
 }
 
-// The distro is named rather than detected here for the same reason the package layer
-// names it everywhere: "whichever manager is on PATH" answers for the wrong package
-// universe on a machine with a second one installed.
 pub fn install_linguist_tools() -> bool {
     if linguist_tools_available() {
         return true;
@@ -102,8 +96,6 @@ pub fn install_cava_sdk() -> bool {
         crate::download::Verification::Match => {}
     }
 
-    // The archive is unpacked as root and tar takes the mode and the owner from it, so the
-    // entries themselves have to be safe when there is no published hash to check.
     if !crate::download::archive_entries_are_safe(&archive) {
         crate::output::warn(&format!(
             "Refusing to unpack {url}: the archive has setuid, setgid or escaping entries."

@@ -35,8 +35,6 @@ pub fn run(context: &Context) -> Result<(), Failure> {
 
     disable_kde_osd();
 
-    // Both first-install tweaks ask the same question, and the desktop count is answered
-    // before either writes: configuring the desktops sets the key the question reads.
     let configured_count = configured_desktops();
     let first_install = is_first_install(context, configured_count.as_deref());
 
@@ -62,8 +60,6 @@ fn configured_desktops() -> Option<String> {
     .filter(|count| !count.is_empty())
 }
 
-// A system that already has a desktop count of its own has been installed or tweaked
-// before, so the tweaks that assume a stock desktop stand down.
 fn first_install(marker: Option<&str>, configured_count: Option<&str>) -> bool {
     marker == Some("1") && matches!(configured_count, None | Some("1"))
 }
@@ -172,8 +168,6 @@ fn is_a_panel(line: &str) -> bool {
     }
 }
 
-// A Plasma panel is a containment whose own keys say so: a form factor of two or three, or
-// the panel plugin by name.
 fn panel_containments(lines: &[&str]) -> BTreeSet<String> {
     let mut panels = BTreeSet::new();
     let mut current: Option<&str> = None;
@@ -183,7 +177,6 @@ fn panel_containments(lines: &[&str]) -> BTreeSet<String> {
         if let Some(index) = containment_index(text) {
             current = Some(index);
         } else if text.starts_with("[Containments][") {
-            // A key of the containment that is being read: it keeps its own group.
         } else if is_group_header(text) {
             current = None;
         } else if let Some(index) = current
@@ -195,7 +188,6 @@ fn panel_containments(lines: &[&str]) -> BTreeSet<String> {
     panels
 }
 
-// The panel's own group and every group under it, up to the next containment.
 fn without_panels(lines: &[&str], panels: &BTreeSet<String>) -> Vec<String> {
     let mut kept = Vec::new();
     let mut removing = false;
@@ -205,7 +197,6 @@ fn without_panels(lines: &[&str], panels: &BTreeSet<String>) -> Vec<String> {
         if let Some(index) = containment_index(text) {
             removing = panels.contains(index);
         } else if text.starts_with("[Containments][") {
-            // A sub-group of the containment: it goes or stays with its parent.
         } else if is_group_header(text) {
             removing = false;
         }
@@ -278,8 +269,6 @@ fn from_passwd_file(user: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-// Konsole keeps the shell of every profile it has, so the ones that exist are updated and a
-// first profile is written only when there is none to update.
 fn configure_konsole(shell_path: &str) {
     let directory = paths::home().join(".local").join("share").join("konsole");
     let _ = fs::create_dir_all(&directory);
@@ -321,10 +310,6 @@ fn profile_files(directory: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// The command this install has just put down, asked for by path before name: the session the
-/// installer runs in started before the command existed, so its PATH need not have the checkout's
-/// bin directory on it. The command resolves its own helpers from its directory, so a path is
-/// enough to make it work.
 fn caelestia_command() -> Option<PathBuf> {
     let installed = install_kind::bin_dir().join("caelestia");
     if process::is_executable(&installed) {

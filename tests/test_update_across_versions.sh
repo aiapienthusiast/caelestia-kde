@@ -23,8 +23,6 @@ fallback_rules() {
     printf '%s\n' "$FALLBACK_SOURCE" | grep -o '"[^"]*"' | tr -d '"'
 }
 
-# The release an install updating to this tree is coming from. The version being
-# released cannot be a tag yet, so the newest tag the branch carries is the one before it.
 previous_release() {
     local current
     current="$(sed -nE 's/^[[:space:]]*VERSION=//p' "$REPO_ROOT/.github/version.env" 2>/dev/null | tr -d '[:space:]')"
@@ -32,8 +30,6 @@ previous_release() {
         grep -vx "$current" | head -n 1
 }
 
-# The rules this release writes that the release before it did not: what an install still
-# on that release is missing from its checkout.
 new_rules() {
     local rule
     for rule in "${CURRENT_RULES[@]}"; do
@@ -100,10 +96,6 @@ test_a_rule_this_release_adds_is_one_the_repair_covers() {
         "this release sparsifies$missing and $PREVIOUS's updater never writes them, so an install still on $PREVIOUS starts the update without them: name them in SPARSIFY in installer/src/steps/build_shell.rs"
 }
 
-# A checkout on the previous release lacks every rule this one adds, and SPARSIFY is what the
-# repair reads, so each rule has to name a path the release actually ships. What the repair
-# then does with them is covered by the crate test
-# the_repair_fills_what_a_sparse_checkout_left_out, against a checkout it seeds itself.
 test_the_paths_the_repair_fetches_are_the_ones_the_tree_ships() {
     local rule path absent=""
     for rule in "${FALLBACK_RULES[@]}"; do

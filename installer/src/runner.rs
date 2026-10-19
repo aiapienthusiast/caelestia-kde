@@ -16,9 +16,6 @@ pub struct Running {
 }
 
 impl Running {
-    // Every step is native now, so the installer itself only ever launches the binary. The
-    // tests below drive a script instead: a step run through the binary would be the test
-    // binary, which is not the installer.
     #[cfg(test)]
     pub fn spawn(
         bundle: &Path,
@@ -71,9 +68,6 @@ impl Running {
 
         let offset = std::fs::metadata(log).map(|meta| meta.len()).unwrap_or(0);
 
-        // Its own process group, so stopping the step stops everything it started rather than
-        // just the first process. It also keeps the terminal's own ctrl+c away from it: the
-        // installer decides when a step ends.
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt;
@@ -97,8 +91,6 @@ impl Running {
         })
     }
 
-    /// Stop the step and everything it started: a term first so a package manager can put its
-    /// lock back, and a kill only if it will not go.
     pub fn stop(&mut self) {
         if matches!(self.child.try_wait(), Ok(Some(_))) {
             return;
@@ -151,8 +143,6 @@ impl Running {
     }
 }
 
-/// A step that is dropped while it is still going is a step nobody stopped: quitting the TUI must
-/// not leave a package manager running behind it.
 impl Drop for Running {
     fn drop(&mut self) {
         self.stop();

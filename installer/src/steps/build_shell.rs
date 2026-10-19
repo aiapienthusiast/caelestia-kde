@@ -30,8 +30,6 @@ const QML_MODULES: [&str; 11] = [
 const LOCKSCREEN_PACKAGE: &str = "src/kde/shells/caelestia.desktop";
 const LEGACY_FONTS: [&str; 3] = ["SF-Pro", "SF-Mono", "google-sans-flex"];
 const LEGACY_FONT_README: &str = "# Fonts";
-// What an install still on an older release is missing after its updater's sparse rules
-// have been applied, and has to be fetched before this step reads it.
 const SPARSIFY: [&str; 3] = ["installer/", "assets/", "uninstall.sh"];
 const EFFECT_DIR: &str = "kwin-effects/workspace-tracker";
 
@@ -59,10 +57,6 @@ pub fn run(context: &Context) -> Result<(), Failure> {
 
     prepare_ccache();
 
-    // An update runs a short plan of its own and leaves the prerequisites to this step; an install
-    // marked as fresh runs every step from the plan, in order. Repairing them here as well would
-    // ask 10-autostart to point the session at a shell this step has not built yet, which is a
-    // failure the run then reports as a warning of this step.
     if context.variable("CAELESTIA_FRESH_INSTALL").as_deref() != Some("1") {
         standalone_update(context, &shell_dir)?;
     }
@@ -143,8 +137,6 @@ fn build_jobs() -> String {
     (available - 1).max(1).to_string()
 }
 
-// The cache the compiler reads and writes; keeping it under the user's own cache directory
-// is what makes a rebuild after an update cheap.
 fn prepare_ccache() {
     let directory = std::env::var("CCACHE_DIR")
         .ok()
@@ -162,16 +154,10 @@ fn prepare_ccache() {
     }
 }
 
-// ---------------------------------------------------------------------------
-// The environment the session reads
-
 const ENVIRONMENT_HEADER: &str = "\
 # Written by Caelestia. Read by systemd for every session process and by the
 # user manager the shell's unit runs under.";
 
-// The command directory goes on PATH because a checkout's command lives in ~/.local/bin,
-// which a session does not carry on every distribution: without this, a terminal here cannot
-// run `caelestia update` by name. A package's /usr/bin is already on PATH.
 const PLASMA_ENVIRONMENT_HEADER: &str = "\
 #!/bin/sh
 # Written by Caelestia. Sourced by KDE Plasma during session startup for KWin,
@@ -241,9 +227,6 @@ pub fn write_shell_environment(home: &Path) -> Result<(), Failure> {
     Ok(())
 }
 
-// The lines an older install added to a shell's rc file are removed: the session gets them
-// from environment.d and Plasma now, and an rc file that also carries them would put the
-// checkout's directories in front of a package's.
 fn remove_environment_lines(rc: &Path) {
     if !rc.is_file() {
         return;
@@ -271,9 +254,6 @@ fn is_environment_line(line: &str) -> bool {
     line.contains("CAELESTIA_LIB_DIR")
         || (line.contains("QML2_IMPORT_PATH") && line.contains("caelestia"))
 }
-
-// ---------------------------------------------------------------------------
-// The update path this step repairs
 
 fn sparsify_checkout_paths(bundle: &Path) {
     for rule in SPARSIFY {
@@ -345,9 +325,6 @@ fn standalone_update(context: &Context, shell_dir: &Path) -> Result<(), Failure>
         output::warn("10-autostart failed");
     }
 
-    // The default wallpaper pack is a step of its own in a full install, but an update only
-    // runs 03-deploy-configs, this step and 09-system-tweaks, so it is fetched from here to
-    // keep updates supplied with it. The step is idempotent.
     output::info("Downloading the default wallpaper pack...");
     if run_step(context, "03a-wallpapers").is_err() {
         output::warn("03a-wallpapers failed");
@@ -385,9 +362,6 @@ fn check_qml_deployment(bundle: &Path, shell_dir: &Path) -> Result<(), Failure> 
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Preparing a build directory
-
 struct Toolchain {
     bundle: PathBuf,
     generator: String,
@@ -418,8 +392,6 @@ impl Toolchain {
     }
 }
 
-// `1.2.3` and `1.2.4` are the same toolchain as far as a rebuild is concerned: the stamp is
-// about whether the generator and the headers changed.
 fn normalize_version(text: &str) -> String {
     let mut parts = text.trim().split('.');
     match (parts.next(), parts.next()) {
@@ -445,7 +417,6 @@ fn prepare_build_dir(directory: &Path, theme: &Toolchain) -> Result<(), Failure>
     Ok(())
 }
 
-// `nice -n 10`: the build stays usable while it runs.
 fn build_command(program: &str, args: &[&str], directory: &Path) -> std::process::Command {
     let mut command = if process::available("nice") {
         let mut command = std::process::Command::new("nice");
@@ -557,8 +528,6 @@ fn build_and_install(
     Ok(())
 }
 
-// How the shell routed a build command's output: everything to the log, and to the terminal
-// either everything, everything but the compiler's own noise, or nothing at all.
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum Logging {
     Terminal,
@@ -609,9 +578,6 @@ fn run_logged(
     Ok(output.status.success())
 }
 
-// ---------------------------------------------------------------------------
-// The prebuilt archive
-
 fn release_tag(bundle: &Path) -> Option<String> {
     let text = fs::read_to_string(bundle.join(".github/version.env")).ok()?;
     text.lines()
@@ -620,12 +586,6 @@ fn release_tag(bundle: &Path) -> Option<String> {
         .filter(|tag| !tag.is_empty())
 }
 
-// The prebuilt archive holds one released revision, so it may only stand in for a tree that
-// is that revision: the released tag itself (an update pinned to a version) or main sitting
-// on its remote tip. A branch, a stale main, or a checkout carrying commits of its own builds
-// locally instead of letting the archive replace them. Main that has moved on since its last
-// release cannot be told apart from that release here, so such a tree is replaced by the
-// release the archive was built from.
 fn checkout_may_use_prebuilt(bundle: &Path) -> bool {
     let Some(release) = release_tag(bundle) else {
         return false;
@@ -723,9 +683,6 @@ fn try_prebuilt_shell(bundle: &Path, home: &Path) -> bool {
         Verification::Match => output::ok("Prebuilt shell artifacts match the published checksum."),
     }
 
-    // Nothing above compared the archive against a published hash for the first two cases,
-    // and this extraction writes into $HOME/.config and $HOME/.local, so refuse an archive
-    // carrying setuid or escaping entries even when there is no hash to check.
     if !download::archive_entries_are_safe(&archive) {
         output::warn(&format!(
             "Refusing to extract {url}: the archive has setuid, setgid or escaping entries."
@@ -797,9 +754,6 @@ fn backup_shell_config(home: &Path) -> Result<(), Failure> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// The workspace-tracker effect
-
 fn workspace_stamp() -> PathBuf {
     paths::cache_dir()
         .join("caelestia-kde")
@@ -836,9 +790,6 @@ fn installed_effect(name: &str) -> Option<PathBuf> {
     .find(|candidate| candidate.is_file())
 }
 
-/// The KWin the effect is being built against. The plugin version is baked into the binary, and an
-/// effect built for another one is a plugin KWin quietly refuses to load - so a KWin update has to
-/// count as a change even when nothing in the checkout moved.
 fn kwin_plugin_version() -> String {
     if let Ok(config) = fs::read_to_string("/usr/include/kwin/config-kwin.h")
         && let Some(version) = plugin_version_in(&config)
@@ -850,7 +801,6 @@ fn kwin_plugin_version() -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-/// `KWIN_PLUGIN_VERSION_STRING "6.2.1"` in KWin's own config header.
 fn plugin_version_in(config: &str) -> Option<String> {
     const MARKER: &str = "KWIN_PLUGIN_VERSION_STRING \"";
     let at = config.find(MARKER)? + MARKER.len();
@@ -860,7 +810,6 @@ fn plugin_version_in(config: &str) -> Option<String> {
     (!version.is_empty()).then(|| version.to_string())
 }
 
-/// The first `x.y.z` in a version banner.
 fn version_triple_in(text: &str) -> Option<String> {
     let bytes: Vec<char> = text.chars().collect();
     let mut start = None;
@@ -884,7 +833,6 @@ fn version_triple_in(text: &str) -> Option<String> {
     (candidate.matches('.').count() == 2).then_some(candidate)
 }
 
-/// The KWin version an effect was compiled for, read out of the plugin factory symbol it exports.
 fn effect_kwin_version(effect: &Path) -> String {
     const MARKER: &str = "org.kde.kwin.EffectPluginFactory";
     let Ok(bytes) = fs::read(effect) else {
@@ -1056,8 +1004,6 @@ fn enable_effect(reconfigure: bool) {
         None,
     );
     if reconfigure {
-        // A reconfigure alone does not load an effect that was not loaded before: KWin is told
-        // about it by name, then re-reads its configuration.
         let _ = process::succeeds(
             "qdbus6",
             &[
@@ -1072,9 +1018,6 @@ fn enable_effect(reconfigure: bool) {
         output::ok("Installed workspace-tracker to KDE.");
     }
 }
-
-// ---------------------------------------------------------------------------
-// What the shell needs on disk afterwards
 
 fn check_qml_modules(home: &Path) -> Result<(), Failure> {
     let base = home.join(".local").join("lib").join("qt6").join("qml");
@@ -1188,8 +1131,6 @@ fn install_icon_set(bundle: &Path, home: &Path) {
     output::info("Yet another monochrome icon set copied successfully.");
 }
 
-// `rsync -a --exclude=.git`, including the part that matters here: a file the copy writes is
-// writable afterwards, which a read-only checkout's own files are not.
 fn copy_tree_without_git(source: &Path, destination: &Path) -> std::io::Result<()> {
     fs::create_dir_all(destination)?;
     for entry in fs::read_dir(source)? {
@@ -1212,8 +1153,6 @@ fn copy_tree_without_git(source: &Path, destination: &Path) -> std::io::Result<(
     Ok(())
 }
 
-// `--chmod=u+w`: a checkout can be mounted read-only, and the shell reads these icons at
-// start-up. A copy on Windows is writable already.
 fn make_writable(path: &Path) {
     #[cfg(unix)]
     {
@@ -1228,15 +1167,6 @@ fn make_writable(path: &Path) {
     let _ = path;
 }
 
-// ---------------------------------------------------------------------------
-// What an older install left behind
-
-// The shell used to load every font under `assets/fonts`, so an install can hold two copies
-// of them: the tree's own, which the CMake install puts in the config directory and never
-// deletes files from, and the copy an older asset step downloaded into the user's asset
-// directory. Nothing reads either directory now, and the two together are about 600 MiB on a
-// machine that has both. Only what those two mechanisms could have put there is removed;
-// anything the user added themselves stays.
 fn cleanup_legacy_fonts(home: &Path) {
     let roots = [
         install_kind::shell_config()
@@ -1271,8 +1201,6 @@ fn cleanup_fonts_in(root: &Path) -> Vec<String> {
         }
     }
 
-    // The download copied the tree's own three-line README along with the fonts, and it
-    // describes a directory nothing reads now. Only that exact text is removed.
     let readme = root.join("README.md");
     if fs::read_to_string(&readme)
         .map(|text| text.lines().next() == Some(LEGACY_FONT_README))
@@ -1388,20 +1316,10 @@ fn install_lockscreen_greeter(bundle: &Path, home: &Path) -> bool {
     true
 }
 
-/// The QML modules the lock screen is built from. `Caelestia` has one module per directory, so the
-/// probe is the one that has to be there rather than a `qmldir` at the top.
 const LOCKSCREEN_MODULES: [(&str, &str); 2] =
     [("Caelestia", "Services/qmldir"), ("M3Shapes", "qmldir")];
 
-/// Put the modules the lock screen imports beside it, inside its own package.
-///
-/// `import M3Shapes` is looked up in the engine's import path, not next to the file that asks for
-/// it, and the greeter is a process of the session that started before any of this was installed:
-/// the one import path it has is the one this session was born with. So the package carries the
-/// modules and the lock screen imports them by directory, which resolves against itself.
 fn carry_lockscreen_modules(package: &Path) -> bool {
-    // The same colon-separated list the session hands the shell, split here because the caller
-    // that built it is the one that knows what it separated the paths with.
     let imports: Vec<PathBuf> = install_kind::qml_import_path()
         .split(':')
         .filter(|base| !base.is_empty())
@@ -1416,7 +1334,6 @@ fn carry_lockscreen_modules(package: &Path) -> bool {
         })
 }
 
-/// Where a module was installed, from the list of paths the engine searches for one.
 fn module_source(imports: &[PathBuf], name: &str, probe: &str) -> Option<PathBuf> {
     imports
         .iter()
@@ -1424,8 +1341,6 @@ fn module_source(imports: &[PathBuf], name: &str, probe: &str) -> Option<PathBuf
         .find(|candidate| candidate.join(probe).is_file())
 }
 
-/// Point the package at the module rather than copying it: a rebuild replaces the module, and the
-/// lock screen should draw with the one that was built rather than a copy of an older one.
 #[cfg(unix)]
 fn module_link(source: &Path, link: &Path) -> bool {
     if link.is_dir() && !link.is_symlink() {
@@ -1496,8 +1411,6 @@ mod tests {
             .unwrap_or(false)
     }
 
-    // A checkout of main with origin/main pointing at the same commit, which is what
-    // install.sh leaves behind, plus a version.env naming the released version.
     fn seed_checkout(work: &TempDir, name: &str, version: &str) -> PathBuf {
         let repo = work.path().join(name);
         fs::create_dir_all(repo.join(".github")).expect("a checkout");
@@ -1549,7 +1462,6 @@ mod tests {
         }
         let work = TempDir::new("caelestia-build-shell-test").expect("a temporary directory");
         let repo = seed_checkout(&work, "repo", "v1.0.0");
-        // The remote moves on while the checkout stays behind, as a stale local main does.
         run_git(
             &repo,
             &["commit", "--quiet", "--allow-empty", "-m", "released later"],
@@ -1585,7 +1497,6 @@ mod tests {
         }
         let work = TempDir::new("caelestia-build-shell-test").expect("a temporary directory");
         let repo = seed_checkout(&work, "repo", "v1.0.0");
-        // An update pinned to a version: the checkout is the tag, not main's tip.
         run_git(
             &repo,
             &["commit", "--quiet", "--allow-empty", "-m", "next release"],
@@ -1608,8 +1519,6 @@ mod tests {
             &["commit", "--quiet", "--allow-empty", "-m", "next release"],
         );
         run_git(&repo, &["tag", "v2.0.0"]);
-        // version.env still names the older release, so the prebuilt would be older than
-        // the tree it replaces.
 
         assert!(!checkout_may_use_prebuilt(&repo));
     }
@@ -1822,9 +1731,6 @@ mod tests {
         }
     }
 
-    // The updater of the release before this one wrote its own rules into the checkout, so
-    // an install still on it is missing whatever this release added. The repair asks git for
-    // those paths again rather than re-cloning, and leaves everything already held alone.
     #[test]
     fn the_repair_fills_what_a_sparse_checkout_left_out() {
         if !process::available("git") {
@@ -1848,7 +1754,6 @@ mod tests {
         run_git(&repo, &["add", "-A"]);
         run_git(&repo, &["commit", "--quiet", "-m", "release"]);
         run_git(&repo, &["config", "core.sparseCheckout", "true"]);
-        // Only the shell is selected: what an install that predates the rest of the rules has.
         fs::write(repo.join(".git/info/sparse-checkout"), "/shell/\n").expect("the rules");
         run_git(&repo, &["read-tree", "-mu", "HEAD"]);
 
@@ -1887,8 +1792,6 @@ mod tests {
             module_source(&imports, "M3Shapes", "qmldir").expect("it is in the second path");
         assert_eq!(found, second.join("M3Shapes"));
 
-        // A module that is nowhere is not a directory that happens to share its name: the probe
-        // file is what says the path holds a module rather than a folder.
         fs::remove_file(second.join("M3Shapes/qmldir")).expect("the qmldir goes");
         assert!(module_source(&imports, "M3Shapes", "qmldir").is_none());
     }
@@ -1901,7 +1804,6 @@ mod tests {
         fs::write(source.join("qmldir"), "module M3Shapes\n").expect("the qmldir");
         let beside = work.path().join("package/contents/lockscreen");
         fs::create_dir_all(&beside).expect("the package");
-        // What an older install left behind: a real directory where the link now goes.
         fs::create_dir_all(beside.join("M3Shapes")).expect("the stale copy");
 
         assert!(module_link(&source, &beside.join("M3Shapes")));

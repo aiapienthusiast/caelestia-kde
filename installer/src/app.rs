@@ -1,8 +1,3 @@
-// The app: what the wizard knows, and what a key does to it.
-//
-// One stage at a time with overlays on top of it, and one meaning per key: `esc` always steps
-// back, `q` always leaves, `ctrl+c` always stops.
-
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::thread;
@@ -23,7 +18,6 @@ use crate::steps::{self, STEPS, Status};
 use crate::theme::Theme;
 use crate::ui::{self, Key};
 
-/// How many lines of the failing step's output the failure card shows.
 const FAILURE_TAIL: usize = 6;
 
 pub fn log_path() -> PathBuf {
@@ -32,8 +26,6 @@ pub fn log_path() -> PathBuf {
         .unwrap_or_else(|| std::env::temp_dir().join("caelestia-install.log"))
 }
 
-/// What the wizard is here to do. Update and Uninstall leave the TUI: their own prompts would
-/// otherwise fight the TUI for the terminal.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Action {
     Install,
@@ -60,9 +52,6 @@ impl Action {
         }
     }
 
-    /// Why an action is not on offer here, said as the way out rather than as the fact the row
-    /// above already carries. Install is always on offer - a reinstall is a thing people do - so
-    /// that arm exists to keep the match total rather than to be shown.
     pub fn unavailable(self) -> &'static str {
         match self {
             Action::Update | Action::Uninstall => "Install Caelestia first",
@@ -79,8 +68,6 @@ impl Action {
     }
 }
 
-/// Where the wizard has got to, in the order it works through. Overlays are not stages: closing
-/// one returns to the stage it was opened over.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Stage {
     Home,
@@ -100,7 +87,6 @@ pub enum Overlay {
     Confirm,
 }
 
-/// What the confirm overlay is asking about.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Confirm {
     Handoff(Action),
@@ -110,7 +96,6 @@ pub enum Confirm {
 }
 
 impl Confirm {
-    /// The buttons, the first being the one that does the thing.
     pub fn buttons(self) -> &'static [&'static str] {
         match self {
             Confirm::Handoff(Action::Update) => &["Update now", "Cancel"],
@@ -121,8 +106,6 @@ impl Confirm {
         }
     }
 
-    /// Where the highlight starts. Two of these questions end something a keystroke cannot get
-    /// back — the run, or the session — so their safe answer is the one under the highlight.
     pub fn focus(self) -> usize {
         match self {
             Confirm::Quit | Confirm::LogOut => 1,
@@ -130,7 +113,6 @@ impl Confirm {
         }
     }
 
-    /// The button a letter stands for, in the order they are drawn.
     pub fn shortcut(self, letter: char) -> Option<usize> {
         match letter {
             'y' | 'Y' => Some(0),
@@ -140,12 +122,9 @@ impl Confirm {
     }
 }
 
-/// How the wizard will become root: its own helper can ask, or the reader can answer.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AuthMethod {
-    /// Offer a finger to the reader the machine already has.
     Fingerprint,
-    /// Ask for the password here and pass it to sudo.
     Password,
 }
 
@@ -158,8 +137,6 @@ impl AuthMethod {
     }
 }
 
-/// The actions that hand the terminal over to something else: another program of the installer's,
-/// or the end of the session itself.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Handoff {
     Update,
@@ -167,23 +144,16 @@ pub enum Handoff {
     LogOut,
 }
 
-/// What the TUI leaves behind: an exit code, and work for the caller once the terminal is back.
 pub struct Session {
     pub outcome: Outcome,
     pub handoff: Option<Handoff>,
 }
 
-/// What the installer found, read before anything is decided and again at the point of no return:
-/// a machine that changed while the wizard was open must not be overwritten on an old answer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Detection {
-    /// The family, kept as the enum it is: a precondition is decided by asking what the machine
-    /// is, not by comparing a label written for a human to a string.
     pub distro: crate::distro::Distro,
     pub kind: crate::install_kind::Kind,
-    /// Caelestia's shell configuration is already where this install kind keeps it.
     pub installed: bool,
-    /// The package manager this distribution installs with, if there is one.
     pub package_manager: Option<&'static str>,
     pub quickshell: bool,
     pub git: bool,
@@ -209,7 +179,6 @@ impl Detection {
         }
     }
 
-    /// What to call the distribution and the layout on screen.
     pub fn distro_label(&self) -> &'static str {
         self.distro.label()
     }
@@ -218,10 +187,6 @@ impl Detection {
         self.kind.label()
     }
 
-    /// The things that will stop an install, as opposed to the things that are merely true.
-    /// Each one is the condition its own sentence describes, so a blocker never fires on a
-    /// machine where what it says is missing is not needed - and a distribution that is unknown
-    /// is said once, rather than also blaming the package manager it was never going to find.
     pub fn blockers(&self) -> Vec<&'static str> {
         let mut blockers = Vec::new();
         if self.distro == crate::distro::Distro::Unknown {
@@ -250,7 +215,6 @@ pub struct Choice {
     pub help: &'static str,
 }
 
-/// What went wrong, what can be done about it, and what each answer costs.
 pub struct FailureCard {
     pub step: &'static str,
     pub detail: Vec<LogLine>,
@@ -265,8 +229,6 @@ impl FailureCard {
             label: "Retry",
             help: "",
         },
-        // Skip and Ignore are the pair worth one line each: they both continue, and what they
-        // record about the step is the whole difference between them.
         Choice {
             key: 's',
             label: "Skip",
@@ -294,8 +256,6 @@ impl FailureCard {
         }
     }
 
-    /// The command that reproduces the step outside the TUI, so a failure can be worked on
-    /// somewhere there is room to read it.
     pub fn reproduction(&self) -> String {
         format!("caelestia-install step {}", self.id)
     }
@@ -307,28 +267,12 @@ pub struct App {
     pub env: Env,
     pub theme: Theme,
     pub glyphs: Glyphs,
-    /// Which of the themeable apps are on this machine. Read once, and the reason a question can
-    /// ask about the apps somebody has instead of listing the ones they might install.
     pub apps: crate::apps::Apps,
-    /// Whether this machine can authorize with a fingerprint. Read once, and the reason the gate
-    /// offers the reader only where there is one to offer.
     pub fingerprint: bool,
-    /// Whether root has to be asked for at all, read once when the wizard starts. Kept as a field
-    /// so a test can say which machine it is testing instead of inheriting the host's sudo.
     pub needs_password: bool,
-    /// Read from the machine when the wizard starts and re-read at the confirmation. What the
-    /// machine is, and whether Caelestia is already on it, are asked of this rather than kept in
-    /// fields of their own: two records of one fact are two records that can disagree.
     pub detection: Detection,
-    /// Set when the user has been shown that Caelestia is already installed and chose to carry
-    /// on anyway. Without it, the confirmation refuses to overwrite something nobody mentioned.
     pub reinstall_acknowledged: bool,
-    /// Whether Caelestia was already there when the wizard started, which is what tells "you
-    /// were told and said yes" apart from "this appeared while you were deciding".
     pub installed_when_started: bool,
-    /// Steps the last recorded run left unfinished, from its journal. A run that stopped part way
-    /// leaves the shell's files on disk, so the files alone would have the screen claim a machine
-    /// is set up when it is half set up.
     pub unfinished: Vec<(String, String)>,
     pub stage: Stage,
     pub overlay: Option<Overlay>,
@@ -336,27 +280,14 @@ pub struct App {
     pub action: Action,
     pub home: usize,
     pub answers: Answers,
-    /// The answers the wizard was seeded with on this machine: what "changed" is measured against
-    /// and what "reset" goes back to. A machine that already has the apps starts with them on, so
-    /// the table's defaults alone would report a change nobody made.
     baseline: Answers,
-    /// Which question the wizard is asking: one screen per question, in order.
     pub question: usize,
     pub cursor: usize,
-    /// Which privilege route the user picked, once they have picked one.
     pub auth: Option<AuthMethod>,
     pub password: String,
-    /// A password that is with sudo. The answer arrives on a later tick, so the frame can show
-    /// that something is happening while PAM takes its time over it.
     pub(crate) checking: Option<std::sync::mpsc::Receiver<bool>>,
-    /// Walk the state machine without running any step: what the tests use to see a whole install
-    /// through. Nothing on the command line sets it, and it is false everywhere else.
     pub pretend: bool,
     pub attempts: usize,
-    /// Set once the reader has been asked and did not answer. Every read that goes unanswered is a
-    /// failed authentication against sudo, which spends an entry in the same tally a wrong password
-    /// spends and can lock the account for minutes; so the reader is asked once per run and the
-    /// password route takes over from it.
     pub fingerprint_spent: bool,
     pub problem: Option<String>,
     pub notice: Option<String>,
@@ -368,11 +299,7 @@ pub struct App {
     pub log_follow: bool,
     pub log_scroll: usize,
     pub log_loud_only: bool,
-    /// Which of the lines that went wrong `n` and `p` are standing on, counted as a row of the log
-    /// as it is shown. Cleared by any other way of moving through the log, so the next jump starts
-    /// from what the pane is showing.
     pub log_problem: Option<usize>,
-    /// Which of the confirm overlay's buttons is highlighted.
     pub confirm_focus: usize,
     pub area: Rect,
     pub spinner: usize,
@@ -383,17 +310,10 @@ pub struct App {
     credential: Option<Credential>,
     inhibitor: Option<Inhibitor>,
     running: Option<Running>,
-    /// Set when something may have drawn on the screen besides the wizard, so the next frame is
-    /// painted whole instead of diffed against a record that no longer matches.
     pub repaint: bool,
-    /// What the finished run left on the machine. Read once when it finishes, because a screen
-    /// drawn eight times a second has no business reading the filesystem to say what it did.
     pub landed: Option<Landed>,
 }
 
-/// Where the install landed: what it installed, which version of it, and where the settings it
-/// replaced were put. Everything here is read from the machine rather than remembered from the
-/// run, so a screen that shows it can only say what is actually there.
 pub struct Landed {
     pub version: Option<String>,
     pub commit: Option<String>,
@@ -406,8 +326,6 @@ pub struct Landed {
 impl Landed {
     pub fn read(bundle: &Path) -> Self {
         let shell = crate::update::config_dir();
-        // A checkout records its revision as it builds; a tarball has no revision to record and
-        // still knows which version it is, so the bundle answers when the record does not.
         let installed = crate::update_state::installed(&shell)
             .or_else(|| crate::update::published_version(bundle));
         let (version, commit, branch) = match installed {
@@ -433,19 +351,11 @@ impl App {
     pub fn new(bundle: PathBuf, log_path: PathBuf, env: Env) -> Self {
         let mut answers = Answers::new();
         menu::seed_answers(&menu::QUESTIONS, &mut answers);
-        // Only the apps this machine has are offered, and the ones it has start on: the answer to
-        // "theme this app you have" is the app, not a prompt. An app that is not here answers no,
-        // so a row nobody ever saw can never be the reason a step runs.
         let apps = crate::apps::Apps::here();
         for (id, answer) in apps.answers() {
             answers.insert(id, answer.to_string());
         }
-        // What this machine started at, which is what "changed" and "reset" are measured against:
-        // the apps it already has are on from the first screen, so nothing reads as switched on
-        // before the user has touched anything.
         let baseline = answers.clone();
-        // Asked of the machine once. A reader that is not there, or a finger that is not enrolled,
-        // is not a route, and the gate should not offer one that cannot open.
         let fingerprint = privileges::fingerprint_ready();
         Self {
             bundle,
@@ -456,8 +366,6 @@ impl App {
             fingerprint,
             needs_password: needs_password(),
             env,
-            // Read once, here, and again when it matters. The header is drawn thirty times a
-            // second, and detection reads the filesystem and the PATH.
             detection: Detection::read(),
             reinstall_acknowledged: false,
             installed_when_started: crate::install_kind::shell_config().exists(),
@@ -503,9 +411,6 @@ impl App {
         }
     }
 
-    /// Point the wizard at a machine with a known set of apps, and take the answers it would have
-    /// started with there. Which apps a machine has is read from the machine, so this is the only
-    /// way to say what the app rows are about.
     #[cfg(test)]
     pub fn with_apps(mut self, apps: crate::apps::Apps) -> Self {
         let seeded: Vec<(&'static str, &'static str)> = apps.answers().collect();
@@ -517,31 +422,22 @@ impl App {
         self
     }
 
-    /// Point the wizard at a machine that has, or has not, a fingerprint to offer. The same reason
-    /// the apps are settable: what the host happens to have must not decide what a test asserts.
     #[cfg(test)]
     pub fn with_fingerprint(mut self, ready: bool) -> Self {
         self.fingerprint = ready;
         self
     }
 
-    /// Say whether this machine has to be asked for root. Read from sudo in `App::new`, so without
-    /// this a test would prove something different on a machine whose sudo needs no password.
     #[cfg(test)]
     pub fn with_password_gate(mut self, needed: bool) -> Self {
         self.needs_password = needed;
         self
     }
 
-    /// The answers a script gave rather than the wizard asking. They are where the wizard starts,
-    /// so they are the baseline as well: a script that switched something on is not a change the
-    /// user made, and resetting goes back to what the script asked for.
     pub fn apply_settings(&mut self, settings: &[(&'static str, String)]) {
         menu::apply_set(settings, &mut self.answers);
         self.baseline = self.answers.clone();
     }
-
-    // What the view asks -------------------------------------------------------------
 
     pub fn header(&self) -> ui::Header {
         ui::Header {
@@ -559,9 +455,6 @@ impl App {
 
     pub fn counter(&self) -> Option<String> {
         match self.stage {
-            // Progress, where there is progress to report. The questions used to be followed by a
-            // screen that showed the same counter as the run screen and always read "step 0 of
-            // 17", which is a progress bar for something that has not started.
             Stage::Run => Some(format!("step {}/{}", self.finished(), STEPS.len())),
             Stage::Options => Some(format!(
                 "question {}/{}",
@@ -587,7 +480,6 @@ impl App {
                 .unwrap_or_default()
     }
 
-    /// The step being worked on, as an index into the table.
     pub fn running_step(&self) -> Option<usize> {
         self.statuses
             .iter()
@@ -603,8 +495,6 @@ impl App {
         }
     }
 
-    /// The rows of the question on screen. This is the list the cursor indexes, so what is drawn
-    /// and what a key moves over cannot disagree.
     pub fn current_entries(&self) -> Vec<&'static Entry> {
         menu::items_of(self.question).iter().collect()
     }
@@ -613,53 +503,36 @@ impl App {
         self.current_entries().into_iter().nth(self.cursor)
     }
 
-    /// Whether a row's answer differs from the one this machine started at.
     pub fn is_changed(&self, entry: &Entry) -> bool {
         menu::is_changed(entry, &self.apps, &self.answers, &self.baseline)
     }
 
     pub fn action_enabled(&self, action: Action) -> bool {
         match action {
-            // Both of these work on an install that is already here. Offering one on a machine
-            // with nothing on it offers work that cannot be done.
             Action::Install => true,
             Action::Update | Action::Uninstall => self.installed(),
         }
     }
 
-    /// Whether this machine already has Caelestia on it: what the wizard reads, not what it
-    /// remembers. One answer, so the screens, the action list and the confirmation cannot
-    /// disagree about it.
     pub fn installed(&self) -> bool {
         self.detection.installed
     }
 
-    /// Whether this machine already has Caelestia on it, read now rather than remembered. A
-    /// pretend run reads nothing: it has no machine to read, and the tests set the detection
-    /// they want to reason about.
     pub fn refresh_detection(&mut self) {
         if self.pretend {
             return;
         }
         self.detection = Detection::read();
         self.unfinished = crate::journal::unfinished();
-        // A new reading is a new answer to whatever the last one was asked about, so a sentence
-        // written about the old one is no longer true of the machine.
         self.problem = None;
     }
 
-    /// The questions whose answers differ from a fresh install: what "changed" is counted over.
-    /// A bulk row is a view of the switches it stands for and holds no answer, so counting it
-    /// would report seven changes for one decision.
     pub fn question_changed(&self, question: usize) -> bool {
         menu::items_of(question)
             .iter()
             .any(|entry| menu::holds_an_answer(entry) && self.is_changed(entry))
     }
 
-    /// How many answers differ from what this machine started at, across every question. A bulk
-    /// row is a view of the switches it stands for and holds no answer, so counting it would
-    /// report seven changes for one decision.
     pub fn changed_answers(&self) -> usize {
         menu::every_entry()
             .into_iter()
@@ -667,7 +540,6 @@ impl App {
             .count()
     }
 
-    /// The lines the log pane shows, in order: everything, or only what went wrong.
     pub fn visible_log(&self) -> Vec<&LogLine> {
         self.log
             .iter()
@@ -679,8 +551,6 @@ impl App {
         ui::log_rows(self.run_layout().log).max(1) as usize
     }
 
-    /// The rows of the log as it is shown that went wrong, in order. These are what `n` and `p`
-    /// step through, what the heading counts, and what the scrollbar marks.
     pub fn problem_rows(&self) -> Vec<usize> {
         self.visible_log()
             .iter()
@@ -690,8 +560,6 @@ impl App {
             .collect()
     }
 
-    /// Stand on the next or the previous line that went wrong, and put it a third of the way down
-    /// the pane: a warning read at the bottom edge is a warning read twice.
     fn jump_to_problem(&mut self, forward: bool, rows: usize) {
         let problems = self.problem_rows();
         let (Some(&first), Some(&last)) = (problems.first(), problems.last()) else {
@@ -732,15 +600,12 @@ impl App {
         ui::run_layout(ui::body(self.area))
     }
 
-    /// The first step that has not started: what the run screen names between two steps.
     pub fn next_step(&self) -> Option<usize> {
         self.statuses
             .iter()
             .position(|status| *status == Status::Pending)
     }
 
-    /// Where the log pane starts, sized for a pane: the run screen passes the pane it drew, and
-    /// the full-screen log passes its own. One function, so the two cannot disagree.
     pub fn log_window_for(&self, rows: usize) -> (usize, usize) {
         let rows = rows.max(1);
         let lines = self.visible_log();
@@ -751,8 +616,6 @@ impl App {
         };
         (start, rows)
     }
-
-    // The loop ----------------------------------------------------------------------
 
     pub fn leaving(&self) -> Option<Outcome> {
         self.leaving
@@ -769,7 +632,6 @@ impl App {
         self.leaving = Some(outcome);
     }
 
-    /// The signal handler's escape hatch, and `ctrl+c`: stop whatever is running, then leave.
     fn interrupt(&mut self) -> Flow {
         if self.overlay == Some(Overlay::Confirm) {
             return self.stop_and_leave();
@@ -781,8 +643,6 @@ impl App {
         Flow::Done(Outcome::Interrupted)
     }
 
-    /// Whether a step is in flight, which is the only thing that makes quitting worth asking
-    /// about.
     fn busy(&self) -> bool {
         self.running.is_some() || self.running_step().is_some()
     }
@@ -792,8 +652,6 @@ impl App {
         Flow::Done(Outcome::Interrupted)
     }
 
-    /// A step that is stopped is a step that is stopped: leaving the child behind would let a
-    /// package manager carry on writing while the user believes they canceled.
     fn stop_running(&mut self) {
         if let Some(mut running) = self.running.take() {
             running.stop();
@@ -817,7 +675,6 @@ impl App {
     }
 
     pub fn key(&mut self, key: KeyEvent) -> Flow {
-        // A notice is the answer to the key before this one, so any key clears it.
         self.notice = None;
 
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
@@ -826,8 +683,6 @@ impl App {
         if let Some(overlay) = self.overlay {
             return self.overlay_key(overlay, key);
         }
-        // The keymap offers `t` everywhere, so it works everywhere. Not on the password
-        // screen, where a letter is a letter.
         if key.code == KeyCode::Char('t') && self.stage != Stage::Privilege {
             self.theme.cycle();
             self.notice = Some(format!("{} theme", self.theme.mode.name()));
@@ -913,8 +768,6 @@ impl App {
                     ui::key(glyphs.up_down(), "move"),
                     ui::key(glyphs.left_right(), "change"),
                     ui::key(glyphs.escape(), "back"),
-                    // The resets come last because they are what a narrow footer can afford to
-                    // lose: the way on and the way back belong ahead of them.
                     ui::key("r", "reset"),
                     ui::key("R", "reset all"),
                 ],
@@ -929,8 +782,6 @@ impl App {
                         ui::key("f", "follow"),
                         ui::key("w", "loud only"),
                     ];
-                    // A key that would only walk a log with nothing wrong in it is not a key to
-                    // advertise.
                     if !self.problem_rows().is_empty() {
                         keys.push(ui::key("n", "next problem"));
                         keys.push(ui::key("p", "previous"));
@@ -941,13 +792,10 @@ impl App {
                 }
                 Stage::Done => {
                     let mut keys = Vec::new();
-                    // A key that would only answer "nothing failed" is not a key to advertise.
                     if self.tally().unresolved() > 0 {
                         keys.push(ui::key("r", "retry failed"));
                     }
                     keys.push(ui::key("l", "log"));
-                    // Logging out is on the screen as a button with its letter in it, so the
-                    // footer does not say it twice.
                     keys.push(ui::key(glyphs.enter(), "finish"));
                     keys.push(ui::key("q", "quit"));
                     keys
@@ -955,8 +803,6 @@ impl App {
             },
         }
     }
-
-    // Home --------------------------------------------------------------------------
 
     fn home_key(&mut self, key: KeyEvent) -> Flow {
         match key.code {
@@ -970,9 +816,6 @@ impl App {
         Flow::Continue
     }
 
-    /// The next action the keys can actually reach. Stepping onto a row that cannot run moved the
-    /// highlight onto something that is not drawn as selected, which reads as the highlight
-    /// disappearing rather than as a choice that is not available yet.
     fn step_action(&self, direction: isize) -> usize {
         let count = Action::ALL.len() as isize;
         let mut index = self.home as isize;
@@ -993,8 +836,6 @@ impl App {
         }
         self.action = action;
         match action {
-            // What is on the machine comes before what to do with it: the answer decides
-            // whether this is an install at all.
             Action::Install => {
                 self.show_detection();
                 self.stage = Stage::Detect;
@@ -1006,30 +847,19 @@ impl App {
         Flow::Continue
     }
 
-    /// Read the machine again and forget the acknowledgment that went with the old reading: a
-    /// warning about an install that has since been removed must not keep saying so, and one
-    /// that has since appeared must stop being silent.
     fn show_detection(&mut self) {
         self.refresh_detection();
         self.reinstall_acknowledged = false;
     }
 
-    // This machine -------------------------------------------------------------------
-
     fn detect_key(&mut self, key: KeyEvent) -> Flow {
         match key.code {
             KeyCode::Enter | KeyCode::Char(' ') => {
-                // A machine the installer cannot install on is said so here rather than after
-                // five screens of questions: the answer is not going to change by asking more.
-                // The reason is already on screen above, so the answer to the key is the fact
-                // that nothing moved.
                 if !self.detection.blockers().is_empty() {
                     self.problem = Some("Sort out the above first.".to_string());
                     return Flow::Continue;
                 }
                 if self.installed() {
-                    // Carrying on here is the deliberate act: it is the only place the user is
-                    // told that this overwrites what is already there.
                     self.reinstall_acknowledged = true;
                 }
                 self.problem = None;
@@ -1047,7 +877,6 @@ impl App {
             }
             KeyCode::Char('?') => self.overlay = Some(Overlay::Keys),
             KeyCode::Esc => {
-                // The screen's own message goes with the screen.
                 self.problem = None;
                 self.stage = Stage::Home;
             }
@@ -1056,12 +885,7 @@ impl App {
         Flow::Continue
     }
 
-    // Privilege ---------------------------------------------------------------------
-
     fn privilege_key(&mut self, key: KeyEvent) -> Flow {
-        // The password is with sudo, and no key pressed now can change what comes back: it
-        // would only queue up a second attempt behind the first. A reader is the same: the finger
-        // is the answer and the keyboard has nothing to add to it.
         if self.checking.is_some() {
             return Flow::Continue;
         }
@@ -1100,8 +924,6 @@ impl App {
                 self.leave_the_gate();
                 Flow::Continue
             }
-            // A chord is not a character of a password. A terminal that sends one for enter,
-            // or any other combination, must not leave a stray letter in the field.
             KeyCode::Char(character) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if !character.is_control() {
                     self.password.push(character);
@@ -1112,9 +934,6 @@ impl App {
         }
     }
 
-    /// Hands the answer to sudo on a thread of its own. PAM can take seconds to answer, and a
-    /// frame that freezes for that long reads as a hang - which is what made people type their
-    /// password again while the first attempt was still in flight.
     fn start_check(&mut self) {
         if self.checking.is_some() {
             return;
@@ -1125,10 +944,6 @@ impl App {
                 self.problem = Some("Type the password first.".to_string());
                 return;
             }
-            // A correct password clears the system's tally, so an attempt is always worth letting
-            // through while there is one to make; only a wrong one can lock the account, and a
-            // locked account cannot take the right password either. Nothing asks the system in a
-            // pretend run, where there is no system to ask.
             if !self.pretend && privileges::locked_out() {
                 self.problem =
                     Some("Locked out for a few minutes after too many tries.".to_string());
@@ -1137,7 +952,6 @@ impl App {
         }
         let (sender, receiver) = std::sync::mpsc::channel();
         if self.pretend {
-            // Nothing here should call sudo: answer the way one that accepted would have.
             let _ = sender.send(true);
         } else {
             let secret = self.password.clone();
@@ -1167,10 +981,6 @@ impl App {
                 self.checking = None;
                 self.password.clear();
                 if self.auth == Some(AuthMethod::Fingerprint) {
-                    // The read went unanswered. A reader that says no is a failed authentication
-                    // like a wrong password is, and sudo counts them in one tally: the second
-                    // miss is what starts locking people out, so the reader is not offered again
-                    // and the password - which clears the tally when it is right - takes over.
                     let problem = self.refusal();
                     self.fingerprint_spent = true;
                     self.cursor = 0;
@@ -1189,28 +999,17 @@ impl App {
         }
     }
 
-    /// What to say when sudo would not take what it was offered. A reader that was not offered is
-    /// told apart from a password that was wrong, because they lead to different next steps.
     fn refusal(&self) -> String {
         if self.auth == Some(AuthMethod::Fingerprint) {
-            // "Not recognized" rather than "no finger was read": a stack that never asks the reader
-            // for anything fails here too, and the reader cannot tell the user which happened. The
-            // read still costs the account an entry in the same tally a wrong password does, which
-            // is why this is the only one the reader gets and the password is offered from here.
             return "No finger was recognized. Type your password instead.".to_string();
         }
         if !self.pretend && privileges::on_the_last_entry() {
-            // The system counts refusals, and once it has counted enough it stops accepting the
-            // right password for a while. Warn before that happens rather than after it.
             "Not accepted. A wrong entry now locks the account.".to_string()
         } else {
             "That password was not accepted.".to_string()
         }
     }
 
-    /// What sudo accepted: publish it for the steps to escalate with. On the fingerprint route
-    /// there is no secret to publish, so what goes to the steps is a helper that refuses and
-    /// leaves the reader to answer every time the authorization has to be won again.
     fn accept_password(&mut self) {
         if !self.pretend {
             let credential = if self.auth == Some(AuthMethod::Fingerprint) {
@@ -1236,10 +1035,6 @@ impl App {
         self.begin_install();
     }
 
-    // Privileges --------------------------------------------------------------------
-
-    /// The route to root, offered only where there is a route to choose. A machine that is
-    /// already authorized has nothing to ask about, so it is not asked.
     fn need_auth(&mut self) {
         if !self.needs_password {
             self.begin_install();
@@ -1247,15 +1042,10 @@ impl App {
         }
         self.problem = None;
         self.cursor = 0;
-        // A gate entered again is asked again from a clean slate: a count left over from the
-        // last visit would report refusals this visit never made.
         self.attempts = 0;
         self.gate();
     }
 
-    /// Put the question up. A machine with one way to become root is asked for the password
-    /// straight away: a list of one route is a keypress that asks nothing, and the password is
-    /// the question the user came here to answer.
     fn gate(&mut self) {
         if self.auth_methods() == [AuthMethod::Password] {
             self.auth = Some(AuthMethod::Password);
@@ -1266,8 +1056,6 @@ impl App {
         }
     }
 
-    /// The way back out of the question: to the routes where there was a choice between them, and
-    /// to the answers where the password was never one.
     fn leave_the_gate(&mut self) {
         self.password.clear();
         self.problem = None;
@@ -1280,10 +1068,6 @@ impl App {
         }
     }
 
-    /// The routes that would actually work here, in the order they are offered. A reader is asked
-    /// first when there is one worth asking: it is the only route that needs nothing typed. Once it
-    /// has been asked and not answered it is gone from the list, because asking again is another
-    /// failed authentication against sudo and those are the entries that lock the account.
     pub fn auth_methods(&self) -> Vec<AuthMethod> {
         let mut methods = Vec::new();
         if self.fingerprint && !self.fingerprint_spent {
@@ -1314,8 +1098,6 @@ impl App {
                 self.problem = None;
                 self.attempts = 0;
                 match method {
-                    // A reader is asked as soon as it is chosen: the prompt is the screen, and
-                    // waiting for a key as well would ask the user to say "yes" and then touch.
                     AuthMethod::Fingerprint => {
                         self.stage = Stage::Privilege;
                         self.start_check();
@@ -1324,7 +1106,6 @@ impl App {
                 }
             }
             KeyCode::Char('?') => self.overlay = Some(Overlay::Keys),
-            // Back to the answers, with the cursor where it was left: on the row that goes on.
             KeyCode::Esc => {
                 self.problem = None;
                 self.stage = Stage::Options;
@@ -1334,16 +1115,9 @@ impl App {
         Flow::Continue
     }
 
-    // Options -----------------------------------------------------------------------
-
     fn options_key(&mut self, key: KeyEvent) -> Flow {
         let entries = self.current_entries();
-        // The answers, then the row that goes on: the way out of a question is the last row of
-        // the list, so the arrows find it as they find everything else.
         let rows = entries.len() + 1;
-        // Rows come and go with the answers — an option goes when it is no longer reachable — so
-        // the cursor is pulled back onto the list before it is moved, and entering and leaving
-        // keep working on a question whose rows have all gone.
         self.cursor = self.cursor.min(rows - 1);
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
@@ -1359,9 +1133,6 @@ impl App {
             KeyCode::Char('r') => self.reset_highlighted(),
             KeyCode::Char('R') => self.reset_all(),
             KeyCode::Char('?') => self.overlay = Some(Overlay::Keys),
-            // Changing a value is its own gesture, so enter is free to mean "onward" and never
-            // does two things depending on which row is under the cursor. On the row that goes
-            // on there is no value to change, so it answers the same keys enter does.
             KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => match self.selected() {
                 Some(entry) => {
                     menu::change(entry, &self.apps, &mut self.answers);
@@ -1380,14 +1151,10 @@ impl App {
         Flow::Continue
     }
 
-    /// Whether the cursor is on the row that goes on, rather than on an answer.
     pub fn on_continue(&self) -> bool {
         self.cursor >= self.current_entries().len()
     }
 
-    /// Onward: the next question, or the confirmation once there is nothing left to ask. The
-    /// confirmation is the last question's own step rather than a screen of its own: a page that
-    /// only repeats the answers already given asks the user to read what they just wrote.
     pub fn next_question(&mut self) {
         if self.question + 1 < menu::question_count() {
             self.question += 1;
@@ -1397,8 +1164,6 @@ impl App {
         }
     }
 
-    /// Back one question, and off the start of the wizard it is the detection screen: there is
-    /// no way to walk past the point where the machine was read.
     pub fn previous_question(&mut self) {
         if self.question == 0 {
             self.stage = Stage::Detect;
@@ -1417,13 +1182,10 @@ impl App {
         }
     }
 
-    /// Every row back to what this machine started at, apps and all.
     fn reset_all(&mut self) {
         self.answers = self.baseline.clone();
         self.notice = Some("every option is back at its default".to_string());
     }
-
-    // Run ---------------------------------------------------------------------------
 
     fn run_key(&mut self, key: KeyEvent) -> Flow {
         if self.paused && matches!(key.code, KeyCode::Enter | KeyCode::Char(' ')) {
@@ -1497,15 +1259,10 @@ impl App {
         Flow::Continue
     }
 
-    /// Whether the session is worth ending. Restarting the desktop around a shell that is only
-    /// half installed is how a machine ends up with no desktop at all, so a run with something
-    /// left unresolved is one to put right before it is logged out of.
     pub fn can_log_out(&self) -> bool {
         self.tally().unresolved() == 0
     }
 
-    /// The exit code has to agree with the screen: a session with a step that failed, or that the
-    /// user chose to move past, is not a success.
     pub fn finish(&mut self) -> Flow {
         if self.tally().unresolved() > 0 {
             Flow::Done(Outcome::Failed)
@@ -1513,8 +1270,6 @@ impl App {
             Flow::Done(Outcome::Ok)
         }
     }
-
-    // Overlays ----------------------------------------------------------------------
 
     fn overlay_key(&mut self, overlay: Overlay, key: KeyEvent) -> Flow {
         match overlay {
@@ -1586,8 +1341,6 @@ impl App {
                 let choice = self.failure.as_ref().map_or(0, |card| card.choice);
                 return self.resolve_failure(choice);
             }
-            // Closing without deciding leaves the failure where it is and the run paused: a key
-            // that means "back" everywhere else must not quietly accept a failure here.
             KeyCode::Esc => {
                 self.overlay = None;
                 self.paused = true;
@@ -1644,13 +1397,10 @@ impl App {
                 return Flow::Continue;
             }
             KeyCode::Enter | KeyCode::Char(' ') => {}
-            // The letters still work for people who learned them, and they mean the buttons they
-            // sit next to rather than a hidden pair of answers.
             KeyCode::Char(letter) => match confirm.shortcut(letter) {
                 Some(index) => self.confirm_focus = index,
                 None => return Flow::Continue,
             },
-            // Closing is the answer that changes nothing, wherever it is pressed.
             KeyCode::Esc => {
                 self.confirm = None;
                 self.overlay = None;
@@ -1672,9 +1422,6 @@ impl App {
                 Flow::Done(Outcome::Ok)
             }
             Confirm::Install => self.confirm_install(),
-            // Ending the session is the last thing the wizard does, so it leaves the same way the
-            // other handoffs do: the terminal is given back first, and the logout is asked for
-            // outside the wizard.
             Confirm::LogOut => {
                 self.handoff = Some(Handoff::LogOut);
                 self.finish()
@@ -1682,16 +1429,12 @@ impl App {
         }
     }
 
-    /// Open the confirmation, with the highlight where that question wants it.
     pub(crate) fn ask(&mut self, confirm: Confirm) {
         self.confirm = Some(confirm);
         self.confirm_focus = confirm.focus();
         self.overlay = Some(Overlay::Confirm);
     }
 
-    /// The point of no return. The machine is read one last time here, because every question
-    /// about whether it is safe to install was answered minutes ago and the answer to "is
-    /// Caelestia already here" is the one nobody should be surprised by.
     fn confirm_install(&mut self) -> Flow {
         self.refresh_detection();
         if self.detection.installed && !self.reinstall_acknowledged {
@@ -1714,12 +1457,7 @@ impl App {
         Flow::Continue
     }
 
-    // The install itself ------------------------------------------------------------
-
     pub fn begin_install(&mut self) {
-        // Keeping the session awake belongs to the install, not to one of the routes into it:
-        // a machine that needed no password, or one authorized in another terminal, must be
-        // held awake just the same.
         if !self.pretend && self.inhibitor.is_none() {
             self.inhibitor = Some(Inhibitor::acquire());
         }
@@ -1736,7 +1474,6 @@ impl App {
         self.start_next();
     }
 
-    /// Try the failed steps again, without redoing what worked.
     pub fn retry_failed(&mut self) {
         let failed: Vec<usize> = self
             .statuses
@@ -1840,8 +1577,6 @@ impl App {
                         .map(|since| since.elapsed())
                         .unwrap_or_default(),
                 );
-                // A step runs programs of its own, and one of them may have written past the log
-                // it was handed. Nothing on the screen can be trusted to be what was drawn.
                 self.repaint = true;
                 if outcome.is_failure() {
                     self.failure = Some(FailureCard::new(&STEPS[self.current], &self.log));
@@ -1866,9 +1601,6 @@ impl App {
     }
 }
 
-/// Counted once, so the screen and the exit code cannot disagree. Only what the screens ask for:
-/// an install that went through is described by what it left behind, not by how many steps it
-/// took to get there.
 pub struct Tally {
     pub warn: usize,
     pub failed: usize,
@@ -1876,7 +1608,6 @@ pub struct Tally {
 }
 
 impl Tally {
-    /// Steps that did not do what they were asked to do.
     pub fn unresolved(&self) -> usize {
         self.failed + self.ignored
     }
@@ -1900,8 +1631,6 @@ pub fn run(
         };
     }
     signals::install();
-    // The screen is the wizard's until it is done with it: it draws on a handle of its own, and
-    // everything it starts writes to the log rather than over the frame.
     let mut terminal = match crate::tui::Tui::start(&log_path) {
         Ok(terminal) => terminal,
         Err(error) => {
@@ -1924,8 +1653,6 @@ fn event_loop(terminal: &mut crate::tui::Tui, app: &mut App) -> Outcome {
         if let Some(outcome) = app.leaving() {
             return outcome;
         }
-        // Something the wizard started may have written past the log it was given. Whatever it
-        // left behind, the next frame is painted whole rather than diffed against it.
         if std::mem::take(&mut app.repaint) {
             terminal.repaint();
         }
@@ -1961,19 +1688,10 @@ mod tests {
             PathBuf::from("/tmp/install.log"),
             Env::default(),
         )
-        // Which apps a machine has is read from the machine, so the host's own apps would leak
-        // into every assertion. A known set: all of them, so the app rows are on screen.
         .with_apps(crate::apps::Apps::all())
-        // Same for the reader: whether the host running the tests happens to have one must not
-        // decide which routes a test sees. The tests that want one ask for it.
         .with_fingerprint(false)
-        // And same for the password gate: a machine whose sudo needs no password would otherwise
-        // walk straight past the screen these tests are about.
         .with_password_gate(true);
-        // The last run's journal lives in the user's state directory, and a host that has one
-        // would decide what a test about the home screen reads. A test that wants one sets it.
         app.unfinished.clear();
-        // The screens and the page keys agree on a size; the tests have to give them one.
         app.area = Rect::new(0, 0, 100, 30);
         app.pretend = true;
         app
@@ -1987,15 +1705,12 @@ mod tests {
         press(app, KeyCode::Char(character))
     }
 
-    /// Which question a row lives in, by the row's id.
     fn question_of(id: &str) -> usize {
         (0..menu::question_count())
             .find(|index| menu::items_of(*index).iter().any(|entry| entry.id() == id))
             .unwrap_or_else(|| panic!("{id} is not in a question"))
     }
 
-    /// A machine the installer can install on, so a test about the flow is not also a test
-    /// about what happens to be installed on the machine running it.
     fn installable() -> Detection {
         Detection {
             distro: crate::distro::Distro::Arch,
@@ -2007,7 +1722,6 @@ mod tests {
         }
     }
 
-    /// Everything the run screen shows, as a state without any of the work.
     fn run_with(statuses: &[Status]) -> App {
         let mut app = app();
         app.stage = Stage::Run;
@@ -2019,9 +1733,6 @@ mod tests {
 
     #[test]
     fn home_offers_the_three_actions_and_moves_only_between_the_ones_that_run() {
-        // Nothing installed: Install is the only action that can run, so the highlight stays on
-        // it. Stepping onto a disabled row used to move the highlight onto something that is not
-        // drawn as selected, which reads as the highlight vanishing.
         let mut nothing_installed = app();
         nothing_installed.detection = installable();
         assert_eq!(nothing_installed.stage, Stage::Home);
@@ -2035,8 +1746,6 @@ mod tests {
         press(&mut nothing_installed, KeyCode::Up);
         assert_eq!(Action::ALL[nothing_installed.home], Action::Install);
 
-        // Installed: every action can run - installing over an existing install is a reinstall -
-        // so the highlight visits all three and wraps.
         let mut already_there = app();
         already_there.detection = Detection {
             installed: true,
@@ -2078,8 +1787,6 @@ mod tests {
 
     #[test]
     fn a_machine_that_cannot_be_installed_on_does_not_start_the_questions() {
-        // Answering five screens of questions and then being refused is worse than being told
-        // at the first screen why it will not work.
         let mut app = app();
         app.detection = Detection {
             package_manager: None,
@@ -2096,7 +1803,6 @@ mod tests {
             "the answer to the key, in words the blocker above does not already use"
         );
 
-        // And the way out is still a way out.
         press(&mut app, KeyCode::Esc);
         assert_eq!(app.stage, Stage::Home);
         assert_eq!(app.problem, None, "the screen's message goes with it");
@@ -2110,7 +1816,6 @@ mod tests {
         app.cursor = 0;
         assert_eq!(app.changed_answers(), 0);
 
-        // One decision, six answers: the bulk row is a view of them and holds none of its own.
         char_key(&mut app, ' ');
         assert_eq!(
             app.changed_answers(),
@@ -2118,7 +1823,6 @@ mod tests {
             "six apps, not seven options: the row is not an answer"
         );
 
-        // And undoing it leaves nothing changed.
         char_key(&mut app, ' ');
         assert_eq!(app.changed_answers(), 0);
     }
@@ -2154,7 +1858,6 @@ mod tests {
             "the answer to the key is what to do about it"
         );
 
-        // With an install on the machine it is offered, and it confirms before handing over.
         app.detection.installed = true;
         press(&mut app, KeyCode::Enter);
         assert_eq!(app.overlay, Some(Overlay::Confirm));
@@ -2163,7 +1866,6 @@ mod tests {
 
     #[test]
     fn the_theme_key_works_on_every_screen_but_the_password_one() {
-        // The keymap offers it everywhere, so it does what it says everywhere.
         for stage in [
             Stage::Home,
             Stage::Detect,
@@ -2179,7 +1881,6 @@ mod tests {
             assert_ne!(app.theme.mode, before, "{stage:?} should flip the theme");
         }
 
-        // Except where a letter is a letter.
         let mut app = app();
         app.stage = Stage::Privilege;
         let before = app.theme.mode;
@@ -2190,8 +1891,6 @@ mod tests {
 
     #[test]
     fn the_options_footer_keeps_the_way_on_and_loses_the_resets_first() {
-        // The footer drops whole groups from its end, so its order is the priority: a narrow
-        // terminal must still show how to move on and how to get back.
         let mut app = app();
         app.stage = Stage::Options;
         let footer: Vec<&str> = app.keys().iter().map(|key| key.what).collect();
@@ -2231,13 +1930,10 @@ mod tests {
             "and nothing has been acknowledged yet"
         );
 
-        // Carrying on from that screen is the acknowledgment: it is the only place the user is
-        // told, so it is the only place that may grant it.
         press(&mut app, KeyCode::Enter);
         assert!(app.reinstall_acknowledged);
         assert_eq!(app.stage, Stage::Options);
 
-        // And the confirmation now lets it through rather than stopping it again.
         app.ask(Confirm::Install);
         char_key(&mut app, 'y');
         assert_ne!(app.stage, Stage::Detect);
@@ -2245,8 +1941,6 @@ mod tests {
 
     #[test]
     fn an_install_that_appeared_while_the_wizard_was_open_stops_at_the_confirmation() {
-        // The answers about this machine were taken minutes ago. The one that decides whether
-        // this overwrites something is worth asking again at the point it matters.
         let mut app = app();
         app.detection = installable();
         app.installed_when_started = false;
@@ -2346,8 +2040,6 @@ mod tests {
             no_git.blockers()
         );
 
-        // git is a source install's precondition and nobody else's: a packaged install that
-        // never touches a checkout must not be stopped for want of it.
         let packaged_without_git = Detection {
             git: false,
             kind: crate::install_kind::Kind::Package,
@@ -2371,8 +2063,6 @@ mod tests {
         let mut app = app();
         app.detection = installable();
 
-        // The last question's way on asks before it acts: nothing starts on the key that arrived
-        // at the end of the answers.
         app.stage = Stage::Options;
         app.question = menu::question_count() - 1;
         app.cursor = app.current_entries().len();
@@ -2382,8 +2072,6 @@ mod tests {
         assert_eq!(app.stage, Stage::Options, "and nothing has started yet");
 
         char_key(&mut app, 'y');
-        // This machine has no reader, so the password is the only way through and it is asked for
-        // directly: a list of one route would be a keypress that asks nothing.
         assert_eq!(app.stage, Stage::Privilege);
         assert_eq!(app.auth, Some(AuthMethod::Password));
     }
@@ -2402,14 +2090,11 @@ mod tests {
 
     #[test]
     fn a_gate_with_one_route_asks_for_the_password_itself() {
-        // No reader, so the password is the only way through, and there is nothing to pick: the
-        // gate is the password field rather than a list of one.
         let mut app = app();
         app.need_auth();
         assert_eq!(app.auth, Some(AuthMethod::Password));
         assert_eq!(app.stage, Stage::Privilege);
 
-        // And leaving it goes back to the answers rather than to a list that is not there.
         press(&mut app, KeyCode::Esc);
         assert_eq!(app.stage, Stage::Options);
         assert_eq!(app.auth, None);
@@ -2448,7 +2133,6 @@ mod tests {
             "choosing the reader is the whole question: the read starts on the key"
         );
 
-        // And nothing is typed on the way: there is no password to type.
         assert_eq!(app.password, "");
         app.tick();
         assert_eq!(
@@ -2468,15 +2152,11 @@ mod tests {
         app.stage = Stage::Privilege;
         app.auth = Some(AuthMethod::Fingerprint);
 
-        // The reader answered nothing, the way it does when no finger arrives.
         let (sender, receiver) = std::sync::mpsc::channel();
         sender.send(false).expect("the answer fits");
         app.checking = Some(receiver);
         app.tick();
 
-        // A read that goes unanswered is a failed authentication against sudo, and those are the
-        // entries that lock the account: the reader is not offered a second time, and with it gone
-        // the gate is the password field.
         assert_eq!(
             app.stage,
             Stage::Privilege,
@@ -2496,7 +2176,6 @@ mod tests {
         );
         assert_eq!(app.attempts, 0, "the reader is not the password's count");
 
-        // Nothing offers the reader again, however the gate is walked.
         assert!(
             !app.auth_methods().contains(&AuthMethod::Fingerprint),
             "and it stays gone"
@@ -2515,7 +2194,6 @@ mod tests {
         press(&mut app, KeyCode::Backspace);
         assert_eq!(app.password, "", "the field is not there to type into");
 
-        // And the way out is still a way out.
         press(&mut app, KeyCode::Esc);
         assert_eq!(app.stage, Stage::Auth);
         assert_eq!(app.auth, None);
@@ -2536,7 +2214,6 @@ mod tests {
             assert_eq!(app.overlay, Some(Overlay::Confirm));
             assert_eq!(app.confirm, Some(Confirm::Handoff(action)));
 
-            // Saying no leaves the wizard where it was.
             char_key(&mut app, 'n');
             assert_eq!(app.overlay, None);
             assert_eq!(app.leaving(), None);
@@ -2551,8 +2228,6 @@ mod tests {
 
     #[test]
     fn the_confirmation_is_answered_by_the_button_under_the_highlight() {
-        // The question has buttons, so the arrows and the key that acts are enough to answer it:
-        // nothing has to be guessed from a footer hint.
         let mut app = app();
         app.detection.installed = true;
         app.home = 2;
@@ -2569,7 +2244,6 @@ mod tests {
         assert_eq!(app.overlay, None, "choosing cancel closes the question");
         assert_eq!(app.leaving(), None, "and nothing happened");
 
-        // The same key on the action goes through.
         press(&mut app, KeyCode::Enter);
         press(&mut app, KeyCode::Enter);
         assert_eq!(
@@ -2581,8 +2255,6 @@ mod tests {
 
     #[test]
     fn stopping_a_run_does_not_put_the_stopping_button_under_the_highlight() {
-        // The key that opens this is pressed to stop a step, and one key too many must not end the
-        // run: the highlight starts on the answer that keeps it going.
         let mut app = app();
         app.stage = Stage::Run;
         app.statuses[0] = Status::Running;
@@ -2621,7 +2293,6 @@ mod tests {
         assert_eq!(solo.password, "", "and it forgets the password");
         assert_eq!(solo.leaving(), None);
 
-        // With a reader on the machine there is a choice to go back to, so it goes back to it.
         let mut with_reader = app().with_fingerprint(true);
         with_reader.auth = Some(AuthMethod::Fingerprint);
         with_reader.stage = Stage::Privilege;
@@ -2633,7 +2304,6 @@ mod tests {
         );
         assert_eq!(with_reader.auth, None);
 
-        // Back through the questions, and off the front of the wizard.
         solo.stage = Stage::Options;
         solo.question = menu::question_count() - 1;
         for expected in (0..menu::question_count() - 1).rev() {
@@ -2656,8 +2326,6 @@ mod tests {
 
     #[test]
     fn the_steps_are_told_this_run_is_an_install() {
-        // Two steps make install-only changes when this is set, and they skip silently when it is
-        // not. The update path never sets it, so the marker and the run are the same thing.
         let env = app().step_environment();
         assert!(
             env.iter()
@@ -2700,7 +2368,6 @@ mod tests {
             "no key does anything while sudo has it"
         );
 
-        // A key pressed now cannot change the answer that is already on its way.
         press(&mut app, KeyCode::Enter);
         char_key(&mut app, 'x');
         assert_eq!(app.password, "hunter2");
@@ -2746,8 +2413,6 @@ mod tests {
 
     #[test]
     fn a_control_chord_never_becomes_part_of_the_password() {
-        // Some terminals send the enter key as a control character - ctrl+j is what script(1)
-        // sends - and a chord must never leave a stray letter in the field.
         let mut app = app();
         app.stage = Stage::Privilege;
         for character in "hunter2".chars() {
@@ -2769,7 +2434,6 @@ mod tests {
 
     #[test]
     fn the_run_screen_names_the_step_it_is_on_and_the_one_that_comes_next() {
-        // Between two steps nothing is running, and a screen with no step on it reads as a hang.
         let mut app = run_with(&[Status::Ok, Status::Running]);
         assert_eq!(app.running_step(), Some(1));
         assert_eq!(app.next_step(), Some(2));
@@ -2787,14 +2451,12 @@ mod tests {
         app.paused = true;
         app.overlay = Some(Overlay::Failure);
 
-        // `esc` closes the card and leaves the failure exactly where it was.
         press(&mut app, KeyCode::Esc);
         assert_eq!(app.overlay, None);
         assert!(app.paused);
         assert_eq!(app.statuses[0], Status::Failed);
         assert_eq!(app.current, 0, "and nothing advanced past it");
 
-        // Enter brings it back rather than starting anything.
         assert_eq!(press(&mut app, KeyCode::Enter), Flow::Continue);
         assert_eq!(app.overlay, Some(Overlay::Failure));
     }
@@ -2812,8 +2474,6 @@ mod tests {
     #[test]
     fn skipping_and_ignoring_both_carry_on_but_only_one_of_them_is_a_failure() {
         for (key, expected) in [('s', Status::Skipped), ('i', Status::Ignored)] {
-            // The step is the last one, so carrying on lands on the summary without starting
-            // anything.
             let last = STEPS.len() - 1;
             let mut app = run_with(&[Status::Failed]);
             app.current = last;
@@ -2904,14 +2564,11 @@ mod tests {
             "the highlight starts on the answer that keeps the session"
         );
 
-        // Closing the card changes nothing, and leaves the reader where they were.
         press(&mut app, KeyCode::Esc);
         assert_eq!(app.confirm, None);
         assert_eq!(app.stage, Stage::Done);
         assert_eq!(app.handoff, None);
 
-        // And the answer that says yes hands the logout to the caller, outside the wizard: the
-        // session cannot be ended while the terminal belongs to a screen being drawn on it.
         char_key(&mut app, 'o');
         assert_eq!(char_key(&mut app, 'y'), Flow::Done(Outcome::Ok));
         assert_eq!(app.handoff, Some(Handoff::LogOut));
@@ -2937,7 +2594,6 @@ mod tests {
     fn options_reset_one_row_or_all_of_them() {
         let mut app = app();
         app.stage = Stage::Options;
-        // The bulk row sits at the top of the question it answers.
         app.question = question_of(menu::PRESET_THEME_APPS);
         app.cursor = 0;
         assert!(
@@ -2949,12 +2605,10 @@ mod tests {
         let preset = app.selected().expect("a row");
         assert!(app.is_changed(preset));
 
-        // `r` puts that row back, and a bulk row takes its members with it.
         char_key(&mut app, 'r');
         let preset = app.selected().expect("a row");
         assert!(!app.is_changed(preset));
 
-        // `R` puts everything back, including a row that was changed by hand.
         app.answers.insert("SKIP_SYSTEM_UPDATE", "true".to_string());
         char_key(&mut app, 'R');
         assert_eq!(
@@ -2971,7 +2625,6 @@ mod tests {
         app.stage = Stage::Options;
         let first = app.selected().map(Entry::id).expect("a row");
 
-        // Enter advances; it does not change the answer under the cursor.
         press(&mut app, KeyCode::Enter);
         assert_eq!(app.question, 1);
         assert_eq!(app.cursor, 0);
@@ -2988,7 +2641,6 @@ mod tests {
             "walking through the questions leaves the answers alone"
         );
 
-        // The last one leads to the confirmation rather than off the end.
         for _ in 1..menu::question_count() {
             press(&mut app, KeyCode::Enter);
         }
@@ -3017,7 +2669,6 @@ mod tests {
         press(&mut app, KeyCode::Right);
         assert_eq!(app.answers.get(switch).map(String::as_str), Some("true"));
 
-        // And on a select it steps through the options rather than doing nothing.
         app.question = question_of("DEFAULT_SHELL");
         app.cursor = app
             .current_entries()
@@ -3062,8 +2713,6 @@ mod tests {
             .collect();
         app.log_follow = true;
 
-        // Following the tail, the first press lands on the first line that went wrong and puts it
-        // in the window rather than at its edge.
         char_key(&mut app, 'n');
         assert!(!app.log_follow, "a jump is a reason to stop following");
         assert_eq!(app.log_problem, Some(20));
@@ -3077,12 +2726,10 @@ mod tests {
         char_key(&mut app, 'p');
         assert_eq!(app.log_problem, Some(20));
 
-        // Either end wraps, so a key pressed once too often still goes somewhere useful.
         char_key(&mut app, 'p');
         assert_eq!(app.log_problem, Some(180));
         assert_eq!(app.notice.as_deref(), Some("problem 3 of 3"));
 
-        // Any other way of moving lets the next jump start from what the pane shows.
         press(&mut app, KeyCode::PageUp);
         assert_eq!(app.log_problem, None);
     }
@@ -3115,7 +2762,6 @@ mod tests {
     #[test]
     fn quitting_while_a_step_is_running_asks_first_and_then_stops_it() {
         let mut app = run_with(&[Status::Running]);
-        // Ctrl+C twice: the first asks, the second stops and leaves.
         let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
         assert_eq!(app.key(ctrl_c), Flow::Continue);
         assert_eq!(app.overlay, Some(Overlay::Confirm));
@@ -3249,14 +2895,12 @@ mod tests {
             "the user has not touched anything"
         );
 
-        // And what was answered reaches the steps, which is the whole point of answering it.
         assert!(
             app.step_environment()
                 .iter()
                 .any(|(key, value)| *key == "DEFAULT_SHELL" && value == "zsh")
         );
 
-        // Reset goes back to what the script asked for, not to the table's own defaults.
         app.stage = Stage::Options;
         char_key(&mut app, ' ');
         assert!(app.changed_answers() > 0);
@@ -3270,8 +2914,6 @@ mod tests {
 
     #[test]
     fn a_cursor_past_the_end_of_a_question_is_pulled_back_onto_it() {
-        // A question can be reached with a cursor left over from a longer one, so the cursor has
-        // to be pulled back onto whatever is there rather than pointing past it.
         let mut app = app();
         app.stage = Stage::Options;
         app.question = question_of("SYNC_LOGIN_SCREEN");
@@ -3307,7 +2949,6 @@ mod tests {
         press(&mut app, KeyCode::Enter);
         assert_eq!(app.question, 1, "enter goes on from it");
 
-        // Space answers the row the same way enter does: there is no value on it to change.
         app.question = 0;
         app.cursor = app.current_entries().len();
         char_key(&mut app, ' ');

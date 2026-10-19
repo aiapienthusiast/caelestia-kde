@@ -61,8 +61,6 @@ conflicts=('caelestia-shell' 'caelestia-shell-git')
 
 _source_url="${_source_url:-$url/releases/download/v$pkgver/$pkgname-v$pkgver.tar.gz}"
 _source_sum="${_source_sum:-SKIP}"
-# installer/data/tui.version. The release job publishes the crates the lockfile names
-# as a tarball of this version, which is what makes the installer build offline.
 _tui_version="${_tui_version:-4}"
 _vendor_url="${_vendor_url:-$url/releases/download/v$pkgver/caelestia-vendor-v$_tui_version.tar.gz}"
 _vendor_sum="${_vendor_sum:-SKIP}"
@@ -95,8 +93,6 @@ prepare() {
         return 1
     fi
 
-    # Cargo resolves every crate from the tarball's tree, so the installer builds
-    # without network, which is what a package build has.
     cat > "$srcdir/cargo-config.toml" <<VENDOR
 [source.crates-io]
 replace-with = "vendored-sources"
@@ -131,8 +127,6 @@ build() {
         -DCMAKE_INSTALL_PREFIX=/usr
     cmake --build "$_effect_build_dir" || exit 1
 
-    # The installer's own target directory keeps cargo from reading or writing the
-    # build user's cache, which a package build must not depend on.
     CARGO_HOME="$srcdir/cargo-home" cargo build --release --frozen --offline \
         --manifest-path installer/Cargo.toml \
         --target-dir "$srcdir/cargo-target" \

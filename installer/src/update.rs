@@ -11,20 +11,13 @@ use crate::steps::{self, Context, Failure};
 use crate::theme::Role;
 use crate::update_state;
 
-// What an install recorded about the answers it was given. An update reads them back so the
-// steps it runs behave the way the install did: a user who declined Fish should not have it
-// installed by an update.
 const ANSWERS: &str = ".config/caelestia-kde/install.env";
 
 const LOCK: &str = "caelestia-update.lock";
 
-// The branches an update may follow, and the one it falls back to.
 const CHANNELS: [&str; 2] = ["main", "dev"];
 const DEFAULT_CHANNEL: &str = "main";
 
-// The steps an update runs, in order, and whether a failure in one stops the rest. The tweaks
-// step only re-applies settings, so it reports and carries on: an update that has already
-// deployed configs and rebuilt the shell is better off finishing.
 const STEPS: [(&str, bool); 3] = [
     ("03-deploy-configs", true),
     ("08-build-shell", true),
@@ -48,8 +41,6 @@ pub fn run(bundle: &Path, requested: Option<String>) -> Result<(), Failure> {
             .to_string(),
     ]);
 
-    // Nothing to fetch, nothing to build: saying so here is the whole of the answer, and it is
-    // the one an update that has already run should give.
     if let (Some(installed), Some(available)) = (&installed, &available)
         && installed.commit == available.1
         && installed.commit.len() >= 7
@@ -112,10 +103,6 @@ pub fn run(bundle: &Path, requested: Option<String>) -> Result<(), Failure> {
     Ok(())
 }
 
-/// The version the bundle publishes, for an install that had no git to record one from: a release
-/// tarball knows what it is even when the state file is missing.
-/// The version this tree publishes, whether or not a build recorded it: a tarball has no revision
-/// to name, and its `version.env` is still the honest answer to "what was installed".
 pub fn published_version(bundle: &Path) -> Option<update_state::Installed> {
     let published = std::fs::read_to_string(bundle.join(".github").join("version.env")).ok()?;
     Some(update_state::Installed {
@@ -125,20 +112,16 @@ pub fn published_version(bundle: &Path) -> Option<update_state::Installed> {
     })
 }
 
-/// The config directory the shell keeps its update state in: the same one the build writes.
 pub fn config_dir() -> PathBuf {
     paths::home().join(".config/quickshell/caelestia")
 }
 
-/// What the update screen says it found: what is installed, and what the channel carries.
 fn revision_rows(
     installed: &Option<update_state::Installed>,
     available: &Option<(String, String)>,
 ) -> Vec<Row> {
     let installed = match installed {
         Some(installed) => {
-            // The branch is what the install tracks: a machine on dev and a machine on main are
-            // two different answers to "what am I updating to".
             let mut value = installed.version.clone();
             if !installed.commit.is_empty() {
                 value.push_str(&format!(" \u{00b7} {}", short(&installed.commit)));
@@ -169,9 +152,6 @@ fn short(commit: &str) -> String {
     commit.chars().take(7).collect()
 }
 
-/// The revision the channel carries, as the version file it publishes and the commit it is on.
-/// The fetch is what makes this an answer rather than a guess, so it happens here - quietly, and
-/// before anything is checked out.
 fn available(bundle: &Path, channel: &str) -> Option<(String, String)> {
     if !bundle.join(".git").is_dir() {
         return None;
@@ -196,7 +176,6 @@ fn available(bundle: &Path, channel: &str) -> Option<(String, String)> {
     Some((version_of(&published), commit))
 }
 
-/// `VERSION=v2.6.1` in the file the release publishes, as just the version.
 fn version_of(published: &str) -> String {
     published
         .lines()
@@ -205,8 +184,6 @@ fn version_of(published: &str) -> String {
         .unwrap_or_else(|| "unknown version".to_string())
 }
 
-// One update at a time: two of them pulling and building the same checkout at once is how a
-// tree ends up half-updated.
 fn take_lock() -> Result<Option<std::fs::File>, Failure> {
     let runtime = std::env::var("XDG_RUNTIME_DIR")
         .ok()
@@ -244,8 +221,6 @@ fn try_lock(_file: &std::fs::File) -> bool {
     true
 }
 
-// The update builds the shell, so the tools the build needs have to be there before the
-// checkout is touched: asking afterwards would leave a half-pulled tree behind.
 fn check_dependencies() -> Result<(), Failure> {
     output::info("Checking dependencies...");
     for command in ["git", "cmake", "make"] {
@@ -299,8 +274,6 @@ fn update_checkout(bundle: &Path, channel: &str) -> Result<(), Failure> {
         return Err(format!("Failed to pull from origin/{channel}").into());
     }
 
-    // The same step a fresh install runs: it prunes the submodules the checkout no longer
-    // lists and makes sure the ones it does are there.
     run_step(bundle, "02a-submodules", true)?;
 
     if stashed {
@@ -313,12 +286,7 @@ fn update_checkout(bundle: &Path, channel: &str) -> Result<(), Failure> {
     Ok(())
 }
 
-// Which branch to follow: the one that was asked for, the one that is checked out, or - with a
-// terminal to ask on - a choice between the two channels. Anything else falls back to main,
-// including a channel the remote does not carry.
 fn choose_channel(bundle: &Path, requested: Option<String>) -> String {
-    // A release bundle carries no git at all, so there is no channel to pick and nothing to say
-    // about one: the remote it would ask does not exist.
     if !bundle.join(".git").is_dir() {
         return DEFAULT_CHANNEL.to_string();
     }
@@ -369,8 +337,6 @@ fn remote_has(bundle: &Path, channel: &str) -> bool {
     )
 }
 
-// The menu the shell version offered, kept for anyone updating by hand. Nothing reads stdin in
-// a GUI-triggered update, so there the answer comes from the checkout instead.
 fn ask_for_channel() -> Option<String> {
     if !std::io::stdout().is_terminal() || !std::io::stdin().is_terminal() {
         return None;
@@ -399,7 +365,6 @@ fn ask_for_channel() -> Option<String> {
     }
 }
 
-// The steps read their answers from the environment, and the install wrote them to a file.
 fn load_answers(home: &Path) {
     let file = home.join(ANSWERS);
     let Ok(text) = std::fs::read_to_string(&file) else {
@@ -448,8 +413,6 @@ fn run_step(bundle: &Path, id: &str, fatal: bool) -> Result<(), Failure> {
     }
 }
 
-// The shell that was running before the update is still running the old tree, so it is asked to
-// quit and started again the way the session starts it.
 fn restart_shell() {
     stop_shell();
     start_shell();
@@ -488,8 +451,6 @@ fn start_shell() {
         .parent()
         .map(|config| config.join("scripts").join("restart_shell.sh"));
 
-    // The wrapper the session's own autostart unit runs: the environment it sets up is the one
-    // the shell was started with at login.
     if let Some(restart) = &restart
         && process::is_executable(restart)
         && process::run_visible("bash", &[&restart.to_string_lossy()], None) == Some(0)
@@ -569,8 +530,6 @@ fn bin_dir() -> PathBuf {
     install_kind::bin_dir()
 }
 
-// The shell writes the scheme once it is up; waiting for it is how the update knows the restart
-// took rather than reporting success over a shell that died on a broken config.
 pub fn wait_for_nonempty_file(path: &Path, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
     loop {

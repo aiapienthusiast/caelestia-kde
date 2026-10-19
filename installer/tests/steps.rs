@@ -1304,8 +1304,6 @@ fn a_source_install_writes_the_launcher_the_unit_and_the_interface_declaration()
         "the exec line points at the resolved binary: {preview_text}"
     );
 
-    // The entry names its icon, so the icon has to be where an icon theme looks, under both the
-    // name it asks for and the name an older install left behind.
     for name in ["caelestia.svg", "org.quickshell.svg"] {
         let icon = fixture.path(&format!(".local/share/icons/hicolor/scalable/apps/{name}"));
         assert!(
@@ -1950,10 +1948,6 @@ fn an_update_never_removes_panels() {
     );
 }
 
-// The step writes to /usr and /etc, so it is pointed at the fixture instead: the sudo it
-// escalates through is a stub that refuses anything under /etc, so a test can never write a
-// sudoers rule on the machine it runs on. The display manager it finds is the stubs' answer,
-// not the host's.
 #[cfg(unix)]
 struct LoginScreen {
     path: PathBuf,
@@ -2007,7 +2001,6 @@ fn login_tools(fixture: &Fixture) -> LoginScreen {
     }
 }
 
-// The helper a checkout installs, at the path the step looks for it in the bundle.
 #[cfg(unix)]
 fn greeter_fixture(fixture: &Fixture) {
     let helper = fixture.path("bundle/src/greeter");
@@ -2198,8 +2191,6 @@ fn run_git(directory: &Path, arguments: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
-// The step runs git with the fixture's HOME, so the file protocol a fixture remote needs is
-// configured where git will look for it.
 #[cfg(unix)]
 fn allow_file_protocol(fixture: &Fixture) {
     std::fs::write(
@@ -2377,8 +2368,6 @@ fn a_submodule_the_checkout_no_longer_lists_is_pruned_and_a_live_one_survives() 
         .expect("a file");
     }
 
-    // The two submodules this step does want are already there, so the only thing it has
-    // left to do is the pruning.
     for tree in ["src/dots", "src/yet-another-monochrome-icon-set"] {
         std::fs::create_dir_all(bundle.join(tree)).expect("the submodule tree");
         std::fs::write(bundle.join(tree).join("content"), b"x\n").expect("a file");
@@ -2469,8 +2458,6 @@ fn run_services(fixture: &Fixture, tools: &Services, extra: &[(&str, &str)]) -> 
     let calls = tools.calls.to_str().expect("a path");
     let rules = fixture.path("rules");
     std::fs::create_dir_all(&rules).expect("a rules directory");
-    // A current rule keeps the system-level branch, which escalates, out of these tests;
-    // the decision itself is covered by the unit tests beside it.
     std::fs::write(
         rules.join("70-uinput.rules"),
         "KERNEL==\"uinput\", MODE=\"0600\", OPTIONS+=\"static_node=uinput\", TAG+=\"uaccess\"\n",
@@ -2487,9 +2474,6 @@ fn run_services(fixture: &Fixture, tools: &Services, extra: &[(&str, &str)]) -> 
     fixture.step_in("06-services", &tools.path, &bundle, &environment)
 }
 
-// The step's own text is what the tests below drive, so a stub that reports one status and
-// logs the arguments it was handed is enough to see what the step did with it. `install`
-// says whether the second run the step makes is taken to have worked.
 #[cfg(unix)]
 fn quick_share_bundle(fixture: &Fixture, status: &str, port: &str, install: bool) -> PathBuf {
     let bundle = fixture.path("bundle");
@@ -2513,9 +2497,6 @@ fn quick_share_calls(fixture: &Fixture) -> String {
     std::fs::read_to_string(fixture.path("quickshare.calls")).unwrap_or_default()
 }
 
-// Escalation has to be reachable from a test that is not root and has no terminal, so the
-// sudo to escalate through is named rather than discovered - the same override the shell
-// resolver offers.
 #[cfg(unix)]
 fn sudo_stub(fixture: &Fixture) -> PathBuf {
     stub_in(
@@ -2804,8 +2785,6 @@ fn dots_tools(fixture: &Fixture) -> ConfigTools {
     let calls = fixture.path("calls.log");
     std::fs::write(&calls, "").expect("the call log");
 
-    // `cksum` stands in for sha256sum: it is POSIX, and its digest is over the bytes, so
-    // it changes exactly when the file does.
     stub_in(&bin, "sha256sum", "#!/bin/sh\nexec cksum \"$@\"\n");
     stub_in(&bin, "id", "#!/bin/sh\nprintf 'tester\\n'\n");
     stub_in(

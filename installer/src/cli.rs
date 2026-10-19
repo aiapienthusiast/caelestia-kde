@@ -13,23 +13,14 @@ pub struct Args {
     pub bundle: Option<PathBuf>,
     pub action: PresetAction,
     pub debug: bool,
-    /// How the TUI should draw itself, when the environment did not say.
     pub look: Look,
-    /// The answers the caller gave instead of walking the wizard, in the order they were given.
-    /// What a script that used to set an environment variable per flag does now.
     pub set: Vec<(&'static str, String)>,
-    /// Print the plan this run would follow and stop, without touching the machine.
     pub plan: bool,
-    /// What `--plan` prints: the plan as JSON for a machine, or as text for a person.
     pub plan_json: bool,
-    /// Run the plan without the wizard. Needs root already available, so it can never block on a
-    /// prompt nobody is watching.
     pub non_interactive: bool,
-    /// Continue a run that stopped instead of starting it again.
     pub resume: bool,
 }
 
-/// The overrides a caller can hand the wizard. Anything left alone is decided by the terminal.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Look {
     pub glyphs: Option<String>,
@@ -94,9 +85,6 @@ where
                 let setting = setting.to_str().ok_or("--set reads text, not bytes")?;
                 parsed.set.push(crate::menu::parse_set(setting)?);
             }
-            // The same flag the `step` subcommand takes. The entry points build their command
-            // with it, and a published `bash update.sh` that fails with "unknown option" is a
-            // worse answer than one that reads the flag in both places.
             Some("--bundle") => {
                 let directory = args.next().ok_or("--bundle needs a directory")?;
                 parsed.bundle = Some(PathBuf::from(directory));
@@ -124,15 +112,10 @@ where
             Some(text) if text.starts_with('-') && text != "-" => {
                 return Err(format!("unknown option: {text}"));
             }
-            // The last bare argument wins, which is what this has always done and what
-            // `the_last_bare_argument_wins` holds it to. It is worth knowing that a stray second
-            // path is taken silently rather than refused the way `step` refuses a second id.
             _ => parsed.bundle = Some(PathBuf::from(arg)),
         }
     }
 
-    // A flag that cannot mean anything here is refused rather than quietly ignored: a pipeline
-    // that asked for a plan and got an install is the worst way to find out.
     if parsed.plan_json && !parsed.plan {
         return Err("--json says how to print a plan; give --plan as well".to_string());
     }
@@ -154,8 +137,6 @@ where
                     .to_string(),
             );
         }
-        // These only say how the wizard draws itself. Refusing them beats a pipeline that passes
-        // --dark and silently gets a headless run.
         if parsed.look != Look::default() {
             return Err(
                 "the look flags apply to the wizard; an unattended run has no screen".to_string(),
@@ -276,7 +257,6 @@ mod tests {
         assert_eq!(unicode.look.theme.as_deref(), Some("dark"));
         assert!(!unicode.look.no_animation);
 
-        // And nothing is forced unless it is asked for.
         let plain = run(&[]);
         assert_eq!(plain.look, Look::default());
     }

@@ -1,5 +1,3 @@
-// The screens. Each draws into the box the chrome hands out.
-
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::Style;
@@ -14,17 +12,12 @@ use crate::steps::{STEPS, Status};
 use crate::theme::{self, Role, Theme};
 use crate::ui;
 
-/// The width of the value column on the options screen.
 const VALUE_COLUMN: usize = 12;
 
-/// How wide the name column ever gets.
 const NAME_CELL: usize = 52;
 
-/// The label column of the failure card and the summary.
 const LABEL_COLUMN: usize = 8;
 
-/// What the button on the finished screen says. It is the sentence the page is for: the shell is
-/// installed, and the session in front of the reader is still the old one.
 const LOGOUT_BUTTON: &str = "Log out and apply Caelestia";
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
@@ -63,8 +56,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
 }
 
-// Home ------------------------------------------------------------------------------
-
 fn home(frame: &mut Frame, app: &App, body: Rect) {
     let theme = &app.theme;
     let mark = banner(body);
@@ -80,9 +71,6 @@ fn home(frame: &mut Frame, app: &App, body: Rect) {
     } else {
         theme::SPLASH.len() as u16 + 1
     };
-    // The left column is as wide as the mark where the whole mark fits beside the panel, and only
-    // as wide as the words under it where it does not. A terminal in between - which is most of
-    // them - still gets the panel beside the prose rather than a column of nothing on the right.
     let mark_width = theme::SPLASH[0].chars().count() as u16;
     let text_width = identity_lines
         .iter()
@@ -98,9 +86,6 @@ fn home(frame: &mut Frame, app: &App, body: Rect) {
     let two_columns = body.width >= left_width + gap + panel_width;
     let left_rows = identity_lines.len() + 2 + credits.len();
 
-    // One composition: the mark, and under it either two columns or one. Sized together and
-    // centred together, because a small block pinned to the corner of a large frame reads as a
-    // screen that stopped drawing rather than as a layout.
     let (width, height) = if two_columns {
         (
             left_width + gap + panel_width,
@@ -140,7 +125,6 @@ fn home(frame: &mut Frame, app: &App, body: Rect) {
     };
 
     if two_columns {
-        // What the program is on the left, what it can do on the right.
         let left = Rect {
             width: left_width.min(below.width),
             ..below
@@ -158,7 +142,6 @@ fn home(frame: &mut Frame, app: &App, body: Rect) {
         return;
     }
 
-    // One column: the same content, in the order it is read.
     let mut lines = identity_lines;
     lines.extend(actions(app, below.width));
     lines.extend(rest);
@@ -167,17 +150,13 @@ fn home(frame: &mut Frame, app: &App, body: Rect) {
     ui::prose(frame, below, lines, theme.body());
 }
 
-/// The left column of the home screen, and the least air beside it.
 const HOME_LEFT: u16 = 54;
 const HOME_GAP: u16 = 4;
 
-/// How much air goes between two columns. It grows with the frame, so a composition on a wide
-/// screen is spread out rather than sitting in the corner as a small block.
 fn column_gap(width: u16) -> u16 {
     HOME_GAP.max((width / 20).min(12))
 }
 
-/// The action list in its panel, with anything the machine has to say under it.
 fn actions_panel(frame: &mut Frame, app: &App, area: Rect) {
     let theme = &app.theme;
     let width = ui::panel_width(actions_width(app), area.width);
@@ -201,13 +180,10 @@ fn actions_panel(frame: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-/// The action panel: three rows and its borders.
 const ACTIONS_PANEL: u16 = 5;
 
-/// Below this the screen would be the mark and nothing else, so it is dropped rather than clipped.
 const MARK_MIN_HEIGHT: u16 = 22;
 
-/// Where the mark goes, or `None` where it does not fit whole.
 fn banner(body: Rect) -> Option<Rect> {
     let width = theme::SPLASH[0].chars().count() as u16;
     if body.width < width || body.height < MARK_MIN_HEIGHT {
@@ -219,7 +195,6 @@ fn banner(body: Rect) -> Option<Rect> {
     })
 }
 
-/// The mark, one row per line.
 fn mark_lines(app: &App) -> Vec<Line<'static>> {
     theme::SPLASH
         .iter()
@@ -227,7 +202,6 @@ fn mark_lines(app: &App) -> Vec<Line<'static>> {
         .collect()
 }
 
-/// The name, where the mark has not already said it, and what this machine turned out to be.
 fn identity(app: &App, named: bool) -> Vec<Line<'static>> {
     let theme = &app.theme;
     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -247,15 +221,11 @@ fn identity(app: &App, named: bool) -> Vec<Line<'static>> {
     lines
 }
 
-/// What was found, in the line the actions beside it depend on.
 fn state_line(app: &App) -> Line<'static> {
     let theme = &app.theme;
     if !app.installed() {
         return Line::from(Span::styled("nothing installed yet", theme.muted()));
     }
-    // Files on disk are not a finished install: a run that stopped part way leaves the shell
-    // where the next step expected it, and saying "installed" then would be a claim the machine
-    // cannot back up.
     if !app.unfinished.is_empty() {
         return Line::from(Span::styled(
             "Caelestia is installed, but the last run did not finish",
@@ -265,8 +235,6 @@ fn state_line(app: &App) -> Line<'static> {
     Line::from(Span::styled("Caelestia is installed", theme.body()))
 }
 
-/// Where the last run stopped, and what to do about it: the steps that finished are kept, so
-/// running the install again is the whole of the repair.
 fn finish_line(app: &App) -> Option<Line<'static>> {
     let (step, _) = app.unfinished.last()?;
     Some(Line::from(Span::styled(
@@ -275,9 +243,6 @@ fn finish_line(app: &App) -> Option<Line<'static>> {
     )))
 }
 
-/// The three actions. The label is the whole row: what each one does is the verb, and anything
-/// that needs saying about it belongs on the confirmation that asks for it. A row that is not on
-/// offer carries the reason it is grey.
 fn actions(app: &App, width: u16) -> Vec<Line<'static>> {
     let theme = &app.theme;
     let glyphs = app.glyphs;
@@ -311,7 +276,6 @@ fn actions(app: &App, width: u16) -> Vec<Line<'static>> {
         .collect()
 }
 
-/// The column the action names are padded to, so the reasons line up under each other.
 fn name_column() -> usize {
     Action::ALL
         .iter()
@@ -320,7 +284,6 @@ fn name_column() -> usize {
         .unwrap_or(0)
 }
 
-/// How wide the action list has to be.
 fn actions_width(app: &App) -> u16 {
     let column = name_column();
     Action::ALL
@@ -344,12 +307,9 @@ fn credits(app: &App) -> Vec<Line<'static>> {
     ]
 }
 
-// Privilege -------------------------------------------------------------------------
-
 fn privilege(frame: &mut Frame, app: &App, body: Rect) {
     let theme = &app.theme;
     let glyphs = app.glyphs;
-    // One measure for the whole card.
     const MEASURE: u16 = 56;
     let mut lines = if app.auth == Some(AuthMethod::Fingerprint) {
         fingerprint_card(app)
@@ -358,7 +318,6 @@ fn privilege(frame: &mut Frame, app: &App, body: Rect) {
     };
 
     lines.push(blank());
-    // The wait belongs where the answer will appear, so it reads as work rather than as a freeze.
     if app.checking.is_some() {
         let waiting = if app.auth == Some(AuthMethod::Fingerprint) {
             "Waiting for your finger..."
@@ -392,8 +351,6 @@ fn privilege(frame: &mut Frame, app: &App, body: Rect) {
     );
 }
 
-/// The reader's card: what to do with it, and nothing else. What the reader is for is the name of
-/// the route, and the reader answers when the finger arrives rather than when a key does.
 fn fingerprint_card(app: &App) -> Vec<Line<'static>> {
     vec![Line::from(Span::styled(
         AuthMethod::Fingerprint.title().to_string(),
@@ -423,25 +380,16 @@ fn password_card(app: &App) -> Vec<Line<'static>> {
     vec![Line::from(field)]
 }
 
-// This machine -----------------------------------------------------------------------
-
-/// What was found before anything is decided.
 fn detect(frame: &mut Frame, app: &App, body: Rect) {
     let theme = &app.theme;
 
-    // Two columns where there is room: the findings on the left, what they mean on the right.
     if ui::rail(body, 44).is_some() {
         let rows = findings(app);
         let label_width = label_column(&rows);
         let left_width = ui::panel_width(finding_width(&rows, label_width), body.width / 2);
 
-        // The panel is as wide as the measure, and the prose inside it is wrapped to what is left
-        // of that once the borders and the inset are taken: wrapping to the measure and then
-        // drawing into a narrower panel leaves the last word of every line on a row of its own.
         let right_width = ui::panel_width(ui::PROSE_WIDTH, body.width / 2);
         let mut narrative = verdict_body(app, right_width.saturating_sub(2));
-        // Added once the panel's width is known, so the bar fills it exactly the way Home's
-        // selected action does rather than stopping at the end of its own text.
         narrative.push(blank());
         narrative.push(ui::cursor_row(
             theme,
@@ -450,8 +398,6 @@ fn detect(frame: &mut Frame, app: &App, body: Rect) {
             right_width.saturating_sub(2),
         ));
 
-        // The pair is centred as one block. Pinned to the left edge, two small panels in a wide
-        // frame read as a drawing that failed part way through.
         const GAP: u16 = 4;
         let total = left_width + GAP + right_width;
         let x = body.x + body.width.saturating_sub(total) / 2;
@@ -480,8 +426,6 @@ fn detect(frame: &mut Frame, app: &App, body: Rect) {
             theme.body(),
         );
 
-        // The verdict is prose, so it reads in a measure. Its border carries the answer, so the
-        // panel needs no title: the headline inside says it.
         let border = verdict(app);
         let inner = ui::section(
             frame,
@@ -511,8 +455,6 @@ fn detect(frame: &mut Frame, app: &App, body: Rect) {
         blank(),
     ];
 
-    // Reading order, budgeted by importance: the fact that changes the decision and the reason it
-    // cannot go on survive a short terminal; the rows and the explanation give way.
     let mut room = (body.height as usize)
         .saturating_sub(lines.len() + 1 + tail.len())
         .saturating_sub(explanation.len());
@@ -545,7 +487,6 @@ fn detect(frame: &mut Frame, app: &App, body: Rect) {
     ui::prose_middle(frame, body, lines, theme.body());
 }
 
-/// The findings: what was looked for, what was found, and whether the install depends on it.
 fn findings(app: &App) -> Vec<(&'static str, String, bool)> {
     let found = &app.detection;
     vec![
@@ -588,7 +529,6 @@ fn findings(app: &App) -> Vec<(&'static str, String, bool)> {
     ]
 }
 
-/// The label column is as wide as the labels in it.
 fn label_column(rows: &[(&'static str, String, bool)]) -> usize {
     rows.iter()
         .map(|(label, _, _)| label.chars().count())
@@ -619,7 +559,6 @@ fn finding_lines(
         .collect()
 }
 
-/// How wide the findings panel has to be to hold its longest row.
 fn finding_width(rows: &[(&'static str, String, bool)], label_width: usize) -> u16 {
     rows.iter()
         .map(|(_, value, _)| label_width + value.chars().count() + 3)
@@ -627,10 +566,6 @@ fn finding_width(rows: &[(&'static str, String, bool)], label_width: usize) -> u
         .unwrap_or(0) as u16
 }
 
-/// The fact this screen turns on, in one line.
-///
-/// A run that stopped part way is not "already installed": the home screen sent the user here to
-/// finish it, and a cross in the error colour would answer that invitation with a refusal.
 fn headline(app: &App) -> Line<'static> {
     let theme = &app.theme;
     let glyphs = app.glyphs;
@@ -659,7 +594,6 @@ fn headline(app: &App) -> Line<'static> {
     ])
 }
 
-/// Why the screen will not go on: a missing precondition, or the reason a guard sent the user back.
 fn reasons(app: &App, width: u16) -> Vec<Line<'static>> {
     let theme = &app.theme;
     let glyphs = app.glyphs;
@@ -686,14 +620,11 @@ fn reasons(app: &App, width: u16) -> Vec<Line<'static>> {
     lines
 }
 
-/// What an existing install means for what happens next.
 fn installed_explanation(app: &App, width: u16) -> Vec<String> {
     if !app.detection.installed {
         return Vec::new();
     }
     let measure = (width as usize).saturating_sub(4);
-    // A run that stopped part way is not a second install, it is the rest of this one: what
-    // finished is recorded, and the step that failed is where the next run starts.
     if let Some((step, _)) = app.unfinished.last() {
         return wrap(
             &format!(
@@ -710,7 +641,6 @@ fn installed_explanation(app: &App, width: u16) -> Vec<String> {
     )
 }
 
-/// Everything the verdict panel says: the fact, what it means, and why the screen will not go on.
 fn verdict_body(app: &App, width: u16) -> Vec<Line<'static>> {
     let theme = &app.theme;
     let mut lines = vec![headline(app)];
@@ -727,8 +657,6 @@ fn verdict_body(app: &App, width: u16) -> Vec<Line<'static>> {
     lines
 }
 
-/// What the findings mean, as the role the verdict's border carries. Ordinary "ready" stays
-/// neutral, since color is spent on what is wrong.
 fn verdict(app: &App) -> Role {
     let found = &app.detection;
     if !found.blockers().is_empty() {
@@ -740,20 +668,14 @@ fn verdict(app: &App) -> Role {
     }
 }
 
-// Auth -------------------------------------------------------------------------------
-
 fn auth(frame: &mut Frame, app: &App, body: Rect) {
     let theme = &app.theme;
     let glyphs = app.glyphs;
-    // One measure for the whole card, so the prose and the rows under it break in the same place.
     const MEASURE: u16 = 68;
     let mut lines: Vec<Line<'static>> = Vec::new();
 
     for (index, method) in app.auth_methods().iter().enumerate() {
         let chosen = index == app.cursor;
-        // A selected row looks the same on every screen: the pointer on a filled bar, which is
-        // what Home's actions have always used. Anything else and the user has to learn the
-        // highlight again per screen.
         if chosen {
             lines.push(ui::cursor_row(
                 theme,
@@ -788,22 +710,15 @@ fn auth(frame: &mut Frame, app: &App, body: Rect) {
     );
 }
 
-// Options ---------------------------------------------------------------------------
-
 fn options(frame: &mut Frame, app: &App, body: Rect) {
     let theme = &app.theme;
 
-    // Two columns: the questions down the left as a map of the setup, the question on the right.
     let rail_width = ui::panel_width(question_rail_width(), body.width);
     let gap = column_gap(body.width);
     let pane_width = PANE_WIDTH.min(body.width.saturating_sub(rail_width + gap));
     if pane_width >= PANE_MIN {
-        // The pane is as wide as its widest row needs and no wider, and the pair is centred as one
-        // block: a question pinned to the left of a wide frame leaves a screen of nothing beside it.
         let listed = option_rows(app, pane_width).len() as u16 + 2;
         let width = rail_width + gap + pane_width;
-        // The heading, the list, and the rows the help and anything else the screen has to say
-        // need under it: a pane clipped to the list is a pane whose help is never drawn.
         let height = (listed + HELP_ROWS + 2).max(question_rail(app).len() as u16 + 2);
         let block = ui::middle(body, width, height);
 
@@ -838,15 +753,11 @@ fn options(frame: &mut Frame, app: &App, body: Rect) {
     );
 }
 
-/// The room the question pane asks for, and the least it will be drawn at before the map is given
-/// up instead. The heading and the help are rows the pane keeps whatever is in the list.
 const PANE_WIDTH: u16 = 74;
 const PANE_WIDE: u16 = 96;
 const PANE_MIN: u16 = 44;
 const HELP_ROWS: u16 = 2;
 
-/// The map of the setup: every question, and which one is on screen. How far along the wizard is,
-/// is on the bar at the bottom of the frame, where it is for every screen.
 fn question_rail(app: &App) -> Vec<Line<'static>> {
     let theme = &app.theme;
     let glyphs = app.glyphs;
@@ -861,8 +772,6 @@ fn question_rail(app: &App) -> Vec<Line<'static>> {
             String::new()
         };
         lines.push(Line::from(vec![
-            // The rail says where you are, not what Enter will act on: the pointer belongs to the
-            // selected row alone, so this marks the position with weight and the accent instead.
             Span::styled(
                 if here { "  · " } else { "    " },
                 if here { theme.accent() } else { theme.muted() },
@@ -874,7 +783,6 @@ fn question_rail(app: &App) -> Vec<Line<'static>> {
     lines
 }
 
-/// How wide the map has to be for its longest name plus its change marker.
 fn question_rail_width() -> u16 {
     let mut width = 0;
     for index in 0..menu::question_count() {
@@ -884,12 +792,8 @@ fn question_rail_width() -> u16 {
     width as u16
 }
 
-/// One question and its answers.
 fn question_pane(frame: &mut Frame, app: &App, area: Rect) {
     let theme = &app.theme;
-    // The answers, then the row that goes on, which is the last thing in the list so the arrows
-    // reach it the way they reach everything else. The rows get exactly the lines they need: a row
-    // that is not drawn is a row nobody can answer, so the help text gives way first.
     let mut listed = option_rows(app, area.width);
     listed.push(blank());
     listed.push(continue_row(app));
@@ -900,8 +804,6 @@ fn question_pane(frame: &mut Frame, app: &App, area: Rect) {
     ])
     .areas::<3>(area);
 
-    // What is being asked, on the one line, with the fact that it has been edited beside it: the
-    // rail names the question too, but only on a terminal wide enough to hold it.
     let mut heading_spans = vec![Span::styled(
         menu::question(app.question).to_string(),
         theme.heading(),
@@ -931,7 +833,6 @@ fn question_pane(frame: &mut Frame, app: &App, area: Rect) {
     ui::prose(frame, rows[2], help_lines, theme.body());
 }
 
-/// The last row of a question: the way on, drawn like every other row so the keys can reach it.
 fn continue_row(app: &App) -> Line<'static> {
     let theme = &app.theme;
     let chosen = app.on_continue();
@@ -949,11 +850,9 @@ fn continue_row(app: &App) -> Line<'static> {
     ])
 }
 
-/// One row per option: cursor, changed marker, name, then the value in its own column.
 pub(crate) fn option_rows(app: &App, width: u16) -> Vec<Line<'static>> {
     let theme = &app.theme;
     let glyphs = app.glyphs;
-    // The name column takes what is left, up to a point; past that it is margin.
     let name_width = (width as usize)
         .saturating_sub(VALUE_COLUMN + 5)
         .clamp(8, NAME_CELL);
@@ -982,8 +881,6 @@ pub(crate) fn option_rows(app: &App, width: u16) -> Vec<Line<'static>> {
             );
             let (value, value_style) = value_cell(entry, app);
             let value = format!("{:>width$}", value, width = VALUE_COLUMN);
-            // The pointer and the weight, which is how DMS marks the row the keys act on. No
-            // background: the only filled surface in the program is the footer.
             let pointer = format!(" {} ", if chosen { glyphs.cursor() } else { " " });
             let label = if chosen {
                 theme.selected()
@@ -1008,15 +905,10 @@ pub(crate) fn option_rows(app: &App, width: u16) -> Vec<Line<'static>> {
         .collect()
 }
 
-/// What the row will do, with the colour of its consequence. An app row has three states rather
-/// than two, because "on" means "install it" and the answer depends on whether it is already
-/// there; DMS draws the same three with the same markers.
 fn value_cell(entry: &'static Entry, app: &App) -> (String, Style) {
     let glyphs = app.glyphs;
     let theme = &app.theme;
     match entry {
-        // A bulk row is a command, not a state: it acts on the rows below it, and giving it a
-        // "skip" of its own reads as if it were one of them.
         Entry::Preset { .. } => (String::new(), theme.muted()),
         Entry::Toggle { id, .. } => {
             let on = menu::value(entry, &app.answers) == Some("true");
@@ -1050,15 +942,10 @@ fn value_cell(entry: &'static Entry, app: &App) -> (String, Style) {
     }
 }
 
-// Run -------------------------------------------------------------------------------
-
 fn run(frame: &mut Frame, app: &App) {
     let theme = &app.theme;
     let layout = app.run_layout();
 
-    // The step it is on, how far along, and anything that did not go cleanly: three lines, the way
-    // DMS draws an install. Everything else is the log, which is the only thing with something to
-    // read; the phases and their step counts were the installer's business, not the reader's.
     ui::prose(frame, layout.step, vec![step_line(app)], theme.body());
     ui::prose(
         frame,
@@ -1070,7 +957,6 @@ fn run(frame: &mut Frame, app: &App) {
     log_pane(frame, app, layout.log, app.log_rows());
 }
 
-/// What is happening now: the spinner and the step's own name.
 fn step_line(app: &App) -> Line<'static> {
     let theme = &app.theme;
     let running = app.running_step();
@@ -1097,7 +983,6 @@ fn step_line(app: &App) -> Line<'static> {
     ])
 }
 
-/// The one bar on the screen, with how far along and how long it has taken.
 fn bar_line(app: &App, width: u16) -> Line<'static> {
     let done = app.finished();
     let total = STEPS.len();
@@ -1106,8 +991,6 @@ fn bar_line(app: &App, width: u16) -> Line<'static> {
         .checked_div(total)
         .unwrap_or_default();
     let elapsed = app.total_elapsed().as_secs();
-    // A run that has only just started has no time to report, and "0:00" beside the bar reads as
-    // a stopwatch that is not moving.
     let caption = if elapsed == 0 {
         format!("{percent:>3}%")
     } else {
@@ -1116,8 +999,6 @@ fn bar_line(app: &App, width: u16) -> Line<'static> {
     ui::progress(done, total, width, &caption, &app.theme, app.glyphs)
 }
 
-/// What did not go cleanly, on the line under the bar, so that a warning is seen without opening
-/// the log. Nothing here means nothing went wrong, and the line stays empty.
 fn note_line(app: &App) -> Line<'static> {
     let theme = &app.theme;
     let glyphs = app.glyphs;
@@ -1147,8 +1028,6 @@ fn note_line(app: &App) -> Line<'static> {
     Line::from(spans)
 }
 
-/// A log pane: a heading row, the lines, then a scrollbar. The run screen and the full-screen log
-/// draw the same thing at different sizes.
 fn log_pane(frame: &mut Frame, app: &App, area: Rect, rows: usize) {
     let theme = &app.theme;
     let glyphs = app.glyphs;
@@ -1162,7 +1041,6 @@ fn log_pane(frame: &mut Frame, app: &App, area: Rect, rows: usize) {
         height: area.height - 1,
         ..area
     };
-    // The log sits on a raised block of its own.
     frame.render_widget(Block::default().style(theme.panel()), area);
     let (start, rows) = app.log_window_for(rows);
     let total = app.visible_log().len();
@@ -1214,7 +1092,6 @@ fn log_pane(frame: &mut Frame, app: &App, area: Rect, rows: usize) {
         follow,
     );
 
-    // The scrollbar column is only spent when there is something to scroll.
     let (text_area, bar_area) = if overflowing {
         (
             Rect {
@@ -1270,9 +1147,6 @@ fn log_line(line: &LogLine, theme: &Theme, glyphs: Glyphs) -> Line<'static> {
     ])
 }
 
-// Done ------------------------------------------------------------------------------
-
-/// Which steps ended in a given state, in the order they ran.
 fn steps_with(app: &App, status: Status) -> Vec<usize> {
     app.statuses
         .iter()
@@ -1287,8 +1161,6 @@ fn done(frame: &mut Frame, app: &App, body: Rect) {
     let glyphs = app.glyphs;
     let tally = app.tally();
 
-    // One sentence for the outcome, with the count stated in it rather than again underneath: what
-    // went wrong is worth naming, but the tally of it is not worth repeating.
     let (status, ending, style) = if tally.failed > 0 {
         (
             Status::Failed,
@@ -1320,9 +1192,6 @@ fn done(frame: &mut Frame, app: &App, body: Rect) {
         (Status::Ok, "finished".to_string(), theme.ok_text())
     };
 
-    // What the reader wants off this screen is not a score, it is what they now have and what to
-    // do with it: the version that went on, where it went, where their own settings were put, and
-    // the two commands that keep it up to date or take it away again.
     let mut lines: Vec<Line<'static>> = vec![Line::from(vec![
         Span::styled(format!(" {} ", glyphs.status(status)), style),
         Span::styled("The install ".to_string(), theme.body()),
@@ -1331,9 +1200,6 @@ fn done(frame: &mut Frame, app: &App, body: Rect) {
     ])];
     lines.extend(notice(app));
 
-    // What did not go cleanly comes first, because it is the only part of this screen that asks for
-    // anything. The step is named: a count on its own sends the reader to the log to find out
-    // whether the warning was even theirs to care about.
     let failed = steps_with(app, Status::Failed);
     let ignored = steps_with(app, Status::Ignored);
     let mut trouble: Vec<Line<'static>> = Vec::new();
@@ -1424,9 +1290,6 @@ fn done(frame: &mut Frame, app: &App, body: Rect) {
             theme,
             LABEL_COLUMN,
         ));
-        // The one thing this screen can do for the reader, drawn as a button rather than as
-        // another line of advice: a filled bar is what a button looks like everywhere else, and
-        // the letter is in the label because nothing here is under a cursor.
         lines.push(blank());
         lines.push(Line::from(Span::styled(
             format!("  {} (o) ", LOGOUT_BUTTON),
@@ -1450,8 +1313,6 @@ fn done(frame: &mut Frame, app: &App, body: Rect) {
     ui::prose_middle(frame, body, lines, theme.body());
 }
 
-/// The version, and whichever of the revision and the channel this install can actually name: a
-/// tarball has no revision to show, and a blank after a separator is worse than not saying it.
 fn version_line(version: &str, landed: &crate::app::Landed) -> String {
     let mut value = version.to_string();
     if let Some(commit) = &landed.commit {
@@ -1463,8 +1324,6 @@ fn version_line(version: &str, landed: &crate::app::Landed) -> String {
     }
     value
 }
-
-// Overlays --------------------------------------------------------------------------
 
 fn keys_overlay(frame: &mut Frame, app: &App) {
     let theme = &app.theme;
@@ -1631,8 +1490,6 @@ fn confirm_overlay(frame: &mut Frame, app: &App) {
         ),
     };
 
-    // The card is as tall as what is in it: a panel with rows of nothing under the buttons
-    // reads as a screen that failed to draw the rest.
     let width = 70u16.min(frame.area().width.saturating_sub(2)).max(8);
     let measure = width.saturating_sub(4) as usize;
     let mut lines = vec![
@@ -1642,7 +1499,6 @@ fn confirm_overlay(frame: &mut Frame, app: &App) {
     for line in wrap(&question, measure) {
         lines.push(Line::from(Span::styled(line, theme.muted())));
     }
-    // What the yes actually starts, in the terms of the person saying it.
     if app.confirm == Some(Confirm::Install) {
         let changed = app.changed_answers();
         lines.push(blank());
@@ -1661,8 +1517,6 @@ fn confirm_overlay(frame: &mut Frame, app: &App) {
         }
     }
     lines.push(blank());
-    // The choices are rows the arrows can reach, drawn the way every other choice is drawn: the
-    // highlighted one is filled from edge to edge, so the key that acts is never in doubt.
     for (index, label) in asked.buttons().iter().enumerate() {
         let chosen = index == app.confirm_focus;
         let pointer = format!(" {} ", if chosen { glyphs.cursor() } else { " " });
@@ -1691,13 +1545,10 @@ fn confirm_overlay(frame: &mut Frame, app: &App) {
     ui::prose(frame, inner, lines, theme.body());
 }
 
-// Small shared pieces ----------------------------------------------------------------
-
 fn blank() -> Line<'static> {
     Line::from("")
 }
 
-/// The transient answer to the last key, shown until the next one.
 fn notice(app: &App) -> Vec<Line<'static>> {
     match &app.notice {
         Some(text) => vec![Line::from(Span::styled(text.clone(), app.theme.accent()))],
@@ -1705,7 +1556,6 @@ fn notice(app: &App) -> Vec<Line<'static>> {
     }
 }
 
-/// Wrap prose to a column without a `Paragraph`, for the places that lay lines out by hand.
 fn wrap(text: &str, width: usize) -> Vec<String> {
     let width = width.max(20);
     let mut lines: Vec<String> = Vec::new();
@@ -1735,11 +1585,6 @@ mod tests {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use std::path::PathBuf;
 
-    /// An app on a machine that says nothing about itself.
-    ///
-    /// Which distribution this host runs, and whether it already has Caelestia on it, are the
-    /// host's facts and not the test's: a machine that has both draws a longer home screen, and a
-    /// test about where the rows land would then be a test about the host.
     fn on(env: Env) -> App {
         let mut app = App::new(
             PathBuf::from("/tmp/caelestia"),
@@ -1749,9 +1594,6 @@ mod tests {
         app.pretend = true;
         app.detection.installed = false;
         app.unfinished.clear();
-        // Whether sudo is warm is the host's fact as well, and a machine that has just
-        // authenticated has nothing to ask: without this, a test that walks to the gate would
-        // pass or fail on whether the machine running it happens to have a cached ticket.
         app.needs_password = true;
         app
     }
@@ -1760,7 +1602,6 @@ mod tests {
         on(Env::default())
     }
 
-    /// The same, on a terminal that can draw a fill and a border.
     fn color_app() -> App {
         on(Env {
             term: Some("xterm-256color".to_string()),
@@ -1769,12 +1610,10 @@ mod tests {
         })
     }
 
-    /// An app on a machine with a fingerprint reader enrolled.
     fn app_that_has_a_reader() -> App {
         app().with_fingerprint(true)
     }
 
-    /// An app whose last run left a step unfinished, without reading the host's own journal.
     fn app_that_stopped_at(step: &str) -> App {
         let mut app = app();
         app.detection.installed = true;
@@ -1782,7 +1621,6 @@ mod tests {
         app
     }
 
-    /// The frame as cells rather than as text.
     fn cells(app: &mut App, width: u16, height: u16) -> ratatui::buffer::Buffer {
         let backend = ratatui::backend::TestBackend::new(width, height);
         let mut terminal = ratatui::Terminal::new(backend).expect("a test terminal");
@@ -1813,7 +1651,6 @@ mod tests {
         for x in 1..buffer.area.width - 1 {
             assert_eq!(buffer[(x, bar)].bg, accent, "the bar stops at column {x}");
         }
-        // Inside the frame, and not over it.
         assert_ne!(
             buffer[(0, bar)].bg,
             accent,
@@ -1833,15 +1670,11 @@ mod tests {
         let buffer = cells(&mut app, 100, 30);
         let chosen = row_of(&buffer, "Install Caelestia");
         let other = row_of(&buffer, "Uninstall Caelestia");
-        // Where the panel sits depends on how wide the frame is, so the row is asked whether it
-        // carries the fill anywhere rather than at a column that only one size puts it on.
         let filled = |row: u16| (0..buffer.area.width).any(|x| buffer[(x, row)].bg == accent);
         assert!(filled(chosen), "the cursor's row is not filled");
         assert!(!filled(other), "a row the cursor is not on is filled");
     }
 
-    /// How many blank cells there are between the frame's left edge and the first thing drawn,
-    /// counting cells rather than bytes.
     fn left_margin(line: &str) -> usize {
         let inside: String = line.chars().skip(1).collect();
         inside.chars().count() - inside.trim_start().chars().count()
@@ -1849,8 +1682,6 @@ mod tests {
 
     #[test]
     fn a_wide_frame_puts_the_home_composition_in_the_middle() {
-        // The mark and the panel are one block of a fixed size. Pinned to the corner of a large
-        // frame it reads as a screen that stopped drawing part way; it belongs in the middle.
         let width = 236u16;
         let height = 60u16;
         let mut app = app();
@@ -1902,16 +1733,12 @@ mod tests {
             .position(|line| line.contains('\u{250c}') && line.contains("Appearance"))
             .expect("the map is on screen");
         let left = left_margin(lines[rail_top]);
-        // The map and the question beside it are one block: the map starts where the block
-        // starts, so its own margin is the block's margin.
         assert!(left > 20, "the map is against the left edge: {left}");
         assert!(
             left < (width / 2) as usize,
             "the block is past the middle, not in it: {left}"
         );
 
-        // And the question is beside the map rather than under it: the row the map's own top
-        // corner is on is the row the question's heading is on.
         assert!(
             lines[rail_top].contains('\u{250c}'),
             "the map's corner is on the heading row:\n{text}"
@@ -1920,12 +1747,7 @@ mod tests {
 
     #[test]
     fn the_password_is_asked_for_rather_than_chosen_from_a_list() {
-        // A machine with no reader has one way to become root, so answering the confirmation puts
-        // the password field up: there is no route to pick, and a list of one would only be a
-        // keypress between the user and the question they came here to answer.
         let mut app = app();
-        // The run is walked rather than performed, so the confirmation does not re-read the host -
-        // which is not a machine this can be installed on in the first place.
         app.pretend = true;
         app.detection = crate::app::Detection {
             distro: crate::distro::Distro::Arch,
@@ -1964,7 +1786,6 @@ mod tests {
             "the list of routes is not between them: {text}"
         );
 
-        // And with a reader on the machine there is a choice, so the choice is shown.
         let mut with_reader = app_that_has_a_reader();
         with_reader.pretend = true;
         with_reader.detection = app.detection.clone();
@@ -1981,8 +1802,6 @@ mod tests {
 
     #[test]
     fn a_half_finished_install_is_not_called_installed() {
-        // The shell's files are on disk after a run that stopped part way, so the files alone
-        // would have the screen claim a machine is set up when it is half set up.
         let mut half = app_that_stopped_at("08-build-shell");
         let text = render(&mut half, 120, 40);
         assert!(
@@ -1994,7 +1813,6 @@ mod tests {
             "and names the step it stopped at: {text}"
         );
 
-        // With every step finished the same machine reads as installed, and nothing more.
         let mut done = app();
         done.detection.installed = true;
         let text = render(&mut done, 120, 40);
@@ -2027,9 +1845,6 @@ mod tests {
 
     #[test]
     fn a_middling_terminal_still_puts_the_actions_beside_the_words() {
-        // Most terminals are wider than the mark plus the panel and narrower than the rest: the
-        // panel belongs beside the prose there too, not under it with a column of nothing on the
-        // right. What is left of the left column is the words the mark would have stood over.
         let mut app = app();
         let text = render(&mut app, 120, 40);
         let lines: Vec<&str> = text.lines().collect();
@@ -2038,8 +1853,6 @@ mod tests {
             .iter()
             .position(|line| line.contains("\u{25b6} Install Caelestia"))
             .expect("the actions are on screen");
-        // The panel's own top-left corner, which is the only one on that row: the frame's corner
-        // is a different glyph.
         let panel_col = lines[panel_row - 1]
             .chars()
             .collect::<Vec<char>>()
@@ -2062,7 +1875,6 @@ mod tests {
         wide.stage = Stage::Options;
         wide.action = crate::app::Action::Install;
         let text = render(&mut wide, 235, 58);
-        // The rail names every question; the pane names only the one being asked.
         assert!(text.contains("Advanced"), "no map:\n{text}");
 
         let mut narrow = app();
@@ -2122,8 +1934,6 @@ mod tests {
             text.contains("Nothing is in the way"),
             "an install with a clear field says so: {text}"
         );
-        // The screen has nothing to select, so the way on has to be visible on the screen itself
-        // and not only in the footer bar.
         assert!(
             text.contains("continue"),
             "the way off this screen is on it: {text}"
@@ -2143,8 +1953,6 @@ mod tests {
             git: true,
         };
 
-        // The findings panel's border, on a wide terminal: it must not start in the first column,
-        // or two small panels in a wide frame read as a drawing that stopped part way through.
         let wide = render(&mut app, 164, 46);
         let first = wide
             .lines()
@@ -2184,7 +1992,6 @@ mod tests {
 
     #[test]
     fn the_detection_screen_names_what_would_stop_the_install() {
-        // One cause, said once.
         let mut unknown = app();
         unknown.stage = Stage::Detect;
         unknown.detection = crate::app::Detection {
@@ -2207,7 +2014,6 @@ mod tests {
             unknown.detection.blockers()
         );
 
-        // On a distribution it does know, the things it is missing are named.
         let mut known = app();
         known.stage = Stage::Detect;
         known.detection = crate::app::Detection {
@@ -2222,7 +2028,6 @@ mod tests {
         assert!(text.contains("No supported package manager"), "{text}");
         assert!(text.contains("git is missing"), "{text}");
 
-        // The keymap overlay is a panel of a fixed size: every line of it has to fit inside.
         let mut overlay = app();
         overlay.overlay = Some(Overlay::Keys);
         let text = render(&mut overlay, 100, 34);
@@ -2239,8 +2044,6 @@ mod tests {
     #[test]
     fn the_reason_a_screen_is_blocking_survives_a_short_terminal() {
         let problem = "Sort out the above first.";
-        // The worst case: an existing install, one blocker, and a guard that sent the user back,
-        // at the smallest terminal the installer draws in.
         let worst = crate::app::Detection {
             distro: crate::distro::Distro::Unknown,
             kind: crate::install_kind::Kind::Source,
@@ -2250,7 +2053,6 @@ mod tests {
             git: false,
         };
 
-        // With room, the screen explains what continuing would do.
         let mut roomy = app();
         roomy.stage = Stage::Detect;
         roomy.detection = crate::app::Detection {
@@ -2280,7 +2082,6 @@ mod tests {
             !text.contains("Your own configs are backed up first"),
             "at the cost of the explanation: {text}"
         );
-        // And the reading order holds: the fact comes before what continuing would do about it.
         let headline = text.find("already installed").expect("the headline");
         let explanation = text.find("Continuing installs over it");
         assert!(
@@ -2317,7 +2118,6 @@ mod tests {
             "the route is named on the list: {text}"
         );
 
-        // Taking it puts the reader on the card, and nothing about passwords on it.
         app.auth = Some(AuthMethod::Fingerprint);
         app.stage = Stage::Privilege;
         let (sender, receiver) = std::sync::mpsc::channel();
@@ -2337,7 +2137,6 @@ mod tests {
             "and the wait says what it is waiting for: {waiting}"
         );
 
-        // A read that did not happen says so, in the reader's own words.
         app.checking = None;
         app.problem = Some("No finger was recognized.".to_string());
         let refused = render(&mut app, 100, 30);
@@ -2426,7 +2225,6 @@ mod tests {
             "the answer is a button: {text}"
         );
         assert!(text.contains("Cancel (n)"), "and so is the other: {text}");
-        // What a person is told is what happens to their machine, not how many steps it takes.
         assert!(text.contains("backed up"), "{text}");
         assert!(
             !text.contains("steps"),
@@ -2438,7 +2236,6 @@ mod tests {
         app.key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE))
     }
 
-    /// The frame as text, so a test can read what a user would see.
     fn render(app: &mut App, width: u16, height: u16) -> String {
         let backend = ratatui::backend::TestBackend::new(width, height);
         let mut terminal = ratatui::Terminal::new(backend).expect("a test terminal");
@@ -2456,7 +2253,6 @@ mod tests {
         text
     }
 
-    /// The rows that mention a phrase.
     fn rows_with(text: &str, needle: &str) -> Vec<String> {
         text.lines()
             .filter(|row| row.contains(needle))
@@ -2486,7 +2282,6 @@ mod tests {
             .first()
             .expect("no log heading")
             .clone();
-        // Nothing sits beside the log: it starts at the left gutter and runs to the frame.
         assert!(
             log.find("install log").expect("a log heading") < 20,
             "the log was pushed into a column:\n{text}"
@@ -2569,7 +2364,6 @@ mod tests {
 
     #[test]
     fn the_wait_for_sudo_is_shown_where_the_answer_will_appear() {
-        // A password in flight used to leave the frame looking frozen, so people typed it again.
         let mut app = app();
         app.stage = Stage::Privilege;
         app.password = "hunter2".to_string();
@@ -2579,7 +2373,6 @@ mod tests {
         assert!(text.contains("Checking your password"), "{text}");
         assert!(!text.contains("hunter2"), "{text}");
 
-        // The answer arrives, and the line gives way to it.
         sender.send(false).expect("the answer fits");
         app.tick();
         let text = render(&mut app, 100, 30);
@@ -2589,8 +2382,6 @@ mod tests {
 
     #[test]
     fn every_question_ends_with_a_row_that_goes_on() {
-        // The way out of a question is the last row of its list, so the arrows reach it: a key
-        // hint at the foot of the screen was something to read, not something to move onto.
         let mut app = app();
         app.stage = Stage::Options;
         for question in 0..menu::question_count() {
@@ -2606,8 +2397,6 @@ mod tests {
 
     #[test]
     fn the_longest_question_shows_its_last_row_and_the_way_on_at_the_smallest_size() {
-        // A row the pane clips is a row nobody can answer, so the rows are given the lines they
-        // need before the help text is given any.
         let mut app = app();
         app.stage = Stage::Options;
         app.question = (0..menu::question_count())
@@ -2624,8 +2413,6 @@ mod tests {
 
     #[test]
     fn the_app_question_offers_every_app_even_on_a_machine_that_has_none() {
-        // The rows are an install decision, so a machine with none of the apps has to see all of
-        // them - that is the machine that needs them.
         let mut app = app().with_apps(crate::apps::Apps::default());
         app.stage = Stage::Options;
         app.question = (0..menu::question_count())
@@ -2654,9 +2441,6 @@ mod tests {
 
     #[test]
     fn every_option_row_starts_at_the_same_column() {
-        // Nothing is drawn under anything else any more: the SDDM login styles were the only
-        // child rows, and they are gone. The pointer is one cell wide either way, so every row's
-        // title begins in the same column.
         let mut app = app();
         app.stage = Stage::Options;
         app.question = 0;
@@ -2694,7 +2478,6 @@ mod tests {
             "the rows are not a grid: {widths:?}"
         );
 
-        // And what is drawn agrees with what was built.
         let text = render(&mut app, 100, 30);
         for entry in app.current_entries() {
             assert!(text.contains(entry.title()), "{}", entry.title());
@@ -2711,7 +2494,6 @@ mod tests {
             drawn.iter().any(|row| row.contains('…')),
             "a clipped name says so: {drawn:?}"
         );
-        // And a clipped row is still the same width as its neighbors.
         let widths: Vec<usize> = narrow.iter().map(Line::width).collect();
         assert!(
             widths.windows(2).all(|pair| pair[0] == pair[1]),
@@ -2727,14 +2509,11 @@ mod tests {
         app.cursor = 0;
         let before = render(&mut app, 100, 30);
         assert!(!before.contains("•"), "{before}");
-        // A row whose label says it all shows nothing under the list: the caption that used to sit
-        // there was the label again.
         assert!(
             !before.contains("Replace the login screen"),
             "a row's label is not repeated as its help: {before}"
         );
 
-        // The row that does carry a fact shows it, and only while it is under the cursor.
         app.cursor = 0;
         let shot = render(&mut app, 100, 30);
         assert!(
@@ -2751,7 +2530,6 @@ mod tests {
             "and it goes with the cursor"
         );
 
-        // A change is marked on the row, on the question, and in the rail's map.
         app.key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
         let after = render(&mut app, 100, 30);
         assert!(after.contains("•"), "the change is marked: {after}");
@@ -2763,8 +2541,6 @@ mod tests {
     }
     #[test]
     fn the_run_screen_names_the_step_it_is_on_and_how_far_along_it_is() {
-        // DMS's install screen, which is what this one now is: the step, one bar, and the log.
-        // Phases and their step counts were the installer's business, not the reader's.
         let mut app = running(
             &[Status::Ok, Status::Warn, Status::Running],
             &["  [INFO]  syncing databases", "  [WARN]  slow mirror"],
@@ -2790,7 +2566,6 @@ mod tests {
             .map(|index| LogLine::parse(&format!("  [INFO]  line {index}")))
             .collect();
         let text = render(&mut app, 80, 24);
-        // On a 24-row terminal the old screen showed two lines of log; this one shows a pane.
         let shown = (0..40)
             .filter(|index| text.contains(&format!("line {index}")))
             .count();
@@ -2879,7 +2654,6 @@ mod tests {
             })
             .collect();
         let text = render(&mut app, 100, 40);
-        // The scrollbar is the last column of the log pane.
         let layout = ui::run_layout(ui::body(app.area));
         let column = (layout.log.x + layout.log.width - 1) as usize;
         let bar: String = text
@@ -2927,8 +2701,6 @@ mod tests {
         assert!(text.contains("leaves the run paused"), "{text}");
     }
 
-    /// What a finished install left behind, as a fixture: the screen that shows it must not read
-    /// this machine's home to say what the wizard did.
     fn landed() -> crate::app::Landed {
         crate::app::Landed {
             version: Some("v2.6.3".to_string()),
@@ -2966,8 +2738,6 @@ mod tests {
 
     #[test]
     fn the_summary_is_not_a_score_of_the_run() {
-        // How many steps ran is the screen that is still running's business: the reader who is
-        // done needs to know what they have now, not what it cost.
         let mut app = app();
         app.stage = Stage::Done;
         app.statuses = vec![Status::Ok; STEPS.len()];
@@ -3007,9 +2777,7 @@ mod tests {
             text.contains("Log out and apply Caelestia (o)"),
             "the way to apply it is a button with its key in it: {text}"
         );
-        // The button says the key, so the footer does not repeat it.
         assert!(!text.contains("o log out"), "{text}");
-        // What the button does is on the same screen, above it.
         assert!(text.contains("log out and back in"), "{text}");
     }
 
@@ -3026,8 +2794,6 @@ mod tests {
             .map(|x| buffer[(x, row)].symbol())
             .collect();
         let start = text.find(LOGOUT_BUTTON).expect("the label is on its row") as u16;
-        // A filled bar is what a button looks like here, so the whole label is on the accent
-        // with nothing of the page showing through it.
         for x in start..start + LOGOUT_BUTTON.chars().count() as u16 {
             assert_eq!(
                 buffer[(x, row)].bg,
@@ -3081,8 +2847,6 @@ mod tests {
             text.contains("caelestia-install step"),
             "the way to retry: {text}"
         );
-        // The steps that did not go through are named, so the reader does not have to open the
-        // log to find out which ones they were.
         assert!(text.contains(STEPS[2].name), "{text}");
         assert!(text.contains(STEPS[5].name), "{text}");
         assert!(text.contains("nothing was rolled back"), "{text}");
@@ -3136,8 +2900,6 @@ mod tests {
             text.contains("A step that is running") && text.contains("stopped first"),
             "true whether or not a step happens to be running: {text}"
         );
-        // The question has buttons, and the one that stops the run is not under the highlight:
-        // the key that opened this must not be able to end the run.
         assert!(text.contains("Stop (y)"), "the answer is a button: {text}");
         assert!(
             text.contains("Keep going (n)"),
@@ -3233,7 +2995,6 @@ mod tests {
         assert!(text.contains("choose"), "{text}");
         assert!(text.contains("quit"), "{text}");
 
-        // And the handler agrees with the hint it printed.
         let before = app.theme.mode;
         assert_eq!(
             app.key(crossterm::event::KeyEvent::new(

@@ -160,8 +160,6 @@ fn run_step(id: &str, bundle: Option<PathBuf>, debug: bool) -> Outcome {
     let context = steps::Context {
         bundle: bundle.root().to_path_buf(),
     };
-    // A step run on its own still records itself, so a run stopped by a crash or a power cut can
-    // be continued with --resume rather than guessed at.
     let started = std::time::Instant::now();
     let code = steps::run(step, &context);
     journal::record_here(
@@ -237,8 +235,6 @@ fn run(args: Args) -> Outcome {
     }
 }
 
-/// Say what would happen, and do none of it. This is the one path that is expected to run
-/// unprivileged and outside a terminal.
 fn print_plan(bundle: &Bundle, args: &Args) -> Outcome {
     let answers = plan::answers(&args.set);
     let rows = plan::rows(&answers);
@@ -251,7 +247,6 @@ fn print_plan(bundle: &Bundle, args: &Args) -> Outcome {
     Outcome::Ok
 }
 
-/// The terminal decides, unless the caller said otherwise.
 fn look(args: &Args) -> Env {
     let mut env = Env::capture();
     if let Some(glyphs) = &args.look.glyphs {
@@ -266,8 +261,6 @@ fn look(args: &Args) -> Env {
     env
 }
 
-/// The wizard can hand the terminal to the update or the uninstall path, which own their own
-/// prompts. That work happens here, after the TUI has given the terminal back.
 fn handoff(bundle: &Bundle, session: Session) -> Outcome {
     match session.handoff {
         None => session.outcome,

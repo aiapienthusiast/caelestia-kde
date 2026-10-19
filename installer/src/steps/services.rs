@@ -217,8 +217,6 @@ fn rule_is_current(rule: &Path) -> bool {
 }
 
 fn rules_dir(context: &Context) -> PathBuf {
-    // The system directory is the one that matters; a test points this at a tree it owns,
-    // because the branch below writes to it.
     context
         .variable("CAELESTIA_UDEV_RULES_DIR")
         .map(PathBuf::from)
@@ -295,8 +293,6 @@ fn write_ydotoold(home: &Path) -> Result<(), Failure> {
     Ok(())
 }
 
-// The listener the plugin build binds and the rule that opens it read the same manifest, so
-// the port is read here rather than stated a second time.
 fn configure_quick_share(context: &Context) {
     if install_kind::is_packaged() {
         output::skip("Quick Share's setup is the shell's own prompt on a packaged install.");

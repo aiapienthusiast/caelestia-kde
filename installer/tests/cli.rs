@@ -28,8 +28,6 @@ impl Bundle {
         &self.root
     }
 
-    // A step no longer runs a script, but a bundle still owes its scripts/ directory: that is
-    // where setup.sh, the update helper and the step libraries are installed from.
     fn with_scripts_dir(self) -> Self {
         fs::create_dir_all(self.root.join("scripts")).expect("a scripts directory");
         self
@@ -116,8 +114,6 @@ fn help_names_the_flag_that_answers_an_option_without_being_asked() {
 
 #[test]
 fn a_set_that_the_menu_cannot_answer_is_refused_before_anything_runs() {
-    // Refused at the command line, not silently dropped half way through an install: there is no
-    // bundle here, and the usage error still comes first.
     let unknown = run(&["--set", "INSTALL_WIDGET=true"]);
     assert_eq!(code(&unknown), 2, "{}", stderr(&unknown));
     assert!(
@@ -232,9 +228,6 @@ fn the_phase_trace_only_appears_when_asked_for() {
 #[cfg(unix)]
 #[test]
 fn an_update_runs_in_the_installer_and_says_what_it_needs() {
-    // The update is native now, so what the binary does with --update is its own flow. A
-    // bundle whose PATH carries no build tools is the cheapest place to see that: the flow
-    // starts, refuses to go on, and names the command it is missing.
     let bundle = Bundle::new("update").with_scripts_dir();
     let path = bundle.path().to_string_lossy().into_owned();
     let empty = bundle.path().join("no-tools");
@@ -267,16 +260,12 @@ fn an_uninstall_with_nothing_to_remove_says_so_and_finishes() {
     use std::io::Write;
     use std::process::Stdio;
 
-    // Answering the confirmation, then declining packages and the cache: a machine that never
-    // had Caelestia installed should still walk the whole flow and end cleanly.
     let bundle = Bundle::new("empty-uninstall").with_scripts_dir();
     let home = bundle.path().join("home");
     let bin = bundle.path().join("bin");
     fs::create_dir_all(&home).expect("a home");
     fs::create_dir_all(&bin).expect("a directory for the stub");
 
-    // Nothing is on PATH, and the one thing that would ask for root answers yes without doing
-    // anything: the flow runs in full without touching the machine it runs on.
     let sudo = bin.join("sudo");
     fs::write(&sudo, "#!/bin/sh\nexit 0\n").expect("a sudo stub");
     {
@@ -367,7 +356,6 @@ fn the_plan_can_be_read_by_a_machine() {
 
 #[test]
 fn flags_that_cannot_mean_anything_are_refused_rather_than_ignored() {
-    // A pipeline that asked for a plan and got an install is the worst way to find out.
     let json_alone = run(&["--json"]);
     assert_eq!(code(&json_alone), 2, "{}", stderr(&json_alone));
     assert!(
@@ -382,10 +370,6 @@ fn flags_that_cannot_mean_anything_are_refused_rather_than_ignored() {
 
 #[test]
 fn an_unattended_run_without_root_says_so_and_stops() {
-    // This test used to run the plan for real on a host with passwordless sudo, which is an
-    // installer running against the test machine's own home directory. Two things prevent that
-    // now: the sudo it is pointed at refuses, so `sudo_cached()` is false however the host is
-    // configured, and a genuinely root process is not asked at all.
     if is_root() {
         return;
     }
@@ -421,12 +405,6 @@ fn an_unattended_run_refuses_the_flags_that_only_mean_something_to_the_wizard() 
 
 #[test]
 fn the_entry_points_bundle_flag_is_understood_by_the_main_run() {
-    // update.sh and uninstall.sh build their command with `--bundle`, and this flag used to be
-    // parsed only by the `step` subcommand, so both published commands died with "unknown option"
-    // before doing anything. A stub installer in the shell tests accepts any argv, which is why
-    // they could not see it.
-    // Checked through --plan, which shares the parser but cannot change the machine; running
-    // --update here would have the test suite update the host.
     let bundle = Bundle::new("bundle-flag").with_scripts_dir();
     let path = bundle.path().to_str().expect("a utf-8 path");
 

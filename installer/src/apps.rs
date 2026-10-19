@@ -1,9 +1,3 @@
-// Which of the apps Caelestia can theme are already on this machine.
-//
-// The wizard asks about these and nothing else: a row for an app that is not installed would be an
-// offer to install somebody else's editor, which is not what this program is for. The step behind
-// each flag still installs the app when a script sets the flag, so nothing is lost to automation.
-
 use std::sync::OnceLock;
 
 use crate::process;
@@ -19,7 +13,6 @@ pub struct Apps {
 }
 
 impl Apps {
-    /// The ids of the rows that are about an app rather than about Caelestia itself.
     pub const IDS: [&'static str; 6] = [
         "INSTALL_VSCODE",
         "INSTALL_ZED",
@@ -29,8 +22,6 @@ impl Apps {
         "INSTALL_FIREFOX_THEME",
     ];
 
-    /// The apps on this machine, probed once: the answer is a property of the machine, not of a
-    /// screen, so a wizard that asked per screen would run the same probes over and over.
     pub fn here() -> Self {
         static APPS: OnceLock<Apps> = OnceLock::new();
         *APPS.get_or_init(Self::probe)
@@ -47,7 +38,6 @@ impl Apps {
         }
     }
 
-    /// Whether the app this row is about is here. A row about something else is always relevant.
     pub fn has(&self, id: &str) -> bool {
         match id {
             "INSTALL_VSCODE" => self.vscode,
@@ -60,22 +50,16 @@ impl Apps {
         }
     }
 
-    /// Whether this id is one of the apps the Applications question offers, as opposed to one of
-    /// the other switches. The three states of an app row depend on it.
     pub fn is_app_row(&self, id: &str) -> bool {
         Self::IDS.contains(&id)
     }
 
-    /// The answer for each app row. An app that is not here answers no, so a row nobody saw can
-    /// never be the reason a step runs.
     pub fn answers(&self) -> impl Iterator<Item = (&'static str, &'static str)> {
         Self::IDS
             .iter()
             .map(|id| (*id, if self.has(id) { "true" } else { "false" }))
     }
 
-    /// Every app present: what the row filter is reasoned about with, since which apps a machine
-    /// happens to have is not something a test can arrange.
     #[cfg(test)]
     pub fn all() -> Self {
         Self {
@@ -89,9 +73,6 @@ impl Apps {
     }
 }
 
-/// Whether the Todoist AppImage is already in place. The step behind the row downloads it to
-/// `~/.local/bin/todoist.AppImage` rather than through the package manager, so asking PATH for
-/// `todoist` would report it missing on every machine that has it.
 fn todoist_here() -> bool {
     process::is_executable(&crate::paths::home().join(".local/bin/todoist.AppImage"))
 }

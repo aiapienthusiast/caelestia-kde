@@ -17,9 +17,6 @@ test_the_packaged_unit_keeps_the_apps_behind_the_shell() {
 }
 
 test_the_environment_writer_uses_the_same_layout() {
-    # The environment the session reads and the wrapper the unit runs have to agree on where
-    # the install put things; they agree by both asking install-kind. The writer is the
-    # native build step now, so the source of truth is its Rust.
     local script
     script="$(cat "$BUILD_SCRIPT")"
 
@@ -49,8 +46,6 @@ test_uninstall_removes_and_disables_the_unit() {
     assert_contains "$script" 'remove_file(&shell_unit)' "and its file removed"
     assert_contains "$script" '"app-caelestiashell@autostart.service"' "the retired generated unit should be disabled too"
 
-    # Disabled by name, before the check for a user-owned copy: a package's unit belongs
-    # to pacman, so there is no copy to test for, while the enable link exists either way.
     local disable_line file_line
     disable_line="$(grep -n '"--now", "caelestia-shell.service"' "$UNINSTALL_STEP" | cut -d: -f1)"
     file_line="$(grep -n 'remove_file(&shell_unit)' "$UNINSTALL_STEP" | cut -d: -f1)"
@@ -58,8 +53,6 @@ test_uninstall_removes_and_disables_the_unit() {
     assert_ne "" "$file_line" "and the copy is still removed when there is one"
     assert_eq "1" "$(( ${disable_line:-0} < ${file_line:-0} ))" "the disable has to come before that check, not inside it"
 
-    # And the link, for the case where the unit's file is already gone and `disable`
-    # cannot resolve it: a link with the unit's name is what systemd counts.
     assert_contains "$script" 'caelestia-shell.service"' "uninstall should clear the enable link pacman does not own"
     assert_contains "$script" 'ends_with(".wants")' "and look in the wants directories it finds"
     assert_contains "$script" '!link.exists()' "and only the ones whose file is gone"
@@ -75,8 +68,6 @@ test_the_package_ships_the_unit_and_not_an_entry() {
 }
 
 test_the_ipc_start_helper_does_not_take_the_login_units_name() {
-    # A transient unit cannot take a name a loaded unit already has, so `caelestia shell`
-    # must not use caelestia-shell while caelestia-shell.service exists.
     local ipc
     ipc="$(cat "$IPC")"
 

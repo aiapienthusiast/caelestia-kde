@@ -9,10 +9,6 @@ pub fn file(source: &Path, target: &Path) -> io::Result<u64> {
     fs::copy(source, target)
 }
 
-// `cp -a`, minus the timestamps: the contents of `source` land in `target`, keeping
-// the shape and the permissions, and leaving a symlink a symlink. A source that is a single
-// file is copied as one: a restore hands this whatever the backup holds, and a file that was
-// read as a directory left the target empty.
 pub fn tree(source: &Path, target: &Path) -> io::Result<()> {
     if !source.is_dir() {
         file(source, target)?;
@@ -46,7 +42,6 @@ fn link(source: &Path, target: &Path) -> io::Result<()> {
     fs::copy(source, target).map(|_| ())
 }
 
-// `ln -sf`: whatever the link was before is replaced rather than written through.
 pub fn symlink(link: &Path, target: &Path) -> io::Result<()> {
     if let Some(parent) = link.parent() {
         fs::create_dir_all(parent)?;

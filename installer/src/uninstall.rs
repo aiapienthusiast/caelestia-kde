@@ -12,8 +12,6 @@ use crate::report::{Report, Row};
 use crate::steps::Failure;
 use crate::theme::Role;
 
-// The panel the installer's own desktop setup creates. Restoring it by name is the only way
-// back to a usable desktop when there is no backup to restore from.
 const STOCK_PANEL: &str = r"if (panels().length === 0) {
     var panel = new Panel;
     panel.alignment = 'center';
@@ -26,9 +24,6 @@ const STOCK_PANEL: &str = r"if (panels().length === 0) {
     panel.addWidget('org.kde.plasma.digitalclock');
 }";
 
-// The cli.json posthook is written by a JSON reader rather than by hand: the sections belong to
-// another tool and only the hook this installer added comes out. python3 is a documented
-// dependency of a Caelestia install, and the same editor shape is used by the login screen step.
 const POSTHOOK_CLEANER: &str = r##"
 import json, os, re, sys
 
@@ -63,9 +58,6 @@ if changed:
         json.dump(config, f, indent=4)
 "##;
 
-// The three set of packages an install may have brought in, per distribution. They are the
-// tools named in the package lists that are also ordinary desktop tools, which is why removing
-// them is a question rather than a decision.
 const ARCH_PACKAGES: &[&str] = &[
     "quickshell",
     "matugen",
@@ -268,8 +260,6 @@ impl Uninstaller {
         self.home.join(relative)
     }
 
-    // The distribution is asked for when nothing identifies it: the package list an uninstall
-    // offers is per distribution, and guessing would offer the wrong one.
     fn greet(&mut self) -> Result<(), Failure> {
         if self.family == Distro::Unknown {
             println!("Could not detect distribution. Select base:");
@@ -327,8 +317,6 @@ impl Uninstaller {
         Ok(())
     }
 
-    // A password is asked for once, here, rather than at the first file that needs root: an
-    // uninstall that stops halfway for a credential leaves the system in between.
     fn prime_sudo(&self) -> Result<(), Failure> {
         if privileges::is_root() || std::env::var("CAELESTIA_SUDO_PRIMED").as_deref() == Ok("1") {
             return Ok(());
@@ -414,8 +402,6 @@ impl Uninstaller {
             let selected = backups[choice - 1].clone();
             let archive = konsave_archive(&selected);
 
-            // A konsave archive restores the KDE profile but is not a clean desktop either, so
-            // the warning runs for both kinds of backup.
             if selected
                 .join(".config")
                 .join("quickshell")
@@ -455,9 +441,6 @@ impl Uninstaller {
             .map(|backup| backup.join(backup_subdir).join(name))
             .filter(|path| path.exists());
 
-        // A single item the installer owned can be dropped; a whole directory cannot, because
-        // these are shared user configs the user keeps editing after install - deleting one
-        // because no backup exists destroys work that has nothing to do with Caelestia.
         if backup_path.is_none() && target.is_dir() {
             output::skip(&format!(
                 "No backup for {name} - left in place (remove {} manually if you want it gone)",
@@ -569,8 +552,6 @@ impl Uninstaller {
             output::ok("Removed: caelestia-shell.service");
         }
 
-        // A wants/ link whose unit is gone is what an old install leaves behind: the link
-        // survives the unit being replaced by the autostart entry.
         if let Ok(entries) = fs::read_dir(&systemd) {
             for wants in entries.flatten().filter(|entry| {
                 entry.path().is_dir() && entry.file_name().to_string_lossy().ends_with(".wants")
@@ -617,8 +598,6 @@ impl Uninstaller {
             }
         }
 
-        // Only the entry the installer wrote: the file names the Wayland interfaces the shell
-        // needs, and another shell's desktop file does not.
         for name in ["quickshell.desktop", "org.quickshell.desktop"] {
             let path = self.path(".local/share/applications").join(name);
             if path.is_file() && file_mentions(&path, "X-KDE-Wayland-Interfaces") {
@@ -799,9 +778,6 @@ impl Uninstaller {
             self.restore_core_kde_configs();
         }
 
-        // Whether the desktop came back is asked of the file the panel lives in, not of which
-        // branch restored what: a restore that brought the theme back and left the panel out is
-        // the case this is here for, and it is the one people notice.
         if !self.has_a_panel()
             && process::succeeds("pgrep", &["-x", "plasmashell"], None)
             && let Some(qdbus) = process::locate("qdbus6").or_else(|| process::locate("qdbus"))
@@ -957,9 +933,6 @@ impl Uninstaller {
         self.revert_darkly_gtk();
     }
 
-    /// Whether the desktop has a panel at all. Plasma keeps them in the appletsrc as containments
-    /// whose plugin is the panel one, and an appletsrc with no such containment is a desktop with
-    /// nothing on it but wallpaper - however much of the rest of the theme came back.
     fn has_a_panel(&self) -> bool {
         let path = self.path(".config/plasma-org.kde.plasma.desktop-appletsrc");
         let Ok(text) = fs::read_to_string(path) else {
@@ -1020,8 +993,6 @@ impl Uninstaller {
         output::ok("Reset KDE theme settings to Breeze.");
     }
 
-    // The rules index is a comma-separated list of group names: ours come out of it and every
-    // other rule keeps its place.
     fn prune_window_rules(&self) {
         let ours = ["caelestia-opacity", "caelestia-dialogs", "caelestia-pip"];
         let Some(index) = kde_read("kwinrulesrc", &["General"], "rules") else {
@@ -1136,8 +1107,6 @@ impl Uninstaller {
         }
     }
 
-    // What the install recorded about each rc file: it was there before (and is in the backup),
-    // or it was not, in which case the installer's own file goes.
     fn restore_shell_rc(&self, key: &str, target: &Path) -> bool {
         let Some(backup) = &self.backup else {
             return false;
@@ -1176,8 +1145,6 @@ impl Uninstaller {
             .and_then(|backup| read_line(&backup.join("previous_shell.txt")));
 
         let Some(recorded) = recorded else {
-            // Nothing recorded means the install never changed it, so the shell it has now is
-            // the user's own and is left alone.
             if let Some(current) = login_shell() {
                 output::info(&format!(
                     "No shell backup was recorded, so the login shell ({current}) is left as it is."
@@ -1297,7 +1264,6 @@ impl Uninstaller {
         }
 
         self.remove_posthooks();
-        // Left by an installer that still shipped an SDDM login theme.
         let _ = fs::remove_file(self.path(".config/caelestia/templates/sddm-theme.conf"));
         self.leave_input_group();
     }
@@ -1328,13 +1294,10 @@ impl Uninstaller {
         }
     }
 
-    // The login screen is a system configuration, so what the install changed there is put
-    // back: the wallpaper it pointed the greeter at, and its sync helper.
     fn restore_login_screen(&self) {
         for rule in [
             "/etc/sudoers.d/ydotoold-nopasswd",
             "/etc/sudoers.d/caelestia-greeter-sync",
-            // The name an install from before the helper was renamed used.
             "/etc/sudoers.d/caelestia-sddm-sync",
         ] {
             let path = Path::new(rule);
@@ -1346,8 +1309,6 @@ impl Uninstaller {
             }
         }
 
-        // An install that shipped an SDDM login theme left its selection behind; the theme itself
-        // went with the package, and the selection would point SDDM at nothing.
         for dropin in [
             "/etc/sddm.conf.d/caelestia.conf",
             "/etc/sddm.conf.d/zz-caelestia.conf",
@@ -1716,8 +1677,6 @@ fn section(title: &str) {
     println!("-------------------------------------------------------------");
 }
 
-// The prompt the shell version printed: the question, then the answer read from the terminal -
-// or from whatever the caller piped in.
 fn prompt(text: &str) -> String {
     print!("{text} ");
     let _ = std::io::stdout().flush();
@@ -1735,7 +1694,6 @@ fn read_stdin_line() -> String {
     line
 }
 
-// A number, a comma or space separated list of them, or a range: "1 3 5-9".
 pub fn select_indices(count: usize, input: &str) -> Vec<usize> {
     if count == 0 {
         return Vec::new();
@@ -1841,7 +1799,6 @@ fn file_mentions(path: &Path, needle: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// A panel containment: Plasma 6 spells it `org.kde.panel`, Plasma 5 `org.kde.plasma.panel`.
 fn panel_in(appletsrc: &str) -> bool {
     appletsrc.lines().any(|line| {
         let line = line.trim();
@@ -1856,8 +1813,6 @@ fn remove_tree(path: &Path) -> bool {
     fs::remove_dir_all(path).is_ok()
 }
 
-/// Remove whatever is at `path`, file or directory. A restore runs this over both, and a file
-/// that only a directory remover was asked about used to survive in place.
 fn remove_path(path: &Path) -> bool {
     if path.is_dir() {
         remove_tree(path)
@@ -1988,8 +1943,6 @@ fn passwd_home(user: &str) -> Option<String> {
         .filter(|home| !home.is_empty())
 }
 
-// The environment lines the install wrote are the only thing taken out of a shell's startup
-// file: everything else in it is the user's.
 fn strip_caelestia_env(rc: &Path, prefixes: &[&str]) -> bool {
     let Ok(text) = fs::read_to_string(rc) else {
         return false;
@@ -2115,15 +2068,12 @@ mod tests {
 
     #[test]
     fn a_desktop_with_only_a_wallpaper_is_a_desktop_without_a_panel() {
-        // What this machine was left with after an uninstall: a containment for the desktop and
-        // nothing else. A panel is a containment of its own.
         let wallpaper = "[Containments][43]\nplugin=org.kde.plasma.folder\nformfactor=0\n";
         assert!(!panel_in(wallpaper));
 
         let panel = "[Containments][7]\nplugin=org.kde.panel\nlocation=4\n";
         assert!(panel_in(panel));
         assert!(panel_in(&format!("{wallpaper}{panel}")));
-        // Plasma 5 spelled it differently, and a machine upgraded from it still counts.
         assert!(panel_in("plugin=org.kde.plasma.panel\n"));
         assert!(!panel_in(""));
     }

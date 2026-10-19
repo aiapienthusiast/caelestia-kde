@@ -52,9 +52,6 @@ Item {
     readonly property color clCardBg: alterColour(clSurfaceContainer, 0.60, 1)
     readonly property color clCardBgHigh: alterColour(clSurfaceContainerHigh, 0.60, 1)
 
-    // What the lock screen wears until a scheme lands. These are the shell's own defaults,
-    // mirrored from services/Colours.qml's M3Palette: a lock screen with no scheme.json to read
-    // has to look like the shell it belongs to, not like a theme of its own.
     property color clSurface: "#191114"
     property color clSurfaceFg: "#efdfe2"
     property color clSurfaceContainer: "#261d20"

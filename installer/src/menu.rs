@@ -24,9 +24,6 @@ pub enum Entry {
         default: &'static str,
         options: &'static [&'static str],
     },
-    /// One row that stands for a group of toggles: the bulk answer, with the individual ones
-    /// still available where they live. `on` is what it writes, so a group can have an "all of
-    /// them" and a "none of them" without either being a special case in the key handler.
     Preset {
         id: &'static str,
         title: &'static str,
@@ -55,15 +52,11 @@ impl Entry {
         }
     }
 
-    /// The one line a row can add to its own label, or `None` where the label says it all. The
-    /// bar is a fact the row cannot show — what `full` and `mini` look like, which fonts get
-    /// applied — because a line that restates its row is a line the reader has to spend anyway.
     pub fn help(&self) -> Option<&'static str> {
         let text = match self {
             Entry::Toggle { help, .. }
             | Entry::Choice { help, .. }
             | Entry::Preset { help, .. } => *help,
-            // A question is named by its title: the screen it opens says what the rows mean.
             Entry::Submenu { .. } => return None,
         };
         (!text.is_empty()).then_some(text)
@@ -82,13 +75,10 @@ impl Entry {
     }
 }
 
-/// Whether a row holds an answer of its own, as opposed to being a view of answers that live
-/// elsewhere. Counting, resetting and "changed" all mean the answers.
 pub fn holds_an_answer(entry: &Entry) -> bool {
     matches!(entry, Entry::Toggle { .. } | Entry::Choice { .. })
 }
 
-/// The apps whose theming the bulk row turns on and off together.
 const APP_THEMING: [&str; 6] = [
     "INSTALL_VSCODE",
     "INSTALL_ZED",
@@ -98,9 +88,6 @@ const APP_THEMING: [&str; 6] = [
     "INSTALL_FIREFOX_THEME",
 ];
 
-/// The look, and the packages it is made of. The icon set, the theme and the Qt style the look is
-/// built on are not offered one at a time: turning any of them off does not give a smaller
-/// Caelestia, it gives a broken one that the configuration deployed later does not match.
 const APPEARANCE: [Entry; 4] = [
     Entry::Toggle {
         id: "SYNC_LOGIN_SCREEN",
@@ -120,8 +107,6 @@ const APPEARANCE: [Entry; 4] = [
         help: "Rubik and JetBrains Mono Nerd Font, system-wide.",
         default: true,
     },
-    // The login shell used to be a question with this one row on it, which cost a whole screen
-    // to ask a thing most people never change. It is an appearance decision, so it lives here.
     Entry::Choice {
         id: "DEFAULT_SHELL",
         title: "Login shell",
@@ -132,8 +117,6 @@ const APPEARANCE: [Entry; 4] = [
 ];
 
 const APPS: [Entry; 8] = [
-    // The bulk answers sit at the top of the question they answer: this is where somebody who
-    // wants all of it on, or none of it, looks first.
     Entry::Preset {
         id: PRESET_THEME_APPS,
         title: "All of them",
@@ -201,10 +184,6 @@ const OPTIONS: [Entry; 2] = [
     },
 ];
 
-/// The wizard asks one question at a time, one screen each, in this order. Every entry here is a
-/// group of answers that belong to the same decision, so a screen is never a list of unrelated
-/// settings and never needs a second level of menus. The last one is the knobs a fresh install is
-/// right to leave alone; its name is what a reader expects to find there.
 pub const QUESTIONS: [Entry; 3] = [
     Entry::Submenu {
         id: "menu_appearance",
@@ -223,12 +202,10 @@ pub const QUESTIONS: [Entry; 3] = [
     },
 ];
 
-/// How many questions there are: what the question counter counts to.
 pub fn question_count() -> usize {
     QUESTIONS.len()
 }
 
-/// The entries belonging to one question, by position.
 pub fn items_of(question: usize) -> &'static [Entry] {
     match QUESTIONS.get(question) {
         Some(Entry::Submenu { items, .. }) => items,
@@ -236,7 +213,6 @@ pub fn items_of(question: usize) -> &'static [Entry] {
     }
 }
 
-/// What one question is called, by position.
 pub fn question(question: usize) -> &'static str {
     match QUESTIONS.get(question) {
         Some(entry) => entry.title(),
@@ -244,9 +220,6 @@ pub fn question(question: usize) -> &'static str {
     }
 }
 
-/// Fish is installed when it is the login shell. They used to be two rows on two screens, which
-/// let somebody ask to log in to a shell that was never installed: one decision about the shell
-/// cannot contradict itself. The row itself now lives with the other appearance choices.
 fn fish_follows_the_shell(answers: &mut Answers) {
     let shell = answers
         .get("DEFAULT_SHELL")
@@ -255,8 +228,6 @@ fn fish_follows_the_shell(answers: &mut Answers) {
     answers.insert("INSTALL_FISH", (shell == "fish").to_string());
 }
 
-/// Every answerable entry the wizard asks about, in the order it asks them: the question tree
-/// flattened, which is what the change tally and the step-policy check walk.
 pub fn every_entry() -> Vec<&'static Entry> {
     fn walk(entries: &'static [Entry], into: &mut Vec<&'static Entry>) {
         for entry in entries {
@@ -297,7 +268,6 @@ pub fn seed_answers(entries: &[Entry], answers: &mut Answers) {
                 };
                 answers.entry(id).or_insert_with(|| seed.to_string());
             }
-            // A preset holds no answer of its own: it is a view of the toggles it stands for.
             Entry::Preset { .. } => {}
         }
     }
@@ -308,10 +278,6 @@ pub fn value<'a>(entry: &Entry, answers: &'a Answers) -> Option<&'a str> {
     answers.get(entry.id()).map(String::as_str)
 }
 
-/// The answer the wizard started this row at on this machine. For everything the wizard decides
-/// that is the value in the table; for the apps it is what was found. "Changed" and "reset" mean
-/// the answers the wizard was seeded with, so the apps a machine already has do not read as six
-/// things the user just switched on.
 pub fn baseline_of<'a>(entry: &Entry, baseline: &'a Answers) -> Option<&'a str> {
     match entry {
         Entry::Toggle { .. } | Entry::Choice { .. } => baseline.get(entry.id()).map(String::as_str),
@@ -319,13 +285,8 @@ pub fn baseline_of<'a>(entry: &Entry, baseline: &'a Answers) -> Option<&'a str> 
     }
 }
 
-/// The members of a bulk row that are actually on screen: the apps this machine has. Turning the
-/// bulk row on must not answer for an app that was never offered, or the step behind it would
-/// install what nobody asked for.
 pub fn members_here(entry: &Entry, apps: &crate::apps::Apps) -> Vec<&'static str> {
     let _ = apps;
-    // Every member, whether or not this machine has it: these rows decide what to install, so a
-    // machine that has none of the apps is exactly the machine that needs to see them all.
     entry.members().unwrap_or_default().to_vec()
 }
 
@@ -346,8 +307,6 @@ pub fn is_changed(
     }
 }
 
-/// Put one row back to the answer this machine started with. A bulk row takes its members with
-/// it: undoing one decision undoes all of it.
 pub fn reset(
     entry: &Entry,
     apps: &crate::apps::Apps,
@@ -375,7 +334,6 @@ pub fn reset(
     }
 }
 
-/// A bulk row is on when every app it stands for is on.
 pub fn preset_on(entry: &Entry, apps: &crate::apps::Apps, answers: &Answers) -> bool {
     let Entry::Preset { on, .. } = entry else {
         return false;
@@ -437,9 +395,6 @@ pub fn cycle(entry: &Entry, answers: &mut Answers, forward: bool) -> bool {
     true
 }
 
-/// Change the row under the cursor, whatever kind of row it is: a switch flips, a select steps
-/// on, and a bulk row takes every member it stands for with it. One entry point, so the key that
-/// means "change" does not quietly do nothing on some rows.
 pub fn change(entry: &Entry, apps: &crate::apps::Apps, answers: &mut Answers) -> bool {
     let changed = match entry {
         Entry::Toggle { .. } => toggle(entry, answers),
@@ -454,9 +409,6 @@ pub fn change(entry: &Entry, apps: &crate::apps::Apps, answers: &mut Answers) ->
     changed
 }
 
-/// Read one `ID=value` from the command line: the answer a script gives without walking the
-/// wizard. Checked against the tables here, so a mistyped id or a value a row cannot hold is
-/// refused before anything runs rather than quietly dropped half way through an install.
 pub fn parse_set(setting: &str) -> Result<(&'static str, String), String> {
     let (id, value) = setting
         .split_once('=')
@@ -482,16 +434,12 @@ pub fn parse_set(setting: &str) -> Result<(&'static str, String), String> {
                 ))
             }
         }
-        // A bulk row is a view of the switches it stands for, so setting it would be a way to
-        // answer for rows the caller never named.
         Entry::Submenu { .. } | Entry::Preset { .. } => Err(format!(
             "--set: {id} has no value of its own; set the rows it stands for"
         )),
     }
 }
 
-/// Apply the answers a script gave, on top of the seeded ones. A script's answers are where the
-/// wizard starts, so they are also the baseline a later change is measured against.
 pub fn apply_set(settings: &[(&'static str, String)], answers: &mut Answers) {
     for (id, value) in settings {
         answers.insert(id, value.clone());
@@ -518,9 +466,6 @@ mod tests {
         entry(PRESET_THEME_APPS)
     }
 
-    /// A wizard on a machine that has every app, and the answers it started with. Most rows only
-    /// mean something next to a baseline, and "the apps this machine has" is not something a test
-    /// can arrange any other way.
     struct Wizard {
         apps: crate::apps::Apps,
         answers: Answers,
@@ -571,7 +516,6 @@ mod tests {
         }
 
         fn visible(&self, id: &str) -> bool {
-            // Every row is shown; the id is looked up so an unknown one still fails loudly.
             every_entry().iter().any(|entry| entry.id() == id)
         }
     }
@@ -601,8 +545,6 @@ mod tests {
 
     #[test]
     fn a_question_is_a_title_and_a_set_of_rows_and_nothing_else() {
-        // The screen a question opens says what its rows mean, so a second line on the heading is
-        // a line the reader spends to be told what they are about to read.
         for entry in QUESTIONS.iter() {
             assert!(
                 matches!(entry, Entry::Submenu { .. }),
@@ -619,8 +561,6 @@ mod tests {
 
     #[test]
     fn a_rows_help_is_a_fact_the_row_cannot_show() {
-        // The bar. A line that repeats its own label, or that runs past what one line holds, is a
-        // caption: it costs the reader a line to learn nothing.
         for entry in every_entry() {
             let Some(help) = entry.help() else {
                 continue;
@@ -647,8 +587,6 @@ mod tests {
 
     #[test]
     fn most_rows_have_nothing_to_add_to_their_label() {
-        // A guard against help creeping back in: if this count grows, each new line has to clear
-        // the bar above.
         let with_help = every_entry()
             .into_iter()
             .filter(|entry| entry.help().is_some())
@@ -658,8 +596,6 @@ mod tests {
 
     #[test]
     fn a_question_holds_answers_rather_than_navigation() {
-        // Back and onward are the wizard's job now: a row that only navigates would sit in the
-        // list looking like something that can be answered.
         for entry in every_entry() {
             assert!(
                 matches!(
@@ -853,7 +789,6 @@ mod tests {
             assert_eq!(wizard.value(id), Some("false"));
         }
 
-        // One app on its own is not the whole row.
         wizard.answers.insert("INSTALL_ZED", "true".to_string());
         assert!(!wizard.bulk_is_on());
 
@@ -907,8 +842,6 @@ mod tests {
 
     #[test]
     fn the_apps_a_machine_already_has_are_on_before_anyone_touches_them() {
-        // The baseline is what this machine starts at, so a machine that has Zed does not read as
-        // having changed anything, and going back does not turn it off.
         let mut wizard = Wizard::new();
         assert_eq!(wizard.value("INSTALL_ZED"), Some("true"));
         assert!(!wizard.changed("INSTALL_ZED"));
@@ -933,7 +866,6 @@ mod tests {
         wizard.set_bulk(false);
         assert!(wizard.changed(PRESET_THEME_APPS));
 
-        // Reset on a bulk row puts the whole group back.
         assert!(wizard.back(PRESET_THEME_APPS));
         assert!(wizard.bulk_is_on());
         assert!(
@@ -964,9 +896,6 @@ mod tests {
 
     #[test]
     fn every_supported_app_is_a_row_whether_or_not_it_is_here() {
-        // These rows decide what to install, so a machine with none of the apps is exactly the
-        // machine that has to see them all. What the machine already has decides the default, not
-        // whether the row exists.
         let empty = Wizard::on(crate::apps::Apps::default());
         assert!(empty.visible("INSTALL_ZED"));
         assert!(empty.visible(PRESET_THEME_APPS));
@@ -985,8 +914,6 @@ mod tests {
 
     #[test]
     fn the_login_screen_row_survives_being_switched_off() {
-        // It has no child rows any more - the SDDM login styles are gone - so switching it off
-        // hides nothing and the row itself stays where it can be switched back on.
         let mut wizard = Wizard::new();
         assert!(wizard.visible("SYNC_LOGIN_SCREEN"));
         wizard.change("SYNC_LOGIN_SCREEN");
@@ -996,8 +923,6 @@ mod tests {
 
     #[test]
     fn a_row_that_is_never_offered_is_never_the_reason_a_step_runs() {
-        // The answers a machine with nothing on it starts with: every app row is off, so the
-        // step policy skips them all rather than going looking for something to install.
         let wizard = Wizard::on(crate::apps::Apps::default());
         for id in crate::apps::Apps::IDS {
             assert_eq!(

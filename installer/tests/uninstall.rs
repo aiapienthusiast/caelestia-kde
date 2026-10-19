@@ -1,7 +1,3 @@
-//! The uninstall, driven the way a user drives it: a sandboxed home, a PATH of stubs, and the
-//! answers piped in. The checks are about what is left on disk afterwards, which is the whole
-//! question an uninstall answers.
-
 #![cfg(unix)]
 
 use std::fs;
@@ -40,8 +36,6 @@ impl Sandbox {
         fs::create_dir_all(&sandbox.bin).expect("a directory for the stubs");
         fs::write(&sandbox.calls, "").expect("a call log");
 
-        // Every external tool this flow reaches for answers "nothing to do", which keeps the
-        // test away from the machine it runs on.
         for name in [
             "systemctl",
             "pkill",
@@ -78,8 +72,6 @@ impl Sandbox {
         sandbox.stub("groups", "printf '%s\\n' 'tester'");
         sandbox.sudo_stub();
 
-        // The tree the uninstall is pointed at, which is what names the bridge scripts it
-        // removes from the user's own bin directory.
         for name in ["caelestia", "caelestia-shell-ipc", "caelestia-update"] {
             let script = sandbox.root.join("src/bin").join(name);
             fs::create_dir_all(script.parent().expect("a parent")).expect("the bundle layout");
@@ -94,8 +86,6 @@ impl Sandbox {
         executable(&path);
     }
 
-    // A credential that never asks for one: everything that would be escalated runs for real
-    // (the stub hands it back), so the file removals the flow asks for are actually checked.
     fn sudo_stub(&self) {
         let log = self.calls.display();
         self.stub(
@@ -117,7 +107,6 @@ exec "$@""#
         );
     }
 
-    // The footprint an install leaves in the user's own directories.
     fn install_footprint(self) -> Self {
         for directory in [
             ".config/quickshell/caelestia",
@@ -164,7 +153,6 @@ exec "$@""#
             fs::write(target, body).expect("a file of the install");
         }
 
-        // A config the user shares with the rest of their desktop, which has to survive.
         fs::create_dir_all(self.home.join(".config/btop")).expect("a shared config");
         fs::write(self.home.join(".config/btop/btop.conf"), "mine\n").expect("a shared file");
         self
@@ -174,8 +162,6 @@ exec "$@""#
         self.run_with(answers, &[])
     }
 
-    /// The two config tools, so the flow's own reads and writes are exercised against a real
-    /// file rather than answered from a fixture.
     fn use_config_tools(&self) -> common::ConfigTools {
         common::config_tools(&self.root, &self.bin)
     }
@@ -239,7 +225,6 @@ fn executable(path: &Path) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("an executable");
 }
 
-// The confirmation, then "no" to packages and "no" to the cache.
 const ANSWERS: [&str; 3] = ["y", "n", "n"];
 
 #[test]
@@ -267,13 +252,11 @@ fn the_installed_footprint_is_removed() {
         );
     }
 
-    // The shell's own settings are the user's, not the install's: they stay.
     assert!(
         sandbox.home.join(".config/caelestia/shell.json").is_file(),
         "the user's shell settings are not the installer's to remove"
     );
 
-    // The frame's own words, not a score of what happened.
     assert!(
         stdout.contains("the shell, its configs and its integrations"),
         "{stdout}"
@@ -348,8 +331,6 @@ fn the_asking_happens_before_anything_is_removed() {
     );
 }
 
-// kwinrulesrc as the installer leaves it: the index it wrote, and the user's own rule sitting
-// in the same list.
 const RULES: &str = r#"[General]
 rules=user-rule,caelestia-opacity,caelestia-dialogs,caelestia-pip
 count=4
@@ -372,7 +353,6 @@ Description=Caelestia: pin picture-in-picture
 titlematch=3
 "#;
 
-// The index holds nothing but our three groups, in the order the installer writes them.
 const OUR_RULES: &str = r#"[General]
 rules=caelestia-opacity,caelestia-dialogs,caelestia-pip
 count=3
@@ -406,8 +386,6 @@ fn ini_value(file: &Path, group: &str, key: &str) -> Option<String> {
     None
 }
 
-// The list of names is the user's, so deleting one that is not ours would silently disable a
-// rule they wrote.
 #[test]
 fn the_users_own_window_rule_survives_the_uninstall() {
     let sandbox = Sandbox::new("rules").install_footprint();
@@ -442,8 +420,6 @@ fn the_users_own_window_rule_survives_the_uninstall() {
     assert!(!written.contains("caelestia-"), "{written}");
 }
 
-// With no name left the file has to look like it did before the install: an index that names
-// nothing, and a count of nothing, are both absent rather than empty.
 #[test]
 fn the_window_rule_index_goes_when_none_of_ours_are_left() {
     let sandbox = Sandbox::new("rules-only").install_footprint();

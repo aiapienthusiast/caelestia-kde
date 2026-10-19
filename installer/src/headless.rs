@@ -1,14 +1,3 @@
-//! The install without the wizard: the same plan, the same steps, no keys.
-//!
-//! This is what `--non-interactive` runs, and the reason it exists is a pipeline: an installer
-//! that can only be driven by a person is an installer no fleet can use. It is deliberately
-//! strict about what it needs - root, or a sudo ticket that is already warm - because the one
-//! thing worse than refusing to run unattended is blocking on a password prompt nobody can see.
-//!
-//! Every step is the same subprocess the TUI launches, so a headless install is not a second
-//! implementation of the install; it is the same one with a different front end. Each step's
-//! output is streamed as it arrives and recorded in the journal as it finishes.
-
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -109,8 +98,6 @@ pub fn run(bundle: &Path, answers: &Answers, resume: bool) -> Outcome {
     Outcome::Ok
 }
 
-/// Run one step and stream what it says. The step is the same binary the TUI launches, so a
-/// failure here is a failure there.
 fn execute(
     step: &Step,
     bundle: &Path,

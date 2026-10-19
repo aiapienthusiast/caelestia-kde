@@ -283,8 +283,5 @@ test_opening_the_firewall_does_nothing_when_no_manager_is_running() {
         "a hand-rolled rule set is invisible, so nothing is changed and that is said"
 }
 
-# configure_quick_share is the native 06-services step now, and the crate tests it
-# there (installer/tests/steps.rs): what it skips, what it refuses to escalate for, and the
-# port it hands the elevated run. What is left here is the helper that step calls.
 
 run_tests

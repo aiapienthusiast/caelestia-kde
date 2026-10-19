@@ -13,8 +13,6 @@ use super::{
     run_visibly, run_xdg_user_dirs, wanted, with_clone,
 };
 
-// The lists are data: whitespace-separated, so a package does not take a line of
-// its own, and read back through `names`.
 pub(super) const CORE: &str = "
     cmake ninja ccache qt6-tools extra-cmake-modules gcc-libs glibc rsync wl-clipboard cliphist
     wl-clip-persist inotify-tools app2unit wireplumber trash-cli jq aubio lm_sensors libpipewire
@@ -39,7 +37,6 @@ pub(super) const UTILITIES: &str = "
     bat ripgrep lazygit xdg-user-dirs
 ";
 
-// The AUR packages whose build has a repository of its own, tried once makepkg has failed.
 const SOURCE_BUILD_REPOS: [(&str, &str); 2] = [
     ("ttf-rubik-vf", "https://github.com/googlefonts/rubik"),
     ("app2unit", "https://github.com/Vladimir-csp/app2unit"),
@@ -70,9 +67,6 @@ pub fn run(context: &Context, group: Group) -> Result<(), Failure> {
         packages.push("papirus-icon-theme");
     }
 
-    // libcava is the one target no package manager can answer for: the prebuilt SDK provides
-    // it without being a package, so the SDK is asked for first and the package only if it
-    // did not arrive.
     if group.covers(Group::Core) {
         if toolchain::cava_sdk_installed() || toolchain::install_cava_sdk() {
             output::info("CAVA SDK ready.");
@@ -99,8 +93,6 @@ pub fn run(context: &Context, group: Group) -> Result<(), Failure> {
 
     if darkly && !super::darkly_gtk_installed() {
         output::info("Installing Darkly GTK theme...");
-        // sassc is the build dependency upstream's install.sh needs; it is asked for the way
-        // everything else here is, through the AUR helper first.
         let _ = run_visibly("yay", &["-S", "--needed", "--noconfirm", "sassc"], None)
             || elevated("pacman", &["-S", "--needed", "--noconfirm", "sassc"]);
         if !install_darkly_gtk_theme() {
@@ -116,8 +108,6 @@ pub fn run(context: &Context, group: Group) -> Result<(), Failure> {
     Ok(())
 }
 
-// yay is what reaches the AUR, and several of the packages below only exist there. It is
-// bootstrapped from its own package rather than from a helper the distribution does not ship.
 fn ensure_yay() {
     if process::available("yay") {
         return;
@@ -154,8 +144,6 @@ fn ensure_yay() {
     }
 }
 
-// One transaction for the whole group, then one attempt per package that is still missing:
-// a single package the AUR cannot resolve must not take the rest of the group with it.
 fn install_batch(packages: &[&str], group: Group, failures: &mut Failures) {
     let missing = pkg::missing(packages);
     if missing.is_empty() {
@@ -221,9 +209,6 @@ fn build_from_source(package: &str) -> bool {
     built
 }
 
-// Upstream repositories in this list use whatever build system they grew up with, so the
-// system is read off the tree rather than assumed. Each one installs as root, which is why
-// every branch ends in the escalated install.
 fn build_detected(package: &str, directory: &Path) -> bool {
     let built = if directory.join("meson.build").is_file() {
         run_visibly("meson", &["setup", "build"], Some(directory))
@@ -263,8 +248,6 @@ fn build_detected(package: &str, directory: &Path) -> bool {
     built
 }
 
-// A repository entry this project used to add. Left behind, it fails every later pacman call,
-// so it is removed before anything is installed.
 fn remove_stale_caelestia_bin_repository() {
     let conf = Path::new("/etc/pacman.conf");
     let Ok(text) = std::fs::read_to_string(conf) else {

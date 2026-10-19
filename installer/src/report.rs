@@ -1,17 +1,9 @@
-//! What an update and an uninstall put up before they touch anything.
-//!
-//! Both run after the wizard has handed the terminal over, so they cannot borrow its frame. They
-//! borrow its palette, its glyphs and its words instead, which is what makes them read as the same
-//! program rather than as a script that happens to be next to it.
-
 use ratatui::style::Color;
 
 use crate::env::Env;
 use crate::glyphs::Glyphs;
 use crate::theme::{Depth, Role, Theme};
 
-/// The widest a report gets. Prose past this is hard to read on a wide terminal, and the value
-/// column does not need the room.
 const MAX_WIDTH: usize = 96;
 const MIN_WIDTH: usize = 48;
 
@@ -39,13 +31,10 @@ impl Report {
         }
     }
 
-    /// A framed block: what the program is about to do, as label/value rows and a sentence or two
-    /// under them. The frame is the page; the rows are the findings.
     pub fn panel(&self, title: &str, right: &str, rows: &[Row], notes: &[String]) {
         println!("{}", self.panel_text(title, right, rows, notes));
     }
 
-    /// A line across the page naming what is happening now, for the stretch in between.
     pub fn section(&self, title: &str) {
         println!();
         println!("{}", self.paint(Role::Rule, &self.rule()));
@@ -58,8 +47,6 @@ impl Report {
         let inner = self.width.saturating_sub(2);
         let mut out = String::new();
 
-        // The title on the left and the machine's own answer on the right, with the rule between
-        // them: the same arrangement the wizard's frame uses.
         let left = format!(" caelestia · {title} ");
         let right = format!(" {right} ");
         let fill = inner.saturating_sub(left.chars().count() + right.chars().count());
@@ -112,7 +99,6 @@ impl Report {
     }
 }
 
-/// One finding: what it is called, what it is, and how it should read.
 pub struct Row {
     pub label: String,
     pub value: String,
@@ -154,7 +140,6 @@ impl Report {
         horizontal.to_string().repeat(self.width.saturating_sub(2))
     }
 
-    /// A row of the frame: the edge, the content, the padding that makes it square, the edge.
     fn row(&self, vertical: char, inner: usize, content: &str) -> String {
         let visible = visible_width(content);
         let padding = inner.saturating_sub(visible);
@@ -183,7 +168,6 @@ impl Report {
     }
 }
 
-/// An ANSI foreground for a role's colour, in whichever depth the terminal said it has.
 fn escape(color: Color) -> String {
     match color {
         Color::Reset => "39".to_string(),
@@ -208,7 +192,6 @@ fn escape(color: Color) -> String {
     }
 }
 
-/// How wide a string is once the escapes in it are not counted.
 fn visible_width(text: &str) -> usize {
     let mut width = 0;
     let mut in_escape = false;

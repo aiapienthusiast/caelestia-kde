@@ -2,9 +2,6 @@
 if [[ -z "${CAELESTIA_INSTALLER_BIN_SOURCED:-}" ]]; then
 CAELESTIA_INSTALLER_BIN_SOURCED=1
 
-# The retrying download lives in download.sh. This file is vendored on its own by callers and by
-# the test harness, so it is sourced when it is there and a plain single attempt is used when it
-# is not: a missing sibling must never turn a download into a failed one.
 _caelestia_lib="$(dirname -- "${BASH_SOURCE[0]}")"
 if [[ -f "$_caelestia_lib/download.sh" ]]; then
     # shellcheck source=scripts/lib/download.sh
@@ -151,10 +148,6 @@ caelestia_installer_bin() {
     caelestia_fetch_installer
 }
 
-# The one hand-off the entry points share. `update.sh` and `uninstall.sh` are published commands
-# and have to keep working, but they are also the same job twice, and they had already drifted
-# apart once (one of them without `set -e`). This is the part that is the same, in the file both
-# of them already source.
 caelestia_run_preset() {
     local mode="${1:-}" branch="${2:-}" noun bundle bin
     case "$mode" in

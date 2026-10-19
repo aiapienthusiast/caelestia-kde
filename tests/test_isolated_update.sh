@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 # suite: isolated
-# The update itself belongs to the installer; what is left in shell is the entry point, so this
-# covers the hand-off: which binary it finds, what it says to it, and what happens when there is
-# no binary to run.
 
 set -uo pipefail
 
@@ -18,8 +15,6 @@ make_bundle() {
         "$root/scripts/lib/"
 }
 
-# A stand-in for the installer: it records the arguments it was given and the branch it was told
-# to follow, and answers with the status it was asked for.
 stub_installer() {
     local root="$1" log="$2" status="${3:-0}"
     cat > "$root/caelestia-install" <<EOF
@@ -94,8 +89,6 @@ test_without_a_binary_the_entry_point_says_so() {
     mkdir -p "$root/home"
     make_bundle "$root"
 
-    # A PATH with the system's own tools but no installer, a home with none either, and
-    # nothing to fetch one with: the resolver has no way to answer.
     status="$(
         HOME="$root/home" PATH="/usr/bin:/bin" CAELESTIA_NO_INSTALLER_FETCH=1 \
             bash "$root/update.sh" > "$root/update.log" 2>&1

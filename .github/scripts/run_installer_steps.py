@@ -249,9 +249,6 @@ def run_steps() -> int:
         print(f"::error::{len(failed)} step(s) failed: {failed}")
         return 1
 
-    # The same steps again. A second run on a machine that is already set up is the normal case
-    # in the field, and it is where a step that appends instead of setting, or that cannot cope
-    # with what it made last time, shows up.
     print("\n=========================================")
     print("  PASS 2 - the same steps on the machine pass 1 built")
     print("=========================================")

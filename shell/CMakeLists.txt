@@ -149,8 +149,6 @@ if("m3shapes" IN_LIST ENABLE_MODULES)
         set_target_properties(m3shapesplugin PROPERTIES INSTALL_RPATH "$ORIGIN")
     endif()
 
-    # Built from source this project does not own. It cannot meet the warning bar the shell is
-    # held to below, and every diagnostic it raises is one nobody here can act on.
     foreach(_m3shape IN ITEMS m3shapes_core m3shapes_morph m3shapes_shapes m3shapesplugin)
         if(TARGET ${_m3shape})
             target_compile_options(${_m3shape} PRIVATE -w)
@@ -243,8 +241,6 @@ if("shell" IN_LIST ENABLE_MODULES)
     install(FILES LICENSE DESTINATION "${INSTALL_QSCONFDIR}")
 
     if(CAELESTIA_PACKAGE)
-        # The greeter's sync helper, under the name the install looks for. It is not a login
-        # theme: Plasma Login draws its own screen and this only keeps its colours in step.
         install(PROGRAMS
             "${CAELESTIA_ROOT_DIR}/src/greeter/sync.sh"
             DESTINATION "${INSTALL_BINDIR}"

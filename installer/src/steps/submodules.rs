@@ -132,8 +132,6 @@ fn pinned_commit(bundle: &Path, path: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-// The URL .gitmodules records is what the content comes from, whether or not the checkout
-// can reach the gitlink on its own.
 fn fetch_by_clone(bundle: &Path, path: &str) -> bool {
     let Some(name) = name_for_path(bundle, path) else {
         return false;
@@ -196,8 +194,6 @@ fn ensure_content(bundle: &Path, path: &str) -> bool {
         return true;
     }
 
-    // A stale registration fails the first update; the sync repairs it and the second
-    // update is the one that works.
     let attempts: [&[&str]; 3] = [
         &["submodule", "update", "--init", "--recursive", "--", path],
         &["submodule", "sync", "--recursive", "--", path],

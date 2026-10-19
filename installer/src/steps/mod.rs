@@ -40,7 +40,6 @@ impl Phase {
         Phase::Finalize,
     ];
 
-    /// The stable spelling of a phase, for anything machine-read: `--plan --json` prints it.
     pub fn id(self) -> &'static str {
         match self {
             Phase::Prepare => "prepare",
@@ -251,9 +250,6 @@ pub fn find(id: &str) -> Option<&'static Step> {
     STEPS.iter().find(|step| step.id == id)
 }
 
-/// What every step is told about the run it belongs to, whoever started it. The TUI and the
-/// headless path both come through here, because the day they disagree is the day a step behaves
-/// one way on a desktop and another on a server.
 pub fn environment(answers: &Answers, bundle: &std::path::Path) -> Vec<(&'static str, String)> {
     let mut env: Vec<(&'static str, String)> = answers
         .iter()
@@ -261,13 +257,7 @@ pub fn environment(answers: &Answers, bundle: &std::path::Path) -> Vec<(&'static
         .collect();
     env.push(("CONFIRM_ARG", "--noconfirm".to_string()));
     env.push(("BUNDLE_DIR", bundle.display().to_string()));
-    // What this run is: a step that only makes sense for an install (the virtual desktops, the
-    // install-only tweaks) asks for this, and the update path never sets it. It went missing once
-    // and the two steps keyed on it stopped applying without saying so, which is why
-    // `test_virtual_desktops.sh` holds it here.
     env.push(("CAELESTIA_FRESH_INSTALL", "1".to_string()));
-    // Which plan these answers are, so a step can record its progress under the same name the
-    // caller will look for when it resumes.
     env.push((
         crate::journal::PLAN_ID_VAR,
         crate::journal::plan_id(answers),
@@ -291,7 +281,6 @@ pub fn wallpapers_dir(context: &Context) -> PathBuf {
 }
 
 pub fn ensure_five_desktops(context: &Context) -> Result<(), Failure> {
-    // The marker the install entries set is "1"; anything else is an update.
     if context.variable("CAELESTIA_FRESH_INSTALL").as_deref() != Some("1") {
         output::skip("Not an install - leaving the virtual desktops alone.");
         return Ok(());
@@ -303,7 +292,6 @@ pub fn ensure_five_desktops(context: &Context) -> Result<(), Failure> {
     )
     .unwrap_or_default();
 
-    // KWin's own default of one desktop is not a configuration the user made.
     if !count.is_empty() && count != "1" {
         output::skip(&format!("Keeping the existing {count} virtual desktops."));
         return Ok(());
@@ -370,8 +358,6 @@ fn answer_is_true(answers: &Answers, name: &str) -> bool {
 }
 
 pub fn is_skipped(step: &Step, answers: &Answers) -> bool {
-    // Keyed on the id, which is what every other part identifies a step by. The name is prose
-    // shown to a person, and a policy keyed on prose stops applying the day somebody rewords it.
     match step.id {
         "00a-system-update" => answer_is_true(answers, "SKIP_SYSTEM_UPDATE"),
         "05-login-screen" => !answer_is_true(answers, "SYNC_LOGIN_SCREEN"),
@@ -405,8 +391,6 @@ mod tests {
 
     #[test]
     fn every_step_the_policy_names_really_exists() {
-        // The skip policy names steps by id. An id that matches nothing is a rule that silently
-        // never applies, which is how a reviewed-out step ends up running anyway.
         let named = ["00a-system-update", "05-login-screen", "11-optional-apps"];
         for id in named {
             assert!(
@@ -415,7 +399,6 @@ mod tests {
             );
         }
 
-        // And the two that can be switched off are switched off by their own answers.
         let off = answers(&[
             ("SKIP_SYSTEM_UPDATE", "true"),
             ("SYNC_LOGIN_SCREEN", "false"),
@@ -432,7 +415,6 @@ mod tests {
             "no optional app is on, so that step has nothing to do: {skipped:?}"
         );
 
-        // With everything on, nothing is skipped for being switched off.
         let on = answers(&[
             ("SKIP_SYSTEM_UPDATE", "false"),
             ("SYNC_LOGIN_SCREEN", "true"),

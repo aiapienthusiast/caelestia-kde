@@ -39,8 +39,6 @@ pub fn status(program: &str, args: &[&str], directory: Option<&Path>) -> Option<
     command.status().ok().and_then(|status| status.code())
 }
 
-// `timeout <seconds> <program>`: a program that hangs must not hold a step open, so it is
-// killed once the deadline passes and reported as having produced no status.
 pub fn status_with_timeout(program: &str, args: &[&str], seconds: u64) -> Option<i32> {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
     let mut child = command(program, args, None).spawn().ok()?;
@@ -73,9 +71,6 @@ pub fn status_quietly(program: &str, args: &[&str], directory: Option<&Path>) ->
     command.status().ok().and_then(|status| status.code())
 }
 
-// A package manager or a source build prints progress the user is watching, so this one
-// leaves the child's own output where it lands. stdin stays closed either way: nothing here
-// may block on a prompt.
 pub fn run_visible(program: &str, args: &[&str], directory: Option<&Path>) -> Option<i32> {
     let mut command = Command::new(program);
     command.args(args).stdin(Stdio::null());

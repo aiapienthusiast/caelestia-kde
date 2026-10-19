@@ -1,6 +1,3 @@
-// The install-kind contract: which layout this install has and where each of its directories
-// is. Every step and the shell wrappers read the same answers from here.
-
 use std::path::PathBuf;
 
 use crate::paths;
@@ -20,8 +17,6 @@ pub fn kind() -> Kind {
         }
     }
 
-    // A packaged install puts its files under the distribution's prefixes, and `/usr/local` is not
-    // one of them: it is where a source build that ran `make install` lands.
     let packaged = std::env::current_exe()
         .map(|exe| {
             let exe = exe.to_string_lossy().replace('\\', "/");
@@ -40,7 +35,6 @@ pub fn is_packaged() -> bool {
 }
 
 impl Kind {
-    /// What to call this install's layout on screen.
     pub fn label(self) -> &'static str {
         match self {
             Kind::Source => "source",
@@ -115,8 +109,6 @@ fn shell_config_for(kind: Kind) -> PathBuf {
 mod tests {
     use super::*;
 
-    /// The rule the environment and the binary's own location decide, kept apart from the
-    /// reading of either so both cases can be asked about.
     fn packaged_from(exe: &str) -> bool {
         let exe = exe.replace('\\', "/");
         exe.starts_with("/usr/") && !exe.starts_with("/usr/local/")
@@ -131,7 +123,6 @@ mod tests {
 
     #[test]
     fn a_build_installed_anywhere_else_is_a_source_install() {
-        // The same rule as above, asked of the binary's own location.
         assert!(!packaged_from("/usr/local/bin/caelestia-install"));
         assert!(!packaged_from("/home/someone/.local/bin/caelestia-install"));
         assert!(!packaged_from("/opt/caelestia/caelestia-install"));

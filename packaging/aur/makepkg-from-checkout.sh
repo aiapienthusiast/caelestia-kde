@@ -44,8 +44,6 @@ tar -C "$src" -czf "$artifact" "caelestia-kde-$pkgver"
 
 sum="$(sha256sum "$artifact" | cut -d' ' -f1)"
 
-# The installer builds from a vendored crate tree rather than the network, so the
-# helper vendors one from this checkout and hands the PKGBUILD its own URL and hash.
 echo "==> vendoring the installer's crates"
 rm -rf "$src/vendor"
 cargo vendor --manifest-path "$repo/installer/Cargo.toml" --locked --versioned-dirs \

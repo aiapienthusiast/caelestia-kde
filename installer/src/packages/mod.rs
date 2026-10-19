@@ -13,8 +13,6 @@ pub mod arch;
 pub mod debian;
 pub mod fedora;
 
-// What a distro's package list is split into. Every group is a slice of one list, and "all"
-// is what the install step asks for; naming one is how a partial install takes a single slice.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Group {
     Core,
@@ -45,14 +43,11 @@ impl Group {
         }
     }
 
-    // Whether installing this group covers the one asked about: "all" covers everything.
     pub fn covers(self, one: Group) -> bool {
         self == Group::All || self == one
     }
 }
 
-// 02-all-packages: the distribution's own packages, which the shell, its plugin and the
-// utilities around them are built against.
 pub fn all(context: &Context) -> Result<(), Failure> {
     let group = Group::from_env();
     let family = distro::detect();
@@ -69,9 +64,6 @@ pub fn all(context: &Context) -> Result<(), Failure> {
     }
 }
 
-// 02-packages: the tooling no distribution packages for us and the rest of the install needs
-// regardless of where it came from - pip, for the konsave backups, and matugen, without
-// which no wallpaper can be turned into a palette.
 pub fn tooling(context: &Context) -> Result<(), Failure> {
     println!();
     output::info("Ensuring Python tooling for konsave backups");
@@ -130,9 +122,6 @@ fn ensure_python_tooling() {
     }
 }
 
-// matugen has a ladder of its own - dnf, yay, pacman, a GitHub release, cargo - and the
-// session's own startup task asks the same helper for the same thing. The installer runs
-// that helper rather than carrying a second copy of the ladder to drift from it.
 pub fn matugen_helper(bundle: &Path, function: &str) -> bool {
     let helper = bundle.join("scripts").join("lib").join("matugen.sh");
     if !helper.is_file() {
@@ -154,8 +143,6 @@ pub fn matugen_helper(bundle: &Path, function: &str) -> bool {
     ) == Some(0)
 }
 
-// starship publishes an installer script rather than a package for every distribution. It is
-// fetched first and then run, so a failed download is not a half-run install.
 pub fn install_starship() -> bool {
     let Some(work) = TempDir::new("caelestia-starship") else {
         return false;
@@ -169,8 +156,6 @@ pub fn install_starship() -> bool {
     run_visibly("sh", &[&script, "-y"], None)
 }
 
-// Every manual fallback below is a repository cloned into a scratch directory and a command
-// run inside it, so the clone lives here and each distro supplies only its own command.
 pub fn with_clone(url: &str, extra_clone_args: &[&str], build: impl FnOnce(&Path) -> bool) -> bool {
     let Some(work) = TempDir::new("caelestia-build") else {
         output::err(&format!("Could not create a directory to build {url} in."));
@@ -190,13 +175,10 @@ pub fn with_clone(url: &str, extra_clone_args: &[&str], build: impl FnOnce(&Path
     build(work.path())
 }
 
-// The build commands and the package managers below all print progress the user is watching,
-// so the success of a command is asked for without its output being swallowed.
 pub fn run_visibly(program: &str, args: &[&str], directory: Option<&Path>) -> bool {
     process::run_visible(program, args, directory) == Some(0)
 }
 
-// Running something as root: what every call site below wants to know is whether it worked.
 pub fn elevated(program: &str, args: &[&str]) -> bool {
     privileges::elevated(program, args, None) == Ok(0)
 }
@@ -205,13 +187,10 @@ pub fn elevated_in(program: &str, args: &[&str], directory: &Path) -> bool {
     privileges::elevated(program, args, Some(directory)) == Ok(0)
 }
 
-// The lists are data: whitespace-separated, so a package does not take a line of its own.
 pub fn names(list: &str) -> Vec<&str> {
     list.split_whitespace().collect()
 }
 
-// The list a group asks for: its own slice of a distro's packages, or every slice for a full
-// install.
 pub fn grouped(
     group: Group,
     core: &'static str,
@@ -231,8 +210,6 @@ pub fn grouped(
     }
 }
 
-// What could not be installed, said once at the end of the group rather than as each attempt
-// fails, and recorded where the update checker reads it.
 #[derive(Default)]
 pub struct Failures {
     packages: Vec<String>,
@@ -260,8 +237,6 @@ impl Failures {
     }
 }
 
-// The second pass over a batch that failed: one attempt per package, so a single package the
-// manager cannot resolve does not take the rest of the group with it.
 pub fn retry_individually(
     missing: &[&str],
     manager: &str,
@@ -279,7 +254,6 @@ pub fn retry_individually(
     }
 }
 
-// A package the user asked to leave out, in the group that would have carried it.
 pub fn wanted(context: &Context, flag: &str, skip: &str) -> bool {
     if context.flag(flag, true) {
         return true;
@@ -288,8 +262,6 @@ pub fn wanted(context: &Context, flag: &str, skip: &str) -> bool {
     false
 }
 
-// The theme's own fonts, which no distribution carries in the shapes the shell asks for.
-// Fetched at once: three or four files from two hosts, and the downloads are the whole cost.
 pub fn install_custom_fonts(with_rubik: bool, failures: &mut Failures) {
     output::info("Downloading and installing required custom fonts (parallel)...");
 
@@ -362,9 +334,6 @@ fn unpack(archive: &Path, directory: &Path) -> bool {
     process::succeeds("unzip", &["-qo", &archive, "-d", &directory], None)
 }
 
-// Both of these ship as packages and then have to answer to a name the shell calls: sass for
-// the Dart compiler, qdbus6 for the Qt6 one, which several distributions only install under
-// the versioned name.
 pub fn link_sassc() {
     if !process::available("sassc") || process::available("sass") {
         return;
@@ -400,9 +369,6 @@ pub fn run_xdg_user_dirs() {
     }
 }
 
-// The Darkly GTK theme ships as a build script rather than a package, which is why it is not
-// in any of the lists below. Upstream's installer only drops theme directories, so the
-// directories are the whole answer to whether it is there.
 pub fn darkly_gtk_installed() -> bool {
     let local = paths::data_home().join("themes").join("Darkly");
     local.is_dir()
@@ -455,9 +421,6 @@ mod tests {
         assert!(!failures.is_empty());
     }
 
-    // The lists are what the step hands to a package manager, so a name with whitespace or a
-    // shell metacharacter in it would be read as something else entirely. The distro modules
-    // carry the data; this is the one place it is checked.
     #[test]
     fn every_package_list_is_a_list_of_package_names() {
         let lists = [

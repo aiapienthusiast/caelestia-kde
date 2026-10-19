@@ -5,10 +5,6 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# What checkout_may_use_prebuilt decides is the crate's own behaviour now, and the crate
-# tests it (installer/src/steps/build_shell.rs): a released tag, main on its remote tip, a
-# stale main, another branch, and a version.env that disagrees with the checkout. What is
-# left here is the launcher, which is what fetches the installer before any Rust exists.
 fetch_function() {
     local name="$1" source
     source="$(awk -v fn="$name" '

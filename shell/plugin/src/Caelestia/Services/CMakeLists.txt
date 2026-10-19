@@ -2,11 +2,7 @@ find_package(KF6GlobalAccel REQUIRED)
 find_package(KF6Config REQUIRED)
 find_package(KF6NetworkManagerQt REQUIRED)
 find_package(X11 REQUIRED)
-# For QPlatformNativeInterface, the only way to reach a QWindow's wl_surface:
-# Qt exposes no public native interface for it. Ships with qt6-base on Arch and
-# with qt6-qtbase-private-devel on Fedora, both already installed by setup.
 find_package(Qt6 REQUIRED COMPONENTS GuiPrivate)
-# Cava audio visualizer — optional on systems where it's not packaged.
 set(CAVA_SOURCES "")
 set(CAVA_LIBRARIES "")
 if(Cava_FOUND)
@@ -127,9 +123,6 @@ set_source_files_properties(
     PROPERTIES SKIP_PRECOMPILE_HEADERS ON
 )
 
-# The client wrappers Qt writes from the protocol XML are generated code too: they come out of a
-# template, they fail the warning bar the hand-written plugin meets, and no fix here would survive
-# the next regeneration.
 set_source_files_properties(
     ${CMAKE_CURRENT_BINARY_DIR}/qwayland-zkde-screencast-unstable-v1.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/qwayland-plasma-window-management.cpp

@@ -23,15 +23,11 @@ pub fn state_dir() -> PathBuf {
     option("XDG_STATE_HOME").unwrap_or_else(|| home().join(".local").join("state"))
 }
 
-/// The path with this reader's home written as `~`. A home directory is the part of a path that
-/// says the least and takes the most room, and every path a screen shows starts with it.
 pub fn shorten(path: &std::path::Path) -> String {
     shorten_from(path, &home())
 }
 
 fn shorten_from(path: &std::path::Path, home: &std::path::Path) -> String {
-    // A home of `/` is what stands in when there is none, and `~/usr/bin` is not a path: with no
-    // home to write as `~`, the path is written as itself.
     if home == std::path::Path::new("/") {
         return path.display().to_string();
     }
@@ -73,12 +69,10 @@ mod tests {
         assert_eq!(shorten_from(Path::new("/home/tester/x/y"), home), "~/x/y");
         assert_eq!(shorten_from(home, home), "~");
         assert_eq!(shorten_from(Path::new("/etc/x"), home), "/etc/x");
-        // A directory whose name merely starts with the home's name is not that home.
         assert_eq!(
             shorten_from(Path::new("/home/tester2/x"), home),
             "/home/tester2/x"
         );
-        // No home means no `~`: the root is not a home, and `~/usr/bin` is not a path.
         assert_eq!(
             shorten_from(Path::new("/usr/bin"), Path::new("/")),
             "/usr/bin"

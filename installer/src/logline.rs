@@ -1,17 +1,9 @@
-// One line of install output, classified once when it is read rather than on every frame.
-//
-// The steps already label their own output (`[INFO]`, `[OK]`, `[WARN]`, `[SKIP]`, `[ERR]`,
-// `[FATAL]`), so the view does not have to guess what a line means - it only has to carry the
-// meaning through to the screen as a glyph, a color and a readable body.
-
 use ratatui::style::Style;
 
 use crate::glyphs::Glyphs;
 use crate::steps::Status;
 use crate::theme::Theme;
 
-/// The longest line kept for display. A step that prints a whole file has nothing to say in one
-/// row, and the pane would truncate it anyway.
 const MAX_LINE: usize = 4096;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -28,7 +20,6 @@ pub enum Kind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LogLine {
     pub kind: Kind,
-    /// How far the line was indented where it was printed, so nested output keeps its shape.
     pub depth: u8,
     pub text: String,
 }
@@ -55,7 +46,6 @@ impl LogLine {
         }
     }
 
-    /// Worth interrupting for: warnings and errors are what a watching user is waiting to see.
     pub fn is_loud(&self) -> bool {
         matches!(self.kind, Kind::Warn | Kind::Error)
     }
@@ -89,8 +79,6 @@ impl LogLine {
     }
 }
 
-/// `  [WARN]  slow mirror` becomes `Warn` with `slow mirror` left to show. A line the steps did
-/// not label keeps its text exactly as printed.
 fn split_marker(line: &str) -> (Kind, &str) {
     let Some(rest) = line.strip_prefix('[') else {
         return (Kind::Plain, line);
@@ -109,7 +97,6 @@ fn split_marker(line: &str) -> (Kind, &str) {
     (kind, rest[end + 1..].trim_start())
 }
 
-/// A line that is nothing but a rule, which the steps print to open a section.
 fn is_rule(line: &str) -> bool {
     let mut characters = line.chars();
     let Some(first) = characters.next() else {
@@ -132,8 +119,6 @@ fn indent(line: &str) -> u8 {
     }
 }
 
-/// The log is a recording of what a program printed, some of which is not printable: control
-/// characters would land in the middle of a row and shift everything after them.
 fn sanitise(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     for character in raw.chars() {

@@ -101,8 +101,6 @@ test_the_login_screen_step_syncs_without_installing_anything() {
     local script
     script="$(cat "$REPO_ROOT/installer/src/steps/login_screen.rs")"
 
-    # Nothing of ours is installed for the login screen any more: the step writes the greeter's
-    # own configuration and leaves the screen to Plasma Login.
     assert_not_contains "$script" 'theme.conf' "no login theme is written"
     assert_not_contains "$script" 'sddm.conf' "and no display manager config either"
     assert_contains "$script" 'The package'"'"'s login screen helper is not installed at' \

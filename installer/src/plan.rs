@@ -1,10 +1,3 @@
-//! What a run would do, printed instead of done.
-//!
-//! The installer works this out before the user commits; this is the same plan for anyone outside
-//! the TUI — a pipeline that wants to see the steps, a person deciding whether to
-//! run the thing, or a support engineer asking what this machine would actually attempt. Nothing
-//! in here touches the machine: no package manager, no sudo, no writes.
-
 use std::path::Path;
 
 use crate::menu::{self, Answers};
@@ -17,9 +10,6 @@ pub struct Row {
     pub runs: bool,
 }
 
-/// The answers a run would use, built the way the wizard builds them: the table's defaults, then
-/// what this machine actually has, then whatever the caller overrode. Anything the caller did not
-/// answer stays at the default it would have been shown.
 pub fn answers(set: &[(&'static str, String)]) -> Answers {
     let mut answers = Answers::new();
     menu::seed_answers(&menu::QUESTIONS, &mut answers);
@@ -48,8 +38,6 @@ fn count(rows: &[Row]) -> (usize, usize) {
     (rows.iter().filter(|row| row.runs).count(), rows.len())
 }
 
-/// One line per step, grouped by phase, with the same tally the run screen keeps. Plain text
-/// on purpose: this is read by people piping it into a file as often as by people reading it.
 pub fn text(bundle: &Path, version: &str, answers: &Answers, rows: &[Row]) -> String {
     let mut out = String::new();
     out.push_str(&format!("caelestia-installer {version}\n"));
@@ -74,8 +62,6 @@ pub fn text(bundle: &Path, version: &str, answers: &Answers, rows: &[Row]) -> St
         out.push_str(" · nothing switched off");
     }
     out.push('\n');
-    // The journal this plan would write, so a person can find it later and a pipeline can point
-    // `--resume` at the run it is continuing.
     out.push_str(&format!(
         "journal  {}\n",
         crate::journal::path_for(&crate::journal::plan_id(answers)).display()
@@ -83,8 +69,6 @@ pub fn text(bundle: &Path, version: &str, answers: &Answers, rows: &[Row]) -> St
     out
 }
 
-/// The same plan for a machine to read. Hand-rolled because this crate has no serializer and one
-/// fixed shape does not justify a dependency; every string goes through `escape`.
 pub fn json(bundle: &Path, version: &str, answers: &Answers, rows: &[Row]) -> String {
     let steps: Vec<String> = rows
         .iter()
@@ -188,7 +172,6 @@ mod tests {
         assert_eq!(plan.matches("\"id\":").count(), steps::STEPS.len());
         assert!(plan.contains("\"runs\":true"), "{plan}");
         assert!(!plan.contains("\"runs\":false"), "{plan}");
-        // The journal is named after the plan, so a pipeline can resume the run it started.
         assert!(plan.contains("\"plan\":\""), "{plan}");
         assert!(plan.contains("install-"), "{plan}");
     }

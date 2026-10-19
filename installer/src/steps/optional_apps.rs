@@ -17,9 +17,6 @@ pub fn run(context: &Context) -> Result<(), Failure> {
     println!("  Optional Components");
     println!();
 
-    // What the run was asked to set up. A run with nothing picked is not an error - the answers
-    // say the machine wants none of them - but it is worth a line, so the log says what went
-    // into the machine rather than reading as if something had.
     const PICKS: [&str; 6] = [
         "INSTALL_VSCODE",
         "INSTALL_ZED",
@@ -187,9 +184,6 @@ fn install_todoist() {
     }
 }
 
-/// Where Firefox keeps its profiles. The traditional root is `~/.mozilla/firefox`, but a build that
-/// reads `XDG_CONFIG_HOME` keeps them under the config directory instead - the same browser, two
-/// places - so both are asked, and the step works wherever this distribution put them.
 fn firefox_roots() -> Vec<PathBuf> {
     let mut roots = vec![paths::home().join(".mozilla").join("firefox")];
     let config = paths::config_dir().join("mozilla").join("firefox");
