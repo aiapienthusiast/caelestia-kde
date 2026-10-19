@@ -468,7 +468,7 @@ impl Uninstaller {
 
         let existed = target.exists();
         if existed {
-            let _ = remove_tree(target);
+            let _ = remove_path(target);
         }
 
         match backup_path {
@@ -477,7 +477,7 @@ impl Uninstaller {
                     output::ok(&format!("Restored {name} from backup"));
                 } else {
                     output::warn(&format!(
-                        "Failed to restore {name} from backup - {} is now missing",
+                        "Failed to restore {name} from backup - check {} manually",
                         target.display()
                     ));
                 }
@@ -1856,6 +1856,16 @@ fn remove_tree(path: &Path) -> bool {
     fs::remove_dir_all(path).is_ok()
 }
 
+/// Remove whatever is at `path`, file or directory. A restore runs this over both, and a file
+/// that only a directory remover was asked about used to survive in place.
+fn remove_path(path: &Path) -> bool {
+    if path.is_dir() {
+        remove_tree(path)
+    } else {
+        fs::remove_file(path).is_ok()
+    }
+}
+
 fn remove_by_prefix(directory: &Path, prefix: &str) -> bool {
     let Ok(entries) = fs::read_dir(directory) else {
         return false;
@@ -2029,6 +2039,21 @@ mod tests {
     #[test]
     fn a_range_stops_at_the_last_item() {
         assert_eq!(select_indices(2, "1-9"), [0, 1]);
+    }
+
+    #[test]
+    fn a_restore_clears_a_file_as_readily_as_a_directory() {
+        let work =
+            crate::tmp::TempDir::new("caelestia-uninstall-test").expect("a temporary directory");
+        let file = work.path().join("starship.toml");
+        let directory = work.path().join("btop");
+        fs::write(&file, b"left by the install").expect("a file");
+        fs::create_dir_all(&directory).expect("a directory");
+
+        assert!(remove_path(&file));
+        assert!(remove_path(&directory));
+        assert!(!file.exists(), "the file is gone, not left to be re-read");
+        assert!(!directory.exists());
     }
 
     #[test]

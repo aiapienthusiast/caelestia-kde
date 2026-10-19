@@ -10,8 +10,14 @@ pub fn file(source: &Path, target: &Path) -> io::Result<u64> {
 }
 
 // `cp -a`, minus the timestamps: the contents of `source` land in `target`, keeping
-// the shape and the permissions, and leaving a symlink a symlink.
+// the shape and the permissions, and leaving a symlink a symlink. A source that is a single
+// file is copied as one: a restore hands this whatever the backup holds, and a file that was
+// read as a directory left the target empty.
 pub fn tree(source: &Path, target: &Path) -> io::Result<()> {
+    if !source.is_dir() {
+        file(source, target)?;
+        return Ok(());
+    }
     fs::create_dir_all(target)?;
 
     for entry in fs::read_dir(source)? {
@@ -90,6 +96,22 @@ mod tests {
         let target = work.path().join("target");
 
         assert!(tree(&work.path().join("absent"), &target).is_err());
+    }
+
+    #[test]
+    fn a_single_file_is_copied_as_one() {
+        let work = TempDir::new("caelestia-copy-test").expect("a temporary directory");
+        let source = work.path().join("starship.toml");
+        let target = work.path().join("restored/starship.toml");
+        fs::write(&source, b"format = \"$all\"").expect("a file");
+
+        tree(&source, &target).expect("the file is copied");
+
+        assert!(target.is_file(), "the target is the file, not a directory");
+        assert_eq!(
+            fs::read_to_string(&target).expect("the file"),
+            "format = \"$all\""
+        );
     }
 
     #[cfg(unix)]
