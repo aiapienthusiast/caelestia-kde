@@ -34,15 +34,19 @@ have.
 
 A checkout can name a version that has not been released yet: `dev` carries the version
 bump before the tag is published, and every branch cut from it inherits that. There is
-no asset to download until the release is cut, so `setup.sh` builds the installer in
-`installer/` with `cargo` instead of stopping - which is why a pull-request branch needs
-Rust. Point `CAELESTIA_INSTALL_BIN` at a binary you built to skip both.
+nothing to download until the release is cut, and the launcher does not compile: CI keeps
+the static installer built for each push as the `caelestia-install` artifact, so a
+reviewer of such a branch downloads that binary and points `CAELESTIA_INSTALL_BIN` at it.
+
+```bash
+gh run download -R ladybug-me/caelestia-kde -n caelestia-install -D /tmp/inst
+CAELESTIA_INSTALL_BIN=/tmp/inst/caelestia-install bash install.sh
+```
 
 | Symptom | Likely Cause | Fix |
 |---|---|---|
 | `[FATAL] Could not download the installer for vN` | No network, or the release is gone | Check the connection; publish the release named by `.github/version.env` |
-| `[FATAL] No installer for vN is published, and this machine cannot build one` | The checkout names a version that has no release yet, and `cargo` is not installed | Install Rust (`https://rustup.rs`), set `CAELESTIA_INSTALL_BIN` to a built installer, or check out a released tag |
-| `[FATAL] Building the installer from this checkout failed` | `cargo build` failed | Read the compiler output above it; the same sources build in CI |
+| `[FATAL] No installer for vN is published under vX.Y.Z` | The checkout names a version that has no release yet (any `dev` branch between bump and tag) | Take `caelestia-install` from that commit's CI artifacts and set `CAELESTIA_INSTALL_BIN`, or check out a released tag |
 | `[FATAL] The downloaded installer failed its checksum` | A truncated or tampered download | Re-run `setup.sh`; if it repeats, the published asset is wrong |
 | `[FATAL] The release publishes no checksum for the installer` | A release from before checksums existed | Update the checkout, or install from an older release |
 | `[FATAL] The downloaded installer does not report vN` | The checkout and the published binary disagree | Update the checkout |

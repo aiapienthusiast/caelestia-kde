@@ -318,23 +318,24 @@ class InstallStepSafetyTests(unittest.TestCase):
     def test_the_launcher_fetches_the_installer_the_release_publishes(self) -> None:
         """The launcher and the release job have to agree on one asset name.
 
-        A published release is what a user runs, so the name the launcher builds and the
-        name the release attaches are the same contract, checked here rather than
-        discovered by a user. A checkout whose version has not been released yet - `dev`
-        between the version bump and the tag - builds the installer in `installer/`
-        instead of compiling the shell with cmake, which is the thing that is gone.
+        A user runs a published release, so the name the launcher builds and the name the
+        release attaches are the same contract, checked here rather than discovered by a
+        user. Nothing is compiled on the user's machine: a branch that names a version with
+        no release yet takes its binary from CI through CAELESTIA_INSTALL_BIN instead.
         """
         script = (ROOT / "scripts" / "setup.sh").read_text(encoding="utf-8")
         release = (ROOT / ".github" / "workflows" / "version-release.yml").read_text(encoding="utf-8")
+        validate = (ROOT / ".github" / "workflows" / "validate.yml").read_text(encoding="utf-8")
 
         self.assertIn("fetch_installer", script, "setup.sh should fetch the installer")
         self.assertNotIn("cmake", script, "nothing is compiled on the user's machine any more")
+        self.assertNotIn("cargo build", script, "the launcher should not compile the installer either")
         self.assertIn("installer_matches_checkout", script,
                       "the launcher should refuse a binary that disagrees with the checkout")
-        self.assertIn("build_installer", script,
-                      "an unreleased branch should build the installer rather than stop")
         self.assertIn("CAELESTIA_INSTALL_BIN", script,
-                      "a reviewer should be able to point the launcher at their own build")
+                      "a reviewer should be able to point the launcher at a CI binary")
+        self.assertIn("name: caelestia-install", validate,
+                      "CI should keep the installer for a branch that has no release")
 
         asset = "caelestia-install-${arch}-v${version}"
         self.assertIn(asset, script, "setup.sh should build the published asset name")

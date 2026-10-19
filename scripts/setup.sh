@@ -141,20 +141,12 @@ fetch_installer() {
     rm -f "$BIN"
     if ! fetch_asset "$url" "$BIN" --max-time 60 2>/dev/null; then
         # `dev` names the release it is about to become, so between the version bump and the tag
-        # being published there is nothing to download. A checkout can build the same binary
-        # instead of stopping the install over a release that is not due yet.
-        local built=0
-        build_installer || built=$?
-        case "$built" in
-            0) return 0 ;;
-            2)
-                echo "[FATAL] Building the installer from this checkout failed." >&2
-                return 1
-                ;;
-        esac
-        # Nothing published and nothing buildable here: the two are different problems, so the
-        # last line says which one it is rather than blaming the download alone.
-        echo "[FATAL] No installer for v${version} is published, and this machine cannot build one: see above." >&2
+        # being published there is no asset to fetch. A checkout in that state is a branch being
+        # worked on, and CI builds the same static binary for it on every push.
+        echo "[FATAL] No installer for v${version} is published under ${tag}." >&2
+        echo "  On a released tag this is the only download there is, so a checkout that names an" >&2
+        echo "  unreleased version needs the binary from CI: take 'caelestia-install' from the" >&2
+        echo "  run's artifacts, then set CAELESTIA_INSTALL_BIN to it and run this again." >&2
         return 1
     fi
 
@@ -176,36 +168,6 @@ fetch_installer() {
     fi
     chmod +x "$BIN"
     return 0
-}
-
-# The installer this checkout's own sources make. A prebuilt one is preferred because it needs no
-# toolchain, so this only runs when there is nothing published to download.
-build_installer() {
-    local manifest="$BUNDLE_DIR/installer/Cargo.toml" built="$BUNDLE_DIR/installer/target/release/caelestia-install"
-    if [[ ! -f "$manifest" ]]; then
-        return 1
-    fi
-    if ! command -v cargo >/dev/null 2>&1; then
-        echo "  This checkout has no published installer yet, and building it needs cargo." >&2
-        echo "  Install Rust (https://rustup.rs), or set CAELESTIA_INSTALL_BIN to a built installer." >&2
-        return 1
-    fi
-
-    # The spinner is the download's; a build draws its own progress on the same line.
-    if declare -F stop_spinner >/dev/null 2>&1; then
-        stop_spinner
-    fi
-    echo "[INFO]  This checkout names a release that is not published yet;"
-    echo "[INFO]  building the installer from the checkout instead."
-
-    rm -f "$built"
-    if ! cargo build --release --manifest-path "$manifest"; then
-        return 2
-    fi
-    if [[ ! -x "$built" ]]; then
-        return 2
-    fi
-    cp -f "$built" "$BIN" && chmod +x "$BIN"
 }
 
 installer_matches_checkout() {
@@ -256,8 +218,8 @@ if ! fetch_installer || ! installer_matches_checkout; then
     echo ""
     echo "  The installer is a published download. Check your network connection,"
     echo "  and that the release named by .github/version.env is still available."
-    echo "  A checkout with Rust can build it: cargo build --release --manifest-path installer/Cargo.toml"
-    echo "  or point CAELESTIA_INSTALL_BIN at an installer binary."
+    echo "  A checkout naming a version with no release yet takes its binary from CI:"
+    echo "  set CAELESTIA_INSTALL_BIN to the 'caelestia-install' artifact of that commit."
     echo ""
     echo "Press Enter to close this window..."
     read -r

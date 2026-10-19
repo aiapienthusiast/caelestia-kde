@@ -393,6 +393,17 @@ jobs:
           fi
           "$binary" --version
 
+      # A release publishes this binary; a branch that names an unreleased version has none to
+      # download, and building one is not something a user's machine should do. Keeping it here
+      # gives a reviewer of that branch the exact binary for the commit, via
+      # CAELESTIA_INSTALL_BIN.
+      - name: Keep the installer for reviewers
+        uses: actions/upload-artifact@v4
+        with:
+          name: caelestia-install
+          path: installer/target/x86_64-unknown-linux-musl/release/caelestia-install
+          if-no-files-found: error
+
   runtime-smoke:
     name: Installed QML runtime smoke
     runs-on: ubuntu-latest

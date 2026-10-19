@@ -19,7 +19,6 @@ fetch_function() {
 }
 
 FETCH_SOURCE="$(fetch_function fetch_installer)"
-BUILD_SOURCE="$(fetch_function build_installer)"
 MATCH_SOURCE="$(fetch_function installer_matches_checkout)"
 
 fetch_with_status() {
@@ -163,97 +162,31 @@ test_a_named_installer_is_used_rather_than_downloaded() {
     esac
 }
 
-test_a_missing_release_is_built_from_the_checkout() {
-    local dir out status
+test_an_unpublished_release_sends_the_reader_to_the_ci_binary() {
+    local err status
 
-    dir="$(mktemp -d)"
-    mkdir -p "$dir/installer"
-    : > "$dir/installer/Cargo.toml"
-
-    out="$(BUNDLE_DIR="$dir" BIN="$dir/caelestia-install" bash -c "
+    err="$(bash -c "
+        BIN='$(mktemp -d)/caelestia-install'
         tui_version() { echo '9.9.9'; }
         release_tag() { echo 'v9.9.9'; }
         fetch_asset() { return 22; }
         verify_download() { return 0; }
         uname() { echo 'x86_64'; }
-        cargo() {
-            mkdir -p \"\$BUNDLE_DIR/installer/target/release\"
-            printf '#!/bin/sh\necho 9.9.9\n' > \"\$BUNDLE_DIR/installer/target/release/caelestia-install\"
-            chmod +x \"\$BUNDLE_DIR/installer/target/release/caelestia-install\"
-        }
-        $BUILD_SOURCE
-        $FETCH_SOURCE
-        fetch_installer || exit 1
-    " 2>&1)"
-    status=$?
-
-    if [[ $status -ne 0 ]]; then
-        fail "an unpublished release should fall back to building; got: $out"
-    fi
-    if [[ ! -x "$dir/caelestia-install" ]]; then
-        fail "the built installer should be put where the run expects it"
-    fi
-    case "$out" in
-        *"building the installer from the checkout"*) ;;
-        *) fail "the fallback should say it is building; got: $out" ;;
-    esac
-}
-
-test_a_checkout_without_cargo_says_how_to_get_an_installer() {
-    local dir err status
-
-    dir="$(mktemp -d)"
-    mkdir -p "$dir/installer"
-    : > "$dir/installer/Cargo.toml"
-
-    err="$(BUNDLE_DIR="$dir" BIN="$dir/caelestia-install" bash -c "
-        tui_version() { echo '9.9.9'; }
-        release_tag() { echo 'v9.9.9'; }
-        fetch_asset() { return 22; }
-        verify_download() { return 0; }
-        uname() { echo 'x86_64'; }
-        PATH=/nonexistent
-        $BUILD_SOURCE
         $FETCH_SOURCE
         fetch_installer
     " 2>&1 >/dev/null)"
     status=$?
 
     if [[ $status -eq 0 ]]; then
-        fail "a checkout that cannot build must not claim an installer"
+        fail "an unpublished release must not claim an installer"
     fi
+    case "$err" in
+        *"No installer for v9.9.9 is published under v9.9.9"*) ;;
+        *) fail "the missing release should be named; got: $err" ;;
+    esac
     case "$err" in
         *"CAELESTIA_INSTALL_BIN"*) ;;
-        *) fail "the way out should be named; got: $err" ;;
-    esac
-}
-
-test_a_build_that_fails_is_not_reported_as_a_download_problem() {
-    local dir err status
-
-    dir="$(mktemp -d)"
-    mkdir -p "$dir/installer"
-    : > "$dir/installer/Cargo.toml"
-
-    err="$(BUNDLE_DIR="$dir" BIN="$dir/caelestia-install" bash -c "
-        tui_version() { echo '9.9.9'; }
-        release_tag() { echo 'v9.9.9'; }
-        fetch_asset() { return 22; }
-        verify_download() { return 0; }
-        uname() { echo 'x86_64'; }
-        cargo() { return 101; }
-        $BUILD_SOURCE
-        $FETCH_SOURCE
-        fetch_installer
-    " 2>&1 >/dev/null)"
-    status=$?
-
-    if [[ $status -eq 0 ]]; then
-        fail "a failed build must not claim an installer"
-    fi
-    case "$err" in
-        *"Building the installer from this checkout failed"*) ;;
-        *) fail "a failed build should say so; got: $err" ;;
+        *) fail "the way to supply a binary should be named; got: $err" ;;
     esac
 }
 
