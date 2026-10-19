@@ -19,6 +19,7 @@ fetch_function() {
 }
 
 FETCH_SOURCE="$(fetch_function fetch_installer)"
+BUILD_SOURCE="$(fetch_function build_installer)"
 MATCH_SOURCE="$(fetch_function installer_matches_checkout)"
 
 fetch_with_status() {
@@ -133,4 +134,98 @@ test_a_binary_from_another_version_is_refused() {
         fail "a binary that matches the checkout must be accepted"
     fi
 }
+test_a_named_installer_is_used_rather_than_downloaded() {
+    local dir binary out
+
+    dir="$(mktemp -d)"
+    binary="$dir/caelestia-install"
+    printf '#!/bin/sh\necho 9.9.9\n' > "$binary"
+    chmod +x "$binary"
+
+    out="$(CAELESTIA_INSTALL_BIN="$binary" bash -c "
+        BIN=''
+        tui_version() { echo '9.9.9'; }
+        release_tag() { echo 'v9.9.9'; }
+        fetch_asset() { echo 'the download must not be attempted' >&2; return 1; }
+        verify_download() { return 0; }
+        uname() { echo 'x86_64'; }
+        $FETCH_SOURCE
+        fetch_installer || exit 1
+        printf '%s\n' \"\$BIN\"
+    " 2>&1)" || fail "a named installer should be used as it is; got: $out"
+
+    case "$out" in
+        *"$binary"*) ;;
+        *) fail "the named installer should be the one chosen; got: $out" ;;
+    esac
+    case "$out" in
+        *"must not be attempted"*) fail "a named installer must not be downloaded over" ;;
+    esac
+}
+
+test_a_missing_release_is_built_from_the_checkout() {
+    local dir out status
+
+    dir="$(mktemp -d)"
+    mkdir -p "$dir/installer"
+    : > "$dir/installer/Cargo.toml"
+
+    out="$(BUNDLE_DIR="$dir" BIN="$dir/caelestia-install" bash -c "
+        tui_version() { echo '9.9.9'; }
+        release_tag() { echo 'v9.9.9'; }
+        fetch_asset() { return 22; }
+        verify_download() { return 0; }
+        uname() { echo 'x86_64'; }
+        cargo() {
+            mkdir -p \"\$BUNDLE_DIR/installer/target/release\"
+            printf '#!/bin/sh\necho 9.9.9\n' > \"\$BUNDLE_DIR/installer/target/release/caelestia-install\"
+            chmod +x \"\$BUNDLE_DIR/installer/target/release/caelestia-install\"
+        }
+        $BUILD_SOURCE
+        $FETCH_SOURCE
+        fetch_installer || exit 1
+    " 2>&1)"
+    status=$?
+
+    if [[ $status -ne 0 ]]; then
+        fail "an unpublished release should fall back to building; got: $out"
+    fi
+    if [[ ! -x "$dir/caelestia-install" ]]; then
+        fail "the built installer should be put where the run expects it"
+    fi
+    case "$out" in
+        *"building the installer from the checkout"*) ;;
+        *) fail "the fallback should say it is building; got: $out" ;;
+    esac
+}
+
+test_a_checkout_without_cargo_says_how_to_get_an_installer() {
+    local dir err status
+
+    dir="$(mktemp -d)"
+    mkdir -p "$dir/installer"
+    : > "$dir/installer/Cargo.toml"
+
+    err="$(BUNDLE_DIR="$dir" BIN="$dir/caelestia-install" bash -c "
+        tui_version() { echo '9.9.9'; }
+        release_tag() { echo 'v9.9.9'; }
+        fetch_asset() { return 22; }
+        verify_download() { return 0; }
+        uname() { echo 'x86_64'; }
+        PATH=/nonexistent
+        $BUILD_SOURCE
+        $FETCH_SOURCE
+        fetch_installer
+    " 2>&1 >/dev/null)"
+    status=$?
+
+    if [[ $status -eq 0 ]]; then
+        fail "a checkout that cannot build must not claim an installer"
+    fi
+    case "$err" in
+        *"CAELESTIA_INSTALL_BIN"*) ;;
+        *) fail "the way out should be named; got: $err" ;;
+    esac
+}
+
 run_tests

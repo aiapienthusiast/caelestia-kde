@@ -318,9 +318,11 @@ class InstallStepSafetyTests(unittest.TestCase):
     def test_the_launcher_fetches_the_installer_the_release_publishes(self) -> None:
         """The launcher and the release job have to agree on one asset name.
 
-        The launcher has nothing to fall back on any more: it downloads the static
-        binary or it stops. So the name it builds and the name the release attaches
-        are the same contract, checked here rather than discovered by a user.
+        A published release is what a user runs, so the name the launcher builds and the
+        name the release attaches are the same contract, checked here rather than
+        discovered by a user. A checkout whose version has not been released yet - `dev`
+        between the version bump and the tag - builds the installer in `installer/`
+        instead of compiling the shell with cmake, which is the thing that is gone.
         """
         script = (ROOT / "scripts" / "setup.sh").read_text(encoding="utf-8")
         release = (ROOT / ".github" / "workflows" / "version-release.yml").read_text(encoding="utf-8")
@@ -329,6 +331,10 @@ class InstallStepSafetyTests(unittest.TestCase):
         self.assertNotIn("cmake", script, "nothing is compiled on the user's machine any more")
         self.assertIn("installer_matches_checkout", script,
                       "the launcher should refuse a binary that disagrees with the checkout")
+        self.assertIn("build_installer", script,
+                      "an unreleased branch should build the installer rather than stop")
+        self.assertIn("CAELESTIA_INSTALL_BIN", script,
+                      "a reviewer should be able to point the launcher at their own build")
 
         asset = "caelestia-install-${arch}-v${version}"
         self.assertIn(asset, script, "setup.sh should build the published asset name")

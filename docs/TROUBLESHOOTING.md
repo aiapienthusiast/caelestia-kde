@@ -32,9 +32,15 @@ This document catalogs known failure modes, error conditions, and edge cases dis
 compiled on your machine, and the binary is static, so it does not care which glibc you
 have.
 
+A checkout can name a version that has not been released yet: `dev` carries the version
+bump before the tag is published, and every branch cut from it inherits that. There is
+no asset to download until the release is cut, so `setup.sh` builds the installer in
+`installer/` with `cargo` instead of stopping - which is why a pull-request branch needs
+Rust. Point `CAELESTIA_INSTALL_BIN` at a binary you built to skip both.
+
 | Symptom | Likely Cause | Fix |
 |---|---|---|
-| `[FATAL] Could not download the installer for vN` | No network, or the release is gone | Check the connection; the release named by `.github/version.env` has to be published |
+| `[FATAL] Could not download the installer for vN` | No network, or the release is gone, and `cargo` is not installed to build it | Check the connection; publish the release named by `.github/version.env`, install Rust, or set `CAELESTIA_INSTALL_BIN` |
 | `[FATAL] The downloaded installer failed its checksum` | A truncated or tampered download | Re-run `setup.sh`; if it repeats, the published asset is wrong |
 | `[FATAL] The release publishes no checksum for the installer` | A release from before checksums existed | Update the checkout, or install from an older release |
 | `[FATAL] The downloaded installer does not report vN` | The checkout and the published binary disagree | Update the checkout |
