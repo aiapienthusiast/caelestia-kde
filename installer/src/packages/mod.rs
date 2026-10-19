@@ -191,6 +191,28 @@ pub fn names(list: &str) -> Vec<&str> {
     list.split_whitespace().collect()
 }
 
+/// What an uninstall offers to remove: the subset of the tables that is also a common desktop
+/// tool, plus the names an older install could have used. The package names live here and nowhere
+/// else; the uninstall asks for this list rather than keeping a copy of its own.
+pub fn removable(distro: crate::distro::Distro) -> Vec<&'static str> {
+    let (removable, legacy) = match distro {
+        crate::distro::Distro::Arch => (arch::REMOVABLE, arch::LEGACY),
+        crate::distro::Distro::Fedora => (fedora::REMOVABLE, fedora::LEGACY),
+        crate::distro::Distro::Debian => (debian::REMOVABLE, debian::LEGACY),
+        crate::distro::Distro::Unknown => return Vec::new(),
+    };
+    let mut names = names(removable);
+    names.extend(names_of(legacy));
+    names.sort_unstable();
+    names.dedup();
+    names
+}
+
+fn names_of(list: &'static str) -> Vec<&'static str> {
+    list.split_whitespace().collect()
+}
+
+
 pub fn grouped(
     group: Group,
     core: &'static str,
@@ -467,6 +489,113 @@ mod tests {
     fn one_line_of_packages_is_read_back_as_the_same_names() {
         assert_eq!(names("a b\n  c\td"), ["a", "b", "c", "d"]);
         assert_eq!(names(""), Vec::<&str>::new());
+    }
+
+    /// Everything a distribution's install can put on the machine. The tests use this as the
+    /// list the uninstall has to stay inside.
+    /// Everything this distribution's install can put on the machine, as one list. An uninstall offers
+    /// these to be removed, so the copy it keeps cannot fall behind the install.
+    fn installable(distro: crate::distro::Distro) -> Vec<&'static str> {
+        let (core, shell, themes, utils) = tables(distro);
+        if core.is_empty() {
+            return Vec::new();
+        }
+        let mut names = grouped(Group::Core, core, shell, themes, utils);
+        for group in [Group::Shell, Group::Themes, Group::Utils] {
+            names.extend(grouped(group, core, shell, themes, utils));
+        }
+        names.extend(elsewhere(distro));
+        names.sort_unstable();
+        names.dedup();
+        names
+    }
+
+    fn tables(
+        distro: crate::distro::Distro,
+    ) -> (&'static str, &'static str, &'static str, &'static str) {
+        match distro {
+            crate::distro::Distro::Arch => (arch::CORE, arch::SHELL, arch::THEMES, arch::UTILITIES),
+            crate::distro::Distro::Fedora => {
+                (fedora::CORE, fedora::SHELL, fedora::THEMES, fedora::UTILITIES)
+            }
+            crate::distro::Distro::Debian => {
+                (debian::CORE, debian::SHELL, debian::THEMES, debian::UTILITIES)
+            }
+            crate::distro::Distro::Unknown => ("", "", "", ""),
+        }
+    }
+
+    /// The lists a distribution reaches for when its own repositories do not carry a package:
+    /// Fedora's COPR set and Debian's fallbacks. They install real names too.
+    fn elsewhere(distro: crate::distro::Distro) -> Vec<&'static str> {
+        let lists: &[&'static str] = match distro {
+            crate::distro::Distro::Fedora => &[fedora::COPR_CORE, fedora::COPR_SHELL, fedora::COPR_ALL],
+            crate::distro::Distro::Debian => &[
+                debian::FALLBACK_CORE,
+                debian::FALLBACK_SHELL,
+                debian::FALLBACK_THEMES,
+                debian::FALLBACK_UTILS,
+            ],
+            _ => &[],
+        };
+        lists.iter().flat_map(|list| names(list)).collect()
+    }
+
+    #[test]
+    fn an_uninstall_offers_desktop_tools_and_nothing_the_install_does_not_put_down() {
+        for distro in [
+            crate::distro::Distro::Arch,
+            crate::distro::Distro::Fedora,
+            crate::distro::Distro::Debian,
+        ] {
+            let offered = removable(distro);
+            assert!(!offered.is_empty(), "{} offers nothing", distro.name());
+
+            let installed = installable(distro);
+            for package in &offered {
+                let installed_here = installed.contains(package);
+                let legacy = match distro {
+                    crate::distro::Distro::Arch => names(arch::LEGACY),
+                    crate::distro::Distro::Fedora => names(fedora::LEGACY),
+                    crate::distro::Distro::Debian => names(debian::LEGACY),
+                    crate::distro::Distro::Unknown => Vec::new(),
+                };
+                assert!(
+                    installed_here || legacy.contains(package),
+                    "{}: {package} is neither installed nor a legacy name",
+                    distro.name()
+                );
+                // A legacy name is offered because an older install put it down, whatever it is;
+                // what the current table offers to remove has to be a tool, not a build input.
+                assert!(
+                    !installed_here
+                        || (!package.starts_with("qt6-")
+                            && !package.contains("-dev")
+                            && !package.contains("-devel")
+                            && *package != "cmake"),
+                    "{}: {package} is a build dependency, not a desktop tool to offer",
+                    distro.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_legacy_name_is_one_the_table_no_longer_installs() {
+        for (distro, legacy) in [
+            (crate::distro::Distro::Arch, arch::LEGACY),
+            (crate::distro::Distro::Fedora, fedora::LEGACY),
+            (crate::distro::Distro::Debian, debian::LEGACY),
+        ] {
+            let installed = installable(distro);
+            for package in names(legacy) {
+                assert!(
+                    !installed.contains(&package),
+                    "{}: {package} is still installed, so it belongs in the table, not in LEGACY",
+                    distro.name()
+                );
+            }
+        }
     }
 
     #[test]

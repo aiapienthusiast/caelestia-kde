@@ -37,6 +37,23 @@ pub(super) const UTILITIES: &str = "
     bat ripgrep lazygit xdg-user-dirs
 ";
 
+/// The packages an uninstall offers to remove: the ones above that are also common desktop
+/// tools. A build dependency is not on it, because removing a compiler someone installed for
+/// their own work is not this installer's business.
+pub(super) const REMOVABLE: &str = "
+    quickshell matugen foot eza fastfetch starship btop fuzzel swappy satty gpu-screen-recorder slurp
+    grim wl-clipboard cliphist wl-clip-persist app2unit brightnessctl ddcutil tesseract
+    tesseract-data-eng bat ripgrep lazygit jq trash-cli inotify-tools imagemagick sassc xdg-utils
+    xdg-user-dirs spectacle adw-gtk-theme ttf-jetbrains-mono-nerd ttf-material-symbols-variable
+    ttf-rubik-vf ttf-cascadia-code-nerd
+";
+
+/// Names an install of an older version could have put down that the table above no longer
+/// names, so an uninstall still offers them.
+pub(super) const LEGACY: &str = "
+    libcava papirus-icon-theme darkly darkly-bin
+";
+
 const SOURCE_BUILD_REPOS: [(&str, &str); 2] = [
     ("ttf-rubik-vf", "https://github.com/googlefonts/rubik"),
     ("app2unit", "https://github.com/Vladimir-csp/app2unit"),

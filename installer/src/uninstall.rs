@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::distro::{self, Distro};
 use crate::output;
+use crate::packages;
 use crate::paths;
 use crate::pkg;
 use crate::privileges;
@@ -57,129 +58,6 @@ if changed:
     with open(cli_path, "w") as f:
         json.dump(config, f, indent=4)
 "##;
-
-const ARCH_PACKAGES: &[&str] = &[
-    "quickshell",
-    "matugen",
-    "foot",
-    "eza",
-    "fastfetch",
-    "starship",
-    "btop",
-    "fuzzel",
-    "swappy",
-    "satty",
-    "gpu-screen-recorder",
-    "slurp",
-    "grim",
-    "wl-clipboard",
-    "cliphist",
-    "wl-clip-persist",
-    "app2unit",
-    "libcava",
-    "brightnessctl",
-    "ddcutil",
-    "tesseract",
-    "tesseract-data-eng",
-    "bat",
-    "ripgrep",
-    "lazygit",
-    "jq",
-    "trash-cli",
-    "inotify-tools",
-    "imagemagick",
-    "sassc",
-    "xdg-utils",
-    "xdg-user-dirs",
-    "spectacle",
-    "adw-gtk-theme",
-    "papirus-icon-theme",
-    "darkly",
-    "darkly-bin",
-    "ttf-jetbrains-mono-nerd",
-    "ttf-material-symbols-variable",
-    "ttf-rubik-vf",
-    "ttf-cascadia-code-nerd",
-];
-
-const FEDORA_PACKAGES: &[&str] = &[
-    "quickshell-git",
-    "matugen",
-    "foot",
-    "eza",
-    "fastfetch",
-    "starship",
-    "btop",
-    "fuzzel",
-    "swappy",
-    "satty",
-    "gpu-screen-recorder",
-    "gpu-screen-recorder-ui",
-    "slurp",
-    "grim",
-    "wl-clipboard",
-    "cliphist",
-    "wl-clip-persist",
-    "app2unit",
-    "libcava",
-    "libcava-devel",
-    "brightnessctl",
-    "ddcutil",
-    "tesseract",
-    "tesseract-langpack-eng",
-    "bat",
-    "ripgrep",
-    "jq",
-    "trash-cli",
-    "inotify-tools",
-    "ImageMagick",
-    "sassc",
-    "xdg-utils",
-    "xdg-user-dirs",
-    "spectacle",
-    "adw-gtk3-theme",
-    "papirus-icon-theme",
-    "darkly",
-    "google-rubik-fonts",
-];
-
-const DEBIAN_PACKAGES: &[&str] = &[
-    "quickshell",
-    "matugen",
-    "foot",
-    "eza",
-    "fastfetch",
-    "starship",
-    "btop",
-    "fuzzel",
-    "swappy",
-    "satty",
-    "gpu-screen-recorder",
-    "slurp",
-    "grim",
-    "wl-clipboard",
-    "cliphist",
-    "wl-clip-persist",
-    "app2unit",
-    "cava",
-    "libcava",
-    "brightnessctl",
-    "ddcutil",
-    "tesseract-ocr",
-    "tesseract-ocr-eng",
-    "jq",
-    "yq",
-    "trash-cli",
-    "inotify-tools",
-    "imagemagick",
-    "sassc",
-    "xdg-utils",
-    "kde-spectacle",
-    "adw-gtk3",
-    "adw-gtk3-theme",
-    "papirus-icon-theme",
-    "darkly",
-];
 
 struct Uninstaller {
     bundle: PathBuf,
@@ -1480,12 +1358,9 @@ impl Uninstaller {
 
         section("Step 9 - Remove Packages (Optional)");
 
-        let listed: &[&str] = match self.family {
-            Distro::Arch => ARCH_PACKAGES,
-            Distro::Fedora => FEDORA_PACKAGES,
-            Distro::Debian => DEBIAN_PACKAGES,
-            Distro::Unknown => &[],
-        };
+        // The package names belong to the package module; an uninstall asks it which of them are
+        // also desktop tools rather than keeping a second list to fall behind.
+        let listed: Vec<&str> = packages::removable(self.family);
 
         let installed: Vec<&str> = listed
             .iter()
@@ -2045,21 +1920,6 @@ mod tests {
             !strip_caelestia_env(&rc, &["export"]),
             "a second pass has nothing to do"
         );
-    }
-
-    #[test]
-    fn every_package_list_an_uninstall_offers_is_a_list_of_names() {
-        for (name, list) in [
-            ("arch", ARCH_PACKAGES),
-            ("fedora", FEDORA_PACKAGES),
-            ("debian", DEBIAN_PACKAGES),
-        ] {
-            assert!(!list.is_empty(), "the {name} list is empty");
-            let mut sorted = list.to_vec();
-            sorted.sort_unstable();
-            sorted.dedup();
-            assert_eq!(sorted.len(), list.len(), "{name} names a package twice");
-        }
     }
 
     #[test]

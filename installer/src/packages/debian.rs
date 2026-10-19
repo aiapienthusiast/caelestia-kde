@@ -689,6 +689,21 @@ fn binary_in(candidates: &[&str], name: &str) -> Option<PathBuf> {
     process::locate(name)
 }
 
+/// The packages an uninstall offers to remove: the ones above that are also common desktop
+/// tools. A build dependency is not on it, because removing a compiler someone installed for
+/// their own work is not this installer's business.
+pub(super) const REMOVABLE: &str = "
+    quickshell matugen foot eza fastfetch starship btop fuzzel swappy satty gpu-screen-recorder slurp
+    grim wl-clipboard cliphist wl-clip-persist app2unit libcava brightnessctl ddcutil tesseract-ocr
+    tesseract-ocr-eng jq yq trash-cli inotify-tools imagemagick sassc xdg-utils kde-spectacle adw-gtk3
+";
+
+/// Names an install of an older version could have put down that the table above no longer
+/// names, so an uninstall still offers them.
+pub(super) const LEGACY: &str = "
+    cava adw-gtk3-theme papirus-icon-theme darkly
+";
+
 #[cfg(test)]
 mod tests {
     use super::*;

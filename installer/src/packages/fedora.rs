@@ -399,6 +399,22 @@ fn is_fedora_rpm(url: &str) -> bool {
     })
 }
 
+/// The packages an uninstall offers to remove: the ones above that are also common desktop
+/// tools. A build dependency is not on it, because removing a compiler someone installed for
+/// their own work is not this installer's business.
+pub(super) const REMOVABLE: &str = "
+    quickshell-git matugen foot eza fastfetch starship btop fuzzel swappy gpu-screen-recorder slurp
+    grim wl-clipboard cliphist wl-clip-persist app2unit libcava brightnessctl ddcutil tesseract
+    tesseract-langpack-eng bat ripgrep jq trash-cli inotify-tools ImageMagick sassc xdg-utils
+    xdg-user-dirs spectacle adw-gtk3-theme google-rubik-fonts
+";
+
+/// Names an install of an older version could have put down that the table above no longer
+/// names, so an uninstall still offers them.
+pub(super) const LEGACY: &str = "
+    satty gpu-screen-recorder-ui libcava-devel papirus-icon-theme darkly
+";
+
 #[cfg(test)]
 mod tests {
     use super::*;
