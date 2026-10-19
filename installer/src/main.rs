@@ -53,6 +53,7 @@ pub(crate) const VERSION: &str = include_str!("../data/tui.version");
 const USAGE: &str = "\
 caelestia-install [OPTIONS] [BUNDLE_DIR]
 caelestia-install step [OPTIONS] STEP_ID
+caelestia-install steps [--for install|packaged|update]
 
   Install, update or remove Caelestia. With no arguments this opens the wizard, which offers
   all three.
@@ -138,14 +139,22 @@ fn main() -> ExitCode {
         }
         Invocation::Askpass(pipe) => askpass(&pipe),
         Invocation::Step { id, bundle, debug } => run_step(&id, bundle, debug),
+        Invocation::Steps { purpose } => print_steps(purpose),
         Invocation::Run(args) => run(args),
     };
 
     ExitCode::from(outcome.code())
 }
 
-fn run_step(id: &str, bundle: Option<PathBuf>, debug: bool) -> Outcome {
-    DEBUG.store(debug, Ordering::Relaxed);
+/// The step ids, one per line, so a shell launcher iterates the table instead of restating it.
+fn print_steps(purpose: steps::Purpose) -> Outcome {
+    for id in steps::ids(purpose) {
+        println!("{id}");
+    }
+    Outcome::Ok
+}
+
+fn run_step(id: &str, bundle: Option<PathBuf>, debug: bool) -> Outcome {    DEBUG.store(debug, Ordering::Relaxed);
 
     let requested = bundle.or_else(|| std::env::var_os("BUNDLE_DIR").map(PathBuf::from));
     let bundle = Bundle::discover(requested);

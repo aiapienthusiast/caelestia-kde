@@ -222,20 +222,22 @@ EOF
         return 1
     fi
 
-    local -a steps=(
-        03-deploy-configs
-        03a-wallpapers
-        04-deploy-kde
-        04a-window-rules
-        05-login-screen
-        06-services
-        08-build-shell
-        09-system-tweaks
-        10-autostart
-    )
-
     # shellcheck source=/dev/null
     . "$SCRIPTS_DIR/lib/installer-bin.sh"
+
+    local -a steps=()
+    # The step table is the list; asking the installer beats keeping a second copy here that can
+    # fall behind it.
+    local bin
+    if ! bin="$(caelestia_installer_bin)"; then
+        printf '[ERR] cannot list the steps: no installer binary to ask\n' >&2
+        return 1
+    fi
+    mapfile -t steps < <("$bin" steps --for packaged)
+    if [[ ${#steps[@]} -eq 0 ]]; then
+        printf '[ERR] the installer named no steps for a packaged install\n' >&2
+        return 1
+    fi
 
     export CAELESTIA_FRESH_INSTALL="${CAELESTIA_FRESH_INSTALL:-1}"
 

@@ -339,6 +339,35 @@ fn the_plan_can_be_read_by_a_machine() {
 }
 
 #[test]
+fn the_step_lists_are_asked_of_the_installer() {
+    let everything = run(&["steps"]);
+    assert_eq!(code(&everything), 0, "{}", stderr(&everything));
+    assert_eq!(stdout(&everything).lines().count(), 17);
+    assert!(stdout(&everything).starts_with("00a-system-update\n"));
+
+    let packaged = run(&["steps", "--for", "packaged"]);
+    assert_eq!(code(&packaged), 0, "{}", stderr(&packaged));
+    let listed = stdout(&packaged);
+    let ids: Vec<&str> = listed.lines().collect();
+    assert_eq!(ids.len(), 9, "{listed}");
+    assert_eq!(ids.first(), Some(&"03-deploy-configs"));
+    assert_eq!(ids.last(), Some(&"10-autostart"));
+
+    let update = run(&["steps", "--for", "update"]);
+    assert_eq!(
+        stdout(&update).lines().collect::<Vec<_>>(),
+        ["03-deploy-configs", "08-build-shell", "09-system-tweaks"]
+    );
+    let wrong = run(&["steps", "--for", "nonsense"]);
+    assert_eq!(code(&wrong), 2, "{}", stderr(&wrong));
+    assert!(
+        stderr(&wrong).contains("install, packaged or update"),
+        "{}",
+        stderr(&wrong)
+    );
+}
+
+#[test]
 fn flags_that_cannot_mean_anything_are_refused_rather_than_ignored() {
     let json_alone = run(&["--json"]);
     assert_eq!(code(&json_alone), 2, "{}", stderr(&json_alone));

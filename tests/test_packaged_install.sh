@@ -24,6 +24,12 @@ stub_steps() {
 
     cat > "$DATA/caelestia-install" <<EOF
 #!/bin/bash
+# The launcher asks the installer which steps a packaged install runs; this stands in for it and
+# logs the step runs, so the test still checks the order the launcher walks them in.
+if [ "\$1" = "steps" ]; then
+    printf '%s\n' ${EXPECTED_STEPS[*]}
+    exit 0
+fi
 printf '%s|%s|%s\n' "\$2" "\$CAELESTIA_DATA_DIR" "\$CAELESTIA_INSTALL_KIND" >> "$CALLS"
 if [ '$failing' = "\$2" ]; then
     exit 7

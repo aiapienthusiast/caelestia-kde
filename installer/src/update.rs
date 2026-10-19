@@ -44,6 +44,11 @@ const STEPS: [Repair; 3] = [
     },
 ];
 
+/// The steps an update runs, for the shell updater that used to keep its own copy of the list.
+pub fn step_ids() -> Vec<&'static str> {
+    STEPS.iter().map(|repair| repair.id).collect()
+}
+
 pub fn run(bundle: &Path, requested: Option<String>) -> Result<(), Failure> {
     let Some(_lock) = take_lock()? else {
         return Err("Another Caelestia update is already running.".into());

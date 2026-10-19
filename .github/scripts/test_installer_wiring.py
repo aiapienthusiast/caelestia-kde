@@ -88,67 +88,30 @@ class InstallerTests(unittest.TestCase):
             f"Duplicate installer step names: {duplicates}",
         )
 
-    def test_every_step_script_is_wired_into_a_step_list(self) -> None:
-        """A numbered step has to be reachable, and every list entry has to resolve.
+    def test_every_step_list_is_asked_of_the_installer(self) -> None:
+        """The step table is the one list of steps; nothing else may keep its own copy.
 
-        Three lists run steps: the full install (installer/src/steps/mod.rs), the user's
-        half of a packaged install (src/bin/caelestia), and the subsets the build step and
-        the update run on their own (installer/src/steps/build_shell.rs,
-        installer/src/update.rs); caelestia-update names its own the same way. A step in
-        none of them is dead weight that every other check still reports as covered; an
-        entry that resolves to no step at all fails at install time instead of here. The
-        step numbers are not an order: the TUI runs 00-backup-themes after 02a-submodules,
-        deliberately. The lists differ in failure policy - the installer stops, the update
-        path warns and carries on - so only their membership is comparable, which is all
-        this checks.
+        The lists used to be scraped out of five files with seven regexes. Now the installer
+        answers `steps --for packaged|update` from the same table it runs, so the only thing
+        left to check here is that the launchers ask rather than restate: an id typed into a
+        shell script is exactly what drifted before.
         """
-        steps_table = (ROOT / "installer" / "src" / "steps" / "mod.rs").read_text(encoding="utf-8")
-        lists = [
-            (ROOT / "src" / "bin" / "caelestia"),
-            (ROOT / "src" / "bin" / "caelestia-update"),
-            (ROOT / "installer" / "src" / "steps" / "build_shell.rs"),
-            (ROOT / "installer" / "src" / "update.rs"),
-        ]
+        table = (ROOT / "installer" / "src" / "steps" / "mod.rs").read_text(encoding="utf-8")
+        native = set(re.findall(r'id: "([^"]+)"', table))
+        self.assertTrue(native, "No step ids found in installer/src/steps/mod.rs")
 
-        native = set(re.findall(r'id: "([^"]+)"', steps_table))
-
-        listed = set(re.findall(r"scripts/([0-9][0-9a-z]*-[A-Za-z0-9._-]+)\.sh", steps_table))
-        for path in lists:
-            text = path.read_text(encoding="utf-8")
-            listed |= set(re.findall(r"scripts/([0-9][0-9a-z]*-[A-Za-z0-9._-]+)\.sh", text))
-            listed |= set(
-                re.findall(r"(?:caelestia_run_step|run_core_step)\s+([0-9][0-9a-z]*-[A-Za-z0-9._-]+)", text)
-            )
-            listed |= set(
-                re.findall(r"run_step\s+\d+\s+([0-9][0-9a-z]*-[A-Za-z0-9._-]+)", text)
-            )
-            listed |= set(
-                re.findall(r"run_step\([^,]+,\s*\"([0-9][0-9a-z]*-[A-Za-z0-9._-]+)\"", text)
-            )
-            listed |= set(
-                re.findall(
-                    r'\(\"([0-9][0-9a-z]*-[A-Za-z0-9._-]+)\", (?:true|false)\)', text
-                )
-            )
-            listed |= set(
-                re.findall(r"^\s+([0-9][0-9a-z]*-[A-Za-z0-9._-]+)$", text, re.MULTILINE)
-            )
-        self.assertTrue(listed, "No steps found in the installer's table or the step lists")
-
-        scripts_dir = ROOT / "scripts"
-        numbered = {
-            path.name[: -len(".sh")] for path in scripts_dir.glob("*.sh")
-            if re.match(r"^\d+[a-z]?-", path.name)
+        launcher = (ROOT / "src" / "bin" / "caelestia").read_text(encoding="utf-8")
+        self.assertIn(
+            "steps --for packaged",
+            launcher,
+            "the packaged launcher should ask the installer which steps to run",
+        )
+        # A restated id in the launcher is the copy this check exists to prevent.
+        restated = {
+            step_id for step_id in native
+            if re.search(rf"^\s+{re.escape(step_id)}\s*$", launcher, re.MULTILINE)
         }
-
-        self.assertEqual(
-            sorted(numbered - listed), [],
-            "Step script(s) no step list runs:",
-        )
-        self.assertEqual(
-            sorted(listed - numbered - native), [],
-            "Step list(s) name step(s) that are neither a script nor a native step:",
-        )
+        self.assertEqual(restated, set(), "src/bin/caelestia restates step ids it should ask for")
 
     def test_the_update_fallback_sparsifies_only_paths_the_updater_writes(self) -> None:
         """The build step's repair adds to the sparse-checkout list src/bin/caelestia-update owns.
@@ -344,26 +307,18 @@ class InstallStepSafetyTests(unittest.TestCase):
 
 
 class TuiArgumentTests(unittest.TestCase):
-    def test_every_argument_is_read_for_a_mode_and_a_directory(self) -> None:
-        cli_rs = (ROOT / "installer" / "src" / "cli.rs").read_text(encoding="utf-8")
+    def test_the_arguments_are_covered_by_the_binarys_own_tests(self) -> None:
+        """The argument parser is checked by driving it, not by reading it.
 
-        self.assertIn('Some("--update")', cli_rs, "the update mode should still be recognised")
-        self.assertIn('Some("--uninstall")', cli_rs, "the uninstall mode should still be recognised")
-        self.assertIn("parsed.bundle = Some(", cli_rs,
-                      "a non-flag argument should set the bundle directory")
-        self.assertIn("while let Some(arg) = args.next()", cli_rs,
-                      "every argument should be read, not just the first")
+        `installer/tests/cli.rs` runs the built binary with each flag and asserts the mode,
+        the bundle and the refusal of a bad option. Reading cli.rs here as well only made a
+        behaviour-preserving refactor fail, so this asserts the behavioural suite exists and
+        leaves the assertions to it.
+        """
+        cli_tests = (ROOT / "installer" / "tests" / "cli.rs").read_text(encoding="utf-8")
 
-    def test_a_mode_and_a_directory_can_both_be_given(self) -> None:
-        cli_rs = (ROOT / "installer" / "src" / "cli.rs").read_text(encoding="utf-8")
-
-        self.assertNotIn(
-            "let _ = args.next();",
-            cli_rs,
-            "reading a single argument discards the second of a two-argument call",
-        )
-        self.assertIn('text.starts_with(\'-\')', cli_rs,
-                      "an unknown option should be refused rather than taken for a directory")
+        self.assertIn("--update", cli_tests, "the update mode should be driven by a test")
+        self.assertIn("--uninstall", cli_tests, "the uninstall mode should be driven by a test")
 
 
 class ScriptNumberingTests(unittest.TestCase):

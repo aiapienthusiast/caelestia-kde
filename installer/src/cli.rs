@@ -36,6 +36,10 @@ pub enum Invocation {
         bundle: Option<PathBuf>,
         debug: bool,
     },
+    /// Which steps run, for the shell launchers that used to keep their own copy of the list.
+    Steps {
+        purpose: crate::steps::Purpose,
+    },
     Version,
     Help,
     Askpass(PathBuf),
@@ -48,6 +52,9 @@ where
     let collected: Vec<OsString> = args.into_iter().collect();
     if collected.first().map(OsString::as_os_str) == Some(OsStr::new("step")) {
         return parse_step(&collected[1..]);
+    }
+    if collected.first().map(OsString::as_os_str) == Some(OsStr::new("steps")) {
+        return parse_steps(&collected[1..]);
     }
 
     let mut parsed = Args {
@@ -150,6 +157,46 @@ where
     }
 
     Ok(Invocation::Run(parsed))
+}
+
+fn parse_steps(args: &[OsString]) -> Result<Invocation, String> {
+    let mut purpose = crate::steps::Purpose::Install;
+    let mut args = args.iter();
+
+    while let Some(arg) = args.next() {
+        match arg.to_str() {
+            Some("-h") | Some("--help") => return Ok(Invocation::Help),
+            Some("--ids") => {}
+            Some("--for") => {
+                let which = args.next().ok_or("--for needs a purpose: install or packaged")?;
+                let which = which.to_str().ok_or("--for reads text, not bytes")?;
+                purpose = match crate::steps::Purpose::parse(which) {
+                    Some(purpose) => purpose,
+                    None => {
+                        return Err(format!(
+                            "--for takes install, packaged or update, not '{which}'"
+                        ));
+                    }
+                };
+            }
+            Some(text) if text.starts_with('-') => {
+                return Err(format!("unknown option: {text}"));
+            }
+            Some(text) => {
+                purpose = match crate::steps::Purpose::parse(text) {
+                    Some(purpose) => purpose,
+                    None => {
+                        return Err(format!(
+                            "steps takes --for install, packaged or update, not '{text}'"
+                        ));
+                    }
+                };
+            }
+            None => return Err("steps reads text, not bytes".to_string()),
+        }
+    }
+
+    Ok(Invocation::Steps { purpose })
 }
 
 fn parse_step(args: &[OsString]) -> Result<Invocation, String> {

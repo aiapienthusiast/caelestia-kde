@@ -154,6 +154,9 @@ pub struct Step {
     pub name: &'static str,
     pub id: &'static str,
     pub phase: Phase,
+    /// Run by the user's half of a packaged install, where the system has already been set up by
+    /// the package manager. `caelestia packaged-install` asks for this list rather than keeping one.
+    pub packaged: bool,
     pub run: Act,
 }
 
@@ -179,102 +182,119 @@ pub const STEPS: [Step; 17] = [
         name: "Update system",
         id: "00a-system-update",
         phase: Phase::Prepare,
+        packaged: false,
         run: system_update::run,
     },
     Step {
         name: "Check for required tools",
         id: "01-ensure-prereqs",
         phase: Phase::Prepare,
+        packaged: false,
         run: prereqs::run,
     },
     Step {
         name: "Fetch the shell sources",
         id: "02a-submodules",
         phase: Phase::Prepare,
+        packaged: false,
         run: submodules::run,
     },
     Step {
         name: "Back up current setup",
         id: "00-backup-themes",
         phase: Phase::Prepare,
+        packaged: false,
         run: backup::run,
     },
     Step {
         name: "Install packages",
         id: "02-all-packages",
         phase: Phase::Packages,
+        packaged: false,
         run: packages::all,
     },
     Step {
         name: "Set up the theming tools",
         id: "02-packages",
         phase: Phase::Packages,
+        packaged: false,
         run: packages::tooling,
     },
     Step {
         name: "Deploy config files",
         id: "03-deploy-configs",
         phase: Phase::Configure,
+        packaged: true,
         run: configs::run,
     },
     Step {
         name: "Download wallpapers",
         id: "03a-wallpapers",
         phase: Phase::Configure,
+        packaged: true,
         run: wallpapers::run,
     },
     Step {
         name: "Apply KDE theme",
         id: "04-deploy-kde",
         phase: Phase::Configure,
+        packaged: true,
         run: kde_theme::run,
     },
     Step {
         name: "Apply window rules",
         id: "04a-window-rules",
         phase: Phase::Configure,
+        packaged: true,
         run: window_rules::run,
     },
     Step {
         name: "Match the login screen",
         id: "05-login-screen",
         phase: Phase::Configure,
+        packaged: true,
         run: login_screen::run,
     },
     Step {
         name: "Enable system services",
         id: "06-services",
         phase: Phase::Configure,
+        packaged: true,
         run: services::run,
     },
     Step {
         name: "Configure KDE applications",
         id: "07-kde-apps",
         phase: Phase::Configure,
+        packaged: false,
         run: kde_apps::run,
     },
     Step {
         name: "Build Caelestia shell",
         id: "08-build-shell",
         phase: Phase::Build,
+        packaged: true,
         run: build_shell::run,
     },
     Step {
         name: "Apply system tweaks",
         id: "09-system-tweaks",
         phase: Phase::Finalize,
+        packaged: true,
         run: system_tweaks::run,
     },
     Step {
         name: "Create autostart entries",
         id: "10-autostart",
         phase: Phase::Finalize,
+        packaged: true,
         run: autostart::run,
     },
     Step {
         name: "Install the apps you picked",
         id: "11-optional-apps",
         phase: Phase::Finalize,
+        packaged: false,
         run: optional_apps::run,
     },
 ];
@@ -386,6 +406,41 @@ pub const SYNC_LOGIN_SCREEN: &str = "SYNC_LOGIN_SCREEN";
 /// Applications question, the bulk row and the step that installs them cannot disagree.
 pub const OPTIONAL_APP_ANSWERS: [&str; 6] = crate::apps::Apps::IDS;
 
+/// Which of the table's steps a caller is asking about. The table is the list; these are the two
+/// cuts of it something else needs, so no launcher has to keep its own copy.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Purpose {
+    /// Everything an install runs, in the order it runs them.
+    Install,
+    /// The steps a packaged install still has to do for the user.
+    Packaged,
+    /// The repairs an update re-runs.
+    Update,
+}
+
+impl Purpose {
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "install" => Some(Purpose::Install),
+            "packaged" => Some(Purpose::Packaged),
+            "update" => Some(Purpose::Update),
+            _ => None,
+        }
+    }
+}
+
+pub fn ids(purpose: Purpose) -> Vec<&'static str> {
+    match purpose {
+        Purpose::Install => STEPS.iter().map(|step| step.id).collect(),
+        Purpose::Packaged => STEPS
+            .iter()
+            .filter(|step| step.packaged)
+            .map(|step| step.id)
+            .collect(),
+        Purpose::Update => crate::update::step_ids(),
+    }
+}
+
 fn answer_is_true(answers: &Answers, name: &str) -> bool {
     answers.get(name).map(String::as_str) == Some("true")
 }
@@ -423,6 +478,44 @@ mod tests {
         let count = ids.len();
         ids.dedup();
         assert_eq!(ids.len(), count, "duplicate step ids");
+    }
+
+    #[test]
+    fn the_whole_table_is_what_an_install_runs_in_order() {
+        assert_eq!(ids(Purpose::Install), STEPS.iter().map(|step| step.id).collect::<Vec<_>>());
+        assert_eq!(ids(Purpose::Install).len(), STEPS.len());
+    }
+
+    #[test]
+    fn a_packaged_install_runs_the_user_half_and_nothing_system_wide() {
+        // This list used to live in `src/bin/caelestia`; it is the table's flag now, so a step
+        // added to the install cannot be forgotten by the packaged path.
+        assert_eq!(
+            ids(Purpose::Packaged),
+            [
+                "03-deploy-configs",
+                "03a-wallpapers",
+                "04-deploy-kde",
+                "04a-window-rules",
+                "05-login-screen",
+                "06-services",
+                "08-build-shell",
+                "09-system-tweaks",
+                "10-autostart",
+            ]
+        );
+    }
+
+    #[test]
+    fn an_update_runs_its_own_repairs_out_of_the_same_table() {
+        let update = ids(Purpose::Update);
+        assert_eq!(
+            update,
+            ["03-deploy-configs", "08-build-shell", "09-system-tweaks"]
+        );
+        for id in update {
+            assert!(find(id).is_some(), "{id} is not in the step table");
+        }
     }
 
     #[test]
