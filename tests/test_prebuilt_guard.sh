@@ -228,4 +228,33 @@ test_a_checkout_without_cargo_says_how_to_get_an_installer() {
     esac
 }
 
+test_a_build_that_fails_is_not_reported_as_a_download_problem() {
+    local dir err status
+
+    dir="$(mktemp -d)"
+    mkdir -p "$dir/installer"
+    : > "$dir/installer/Cargo.toml"
+
+    err="$(BUNDLE_DIR="$dir" BIN="$dir/caelestia-install" bash -c "
+        tui_version() { echo '9.9.9'; }
+        release_tag() { echo 'v9.9.9'; }
+        fetch_asset() { return 22; }
+        verify_download() { return 0; }
+        uname() { echo 'x86_64'; }
+        cargo() { return 101; }
+        $BUILD_SOURCE
+        $FETCH_SOURCE
+        fetch_installer
+    " 2>&1 >/dev/null)"
+    status=$?
+
+    if [[ $status -eq 0 ]]; then
+        fail "a failed build must not claim an installer"
+    fi
+    case "$err" in
+        *"Building the installer from this checkout failed"*) ;;
+        *) fail "a failed build should say so; got: $err" ;;
+    esac
+}
+
 run_tests

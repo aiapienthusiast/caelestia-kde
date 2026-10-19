@@ -143,10 +143,18 @@ fetch_installer() {
         # `dev` names the release it is about to become, so between the version bump and the tag
         # being published there is nothing to download. A checkout can build the same binary
         # instead of stopping the install over a release that is not due yet.
-        if build_installer; then
-            return 0
-        fi
-        echo "[FATAL] Could not download the installer for v${version}." >&2
+        local built=0
+        build_installer || built=$?
+        case "$built" in
+            0) return 0 ;;
+            2)
+                echo "[FATAL] Building the installer from this checkout failed." >&2
+                return 1
+                ;;
+        esac
+        # Nothing published and nothing buildable here: the two are different problems, so the
+        # last line says which one it is rather than blaming the download alone.
+        echo "[FATAL] No installer for v${version} is published, and this machine cannot build one: see above." >&2
         return 1
     fi
 
@@ -192,12 +200,10 @@ build_installer() {
 
     rm -f "$built"
     if ! cargo build --release --manifest-path "$manifest"; then
-        echo "[FATAL] Building the installer from this checkout failed." >&2
-        return 1
+        return 2
     fi
     if [[ ! -x "$built" ]]; then
-        echo "[FATAL] The build finished but produced no installer at $built." >&2
-        return 1
+        return 2
     fi
     cp -f "$built" "$BIN" && chmod +x "$BIN"
 }

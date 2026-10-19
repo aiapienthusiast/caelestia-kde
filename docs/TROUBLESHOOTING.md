@@ -40,7 +40,9 @@ Rust. Point `CAELESTIA_INSTALL_BIN` at a binary you built to skip both.
 
 | Symptom | Likely Cause | Fix |
 |---|---|---|
-| `[FATAL] Could not download the installer for vN` | No network, or the release is gone, and `cargo` is not installed to build it | Check the connection; publish the release named by `.github/version.env`, install Rust, or set `CAELESTIA_INSTALL_BIN` |
+| `[FATAL] Could not download the installer for vN` | No network, or the release is gone | Check the connection; publish the release named by `.github/version.env` |
+| `[FATAL] No installer for vN is published, and this machine cannot build one` | The checkout names a version that has no release yet, and `cargo` is not installed | Install Rust (`https://rustup.rs`), set `CAELESTIA_INSTALL_BIN` to a built installer, or check out a released tag |
+| `[FATAL] Building the installer from this checkout failed` | `cargo build` failed | Read the compiler output above it; the same sources build in CI |
 | `[FATAL] The downloaded installer failed its checksum` | A truncated or tampered download | Re-run `setup.sh`; if it repeats, the published asset is wrong |
 | `[FATAL] The release publishes no checksum for the installer` | A release from before checksums existed | Update the checkout, or install from an older release |
 | `[FATAL] The downloaded installer does not report vN` | The checkout and the published binary disagree | Update the checkout |
