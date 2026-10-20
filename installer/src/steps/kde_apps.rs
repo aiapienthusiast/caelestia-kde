@@ -1,7 +1,6 @@
 use crate::distro::{self, Distro};
 use crate::output;
 use crate::pkg;
-use crate::process;
 use crate::steps::{Context, Failure};
 
 pub fn run(context: &Context) -> Result<(), Failure> {
@@ -26,13 +25,7 @@ pub fn run(context: &Context) -> Result<(), Failure> {
         output::skip("Skipping Kvantum installation by user choice.");
     }
 
-    let _ = process::succeeds(
-        "kwriteconfig6",
-        &[
-            "--file", "plasmarc", "--group", "Theme", "--key", "name", "darkly",
-        ],
-        None,
-    );
+    let _ = crate::kde::write("plasmarc", &["Theme"], "name", "darkly");
 
     println!("[OK]  KDE extra apps step complete.");
     Ok(())

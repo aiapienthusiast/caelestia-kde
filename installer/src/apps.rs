@@ -13,6 +13,7 @@ pub struct Apps {
 }
 
 impl Apps {
+    /// The ids of the rows that are about an app rather than about Caelestia itself.
     pub const IDS: [&'static str; 6] = [
         "INSTALL_VSCODE",
         "INSTALL_ZED",
@@ -22,6 +23,8 @@ impl Apps {
         "INSTALL_FIREFOX_THEME",
     ];
 
+    /// The apps on this machine, probed once: the answer is a property of the machine, not of a
+    /// screen, so a wizard that asked per screen would run the same probes over and over.
     pub fn here() -> Self {
         static APPS: OnceLock<Apps> = OnceLock::new();
         *APPS.get_or_init(Self::probe)
@@ -38,6 +41,7 @@ impl Apps {
         }
     }
 
+    /// Whether the app this row is about is here. A row about something else is always relevant.
     pub fn has(&self, id: &str) -> bool {
         match id {
             "INSTALL_VSCODE" => self.vscode,
@@ -50,6 +54,8 @@ impl Apps {
         }
     }
 
+    /// Whether this id is one of the apps the Applications question offers, as opposed to one of
+    /// the other switches. The three states of an app row depend on it.
     pub fn is_app_row(&self, id: &str) -> bool {
         Self::IDS.contains(&id)
     }

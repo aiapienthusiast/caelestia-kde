@@ -35,6 +35,7 @@ pub fn is_packaged() -> bool {
 }
 
 impl Kind {
+    /// What to call this install's layout on screen.
     pub fn label(self) -> &'static str {
         match self {
             Kind::Source => "source",
@@ -115,6 +116,8 @@ fn shell_config_for(kind: Kind) -> PathBuf {
 mod tests {
     use super::*;
 
+    /// The rule the environment and the binary's own location decide, kept apart from the
+    /// reading of either so both cases can be asked about.
     fn packaged_from(exe: &str) -> bool {
         let exe = exe.replace('\\', "/");
         exe.starts_with("/usr/") && !exe.starts_with("/usr/local/")

@@ -53,11 +53,7 @@ pub fn run(context: &Context) -> Result<(), Failure> {
 }
 
 fn configured_desktops() -> Option<String> {
-    process::capture(
-        "kreadconfig6",
-        &["--file", "kwinrc", "--group", "Desktops", "--key", "Number"],
-    )
-    .filter(|count| !count.is_empty())
+    crate::kde::read("kwinrc", &["Desktops"], "Number")
 }
 
 fn first_install(marker: Option<&str>, configured_count: Option<&str>) -> bool {
@@ -72,11 +68,7 @@ fn is_first_install(context: &Context, configured_count: Option<&str>) -> bool {
 }
 
 fn set(config: &str, group: &str, key: &str, value: &str) -> bool {
-    process::succeeds(
-        "kwriteconfig6",
-        &["--file", config, "--group", group, "--key", key, value],
-        None,
-    )
+    crate::kde::write(config, &[group], key, value)
 }
 
 fn disable_kde_osd() {

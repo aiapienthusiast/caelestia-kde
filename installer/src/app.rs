@@ -15,10 +15,11 @@ use crate::privileges::{self, Credential, Inhibitor};
 use crate::signals;
 use crate::steps::{self, STEPS, Status};
 use crate::theme::Theme;
-use crate::ui::{self, Key};
+use crate::ui;
 
 mod keys;
 
+/// How many lines of the failing step's output the failure card shows.
 const FAILURE_TAIL: usize = 6;
 
 pub fn log_path() -> PathBuf {
@@ -27,6 +28,8 @@ pub fn log_path() -> PathBuf {
         .unwrap_or_else(|| std::env::temp_dir().join("caelestia-install.log"))
 }
 
+/// What the wizard is here to do. Update and Uninstall leave the TUI: their own prompts would
+/// otherwise fight the TUI for the terminal.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Action {
     Install,
@@ -53,6 +56,9 @@ impl Action {
         }
     }
 
+    /// Why an action is not on offer here, said as the way out rather than as the fact the row
+    /// above already carries. Install is always on offer - a reinstall is a thing people do - so
+    /// that arm exists to keep the match total rather than to be shown.
     pub fn unavailable(self) -> &'static str {
         match self {
             Action::Update | Action::Uninstall => "Install Caelestia first",
@@ -69,6 +75,9 @@ impl Action {
     }
 }
 
+/// Where the wizard has got to, in the order it works through. Overlays are not stages: closing
+/// one returns to the stage it was opened over.
+/// What the confirm overlay is asking about.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Stage {
     Home,
@@ -97,6 +106,7 @@ pub enum Confirm {
 }
 
 impl Confirm {
+    /// The buttons, the first being the one that does the thing.
     pub fn buttons(self) -> &'static [&'static str] {
         match self {
             Confirm::Handoff(Action::Update) => &["Update now", "Cancel"],
@@ -107,6 +117,8 @@ impl Confirm {
         }
     }
 
+    /// Where the highlight starts. Two of these questions end something a keystroke cannot get
+    /// back — the run, or the session — so their safe answer is the one under the highlight.
     pub fn focus(self) -> usize {
         match self {
             Confirm::Quit | Confirm::LogOut => 1,
@@ -114,6 +126,7 @@ impl Confirm {
         }
     }
 
+    /// The button a letter stands for, in the order they are drawn.
     pub fn shortcut(self, letter: char) -> Option<usize> {
         match letter {
             'y' | 'Y' => Some(0),
@@ -123,6 +136,9 @@ impl Confirm {
     }
 }
 
+/// How the wizard will become root: its own helper can ask, or the reader can answer.
+/// The actions that hand the terminal over to something else: another program of the installer's,
+/// or the end of the session itself.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AuthMethod {
     Fingerprint,
@@ -180,6 +196,7 @@ impl Detection {
         }
     }
 
+    /// What to call the distribution and the layout on screen.
     pub fn distro_label(&self) -> &'static str {
         self.distro.label()
     }
@@ -188,6 +205,10 @@ impl Detection {
         self.kind.label()
     }
 
+    /// The things that will stop an install, as opposed to the things that are merely true.
+    /// Each one is the condition its own sentence describes, so a blocker never fires on a
+    /// machine where what it says is missing is not needed - and a distribution that is unknown
+    /// is said once, rather than also blaming the package manager it was never going to find.
     pub fn blockers(&self) -> Vec<&'static str> {
         let mut blockers = Vec::new();
         if self.distro == crate::distro::Distro::Unknown {
@@ -216,6 +237,7 @@ pub struct Choice {
     pub help: &'static str,
 }
 
+/// What went wrong, what can be done about it, and what each answer costs.
 pub struct FailureCard {
     pub step: &'static str,
     pub detail: Vec<LogLine>,
@@ -257,6 +279,8 @@ impl FailureCard {
         }
     }
 
+    /// The command that reproduces the step outside the TUI, so a failure can be worked on
+    /// somewhere there is room to read it.
     pub fn reproduction(&self) -> String {
         format!("caelestia-install step {}", self.id)
     }
@@ -268,6 +292,8 @@ pub struct App {
     pub env: Env,
     pub theme: Theme,
     pub glyphs: Glyphs,
+    /// Which of the themeable apps are on this machine. Read once, and the reason a question can
+    /// ask about the apps somebody has instead of listing the ones they might install.
     pub apps: crate::apps::Apps,
     pub fingerprint: bool,
     pub needs_password: bool,
@@ -295,12 +321,14 @@ pub struct App {
     pub problem: Option<String>,
     pub notice: Option<String>,
     pub failure: Option<FailureCard>,
-    pub paused: bool,
     run: crate::run::Session,
     pub log: Vec<LogLine>,
     pub log_follow: bool,
     pub log_scroll: usize,
     pub log_loud_only: bool,
+    /// Which of the lines that went wrong `n` and `p` are standing on, counted as a row of the log
+    /// as it is shown. Cleared by any other way of moving through the log, so the next jump starts
+    /// from what the pane is showing.
     pub log_problem: Option<usize>,
     pub confirm_focus: usize,
     pub area: Rect,
@@ -309,6 +337,8 @@ pub struct App {
     handoff: Option<Handoff>,
     credential: Option<Credential>,
     inhibitor: Option<Inhibitor>,
+    /// Set when something may have drawn on the screen besides the wizard, so the next frame is
+    /// painted whole instead of diffed against a record that no longer matches.
     pub repaint: bool,
     pub landed: Option<Landed>,
 }
@@ -348,12 +378,7 @@ impl Landed {
 
 impl App {
     pub fn new(bundle: PathBuf, log_path: PathBuf, env: Env) -> Self {
-        let mut answers = Answers::new();
-        menu::seed_answers(&menu::QUESTIONS, &mut answers);
-        let apps = crate::apps::Apps::here();
-        for (id, answer) in apps.answers() {
-            answers.insert(id, answer.to_string());
-        }
+        let answers = menu::starting(&[]);
         let baseline = answers.clone();
         let fingerprint = privileges::fingerprint_ready();
         let run = crate::run::Session::new(&bundle, log_path.clone(), Vec::new(), &answers);
@@ -362,7 +387,7 @@ impl App {
             log_path,
             theme: Theme::resolve(&env),
             glyphs: Glyphs::resolve(&env),
-            apps,
+            apps: crate::apps::Apps::here(),
             fingerprint,
             needs_password: needs_password(),
             env,
@@ -389,7 +414,6 @@ impl App {
             problem: None,
             notice: None,
             failure: None,
-            paused: false,
             run,
             log: Vec::new(),
             log_follow: true,
@@ -408,6 +432,9 @@ impl App {
         }
     }
 
+    /// Point the wizard at a machine with a known set of apps, and take the answers it would have
+    /// started with there. Which apps a machine has is read from the machine, so this is the only
+    /// way to say what the app rows are about.
     #[cfg(test)]
     pub fn with_apps(mut self, apps: crate::apps::Apps) -> Self {
         let seeded: Vec<(&'static str, &'static str)> = apps.answers().collect();
@@ -419,6 +446,8 @@ impl App {
         self
     }
 
+    /// Point the wizard at a machine that has, or has not, a fingerprint to offer. The same reason
+    /// the apps are settable: what the host happens to have must not decide what a test asserts.
     #[cfg(test)]
     pub fn with_fingerprint(mut self, ready: bool) -> Self {
         self.fingerprint = ready;
@@ -499,6 +528,7 @@ impl App {
         self.run.total_elapsed()
     }
 
+    /// The step being worked on, as an index into the table.
     pub fn running_step(&self) -> Option<usize> {
         self.run
             .statuses()
@@ -521,6 +551,8 @@ impl App {
         }
     }
 
+    /// The rows of the question on screen. This is the list the cursor indexes, so what is drawn
+    /// and what a key moves over cannot disagree.
     pub fn current_entries(&self) -> Vec<&'static Entry> {
         menu::items_of(self.question).iter().collect()
     }
@@ -529,6 +561,7 @@ impl App {
         self.current_entries().into_iter().nth(self.cursor)
     }
 
+    /// Whether a row's answer differs from the one this machine started at.
     pub fn is_changed(&self, entry: &Entry) -> bool {
         menu::is_changed(entry, &self.answers, &self.baseline)
     }
@@ -542,6 +575,12 @@ impl App {
 
     pub fn installed(&self) -> bool {
         self.detection.installed
+    }
+
+    /// The run is stopped on a failure the user has not resolved yet. One fact, one field: the card
+    /// that is still on record is what stops the run, so the two cannot disagree.
+    pub fn paused(&self) -> bool {
+        self.failure.is_some()
     }
 
     /// A rehearsal run walks the table without running anything. Only a test asks for one, so in
@@ -579,28 +618,28 @@ impl App {
             .count()
     }
 
-    pub fn visible_log(&self) -> Vec<&LogLine> {
+    /// The lines the log pane shows, in order: everything, or only what went wrong.
+    pub fn visible_log(&self) -> impl Iterator<Item = &LogLine> + '_ {
         self.log
             .iter()
             .filter(|line| !self.log_loud_only || line.is_loud())
-            .collect()
     }
 
     pub fn log_rows(&self) -> usize {
         ui::log_rows(self.run_layout().log).max(1) as usize
     }
 
-    pub fn problem_rows(&self) -> Vec<usize> {
+    /// The rows of the log as it is shown that went wrong, in order. These are what `n` and `p`
+    /// step through, what the heading counts, and what the scrollbar marks.
+    pub fn problem_rows(&self) -> impl Iterator<Item = usize> + '_ {
         self.visible_log()
-            .iter()
             .enumerate()
             .filter(|(_, line)| line.is_loud())
             .map(|(row, _)| row)
-            .collect()
     }
 
     pub(super) fn jump_to_problem(&mut self, forward: bool, rows: usize) {
-        let problems = self.problem_rows();
+        let problems: Vec<usize> = self.problem_rows().collect();
         let (Some(&first), Some(&last)) = (problems.first(), problems.last()) else {
             self.notice = Some("nothing in the log went wrong".to_string());
             return;
@@ -639,6 +678,7 @@ impl App {
         ui::run_layout(ui::body(self.area))
     }
 
+    /// The first step that has not started: what the run screen names between two steps.
     pub fn next_step(&self) -> Option<usize> {
         self.run
             .statuses()
@@ -648,11 +688,11 @@ impl App {
 
     pub fn log_window_for(&self, rows: usize) -> (usize, usize) {
         let rows = rows.max(1);
-        let lines = self.visible_log();
+        let total = self.visible_log().count();
         let start = if self.log_follow {
-            lines.len().saturating_sub(rows)
+            total.saturating_sub(rows)
         } else {
-            self.log_scroll.min(lines.len().saturating_sub(rows))
+            self.log_scroll.min(total.saturating_sub(rows))
         };
         (start, rows)
     }
@@ -672,6 +712,7 @@ impl App {
         self.leaving = Some(outcome);
     }
 
+    /// The signal handler's escape hatch, and `ctrl+c`: stop whatever is running, then leave.
     fn interrupt(&mut self) -> Flow {
         if self.overlay == Some(Overlay::Confirm) {
             return self.stop_and_leave();
@@ -683,6 +724,8 @@ impl App {
         Flow::Done(Outcome::Interrupted)
     }
 
+    /// Whether a step is in flight, which is the only thing that makes quitting worth asking
+    /// about.
     fn busy(&self) -> bool {
         self.run.is_running() || self.running_step().is_some()
     }
@@ -736,111 +779,6 @@ impl App {
         }
     }
 
-    pub fn keys(&self) -> Vec<Key> {
-        let glyphs = self.glyphs;
-        match self.overlay {
-            Some(Overlay::Keys) => vec![ui::key(glyphs.escape(), "close")],
-            Some(Overlay::Log) => {
-                let mut keys = vec![
-                    ui::key(glyphs.up_down(), "scroll"),
-                    ui::key("w", "loud only"),
-                    ui::key("f", "follow"),
-                ];
-                if !self.problem_rows().is_empty() {
-                    keys.push(ui::key("n", "next problem"));
-                    keys.push(ui::key("p", "previous"));
-                }
-                keys.push(ui::key(glyphs.escape(), "close"));
-                keys
-            }
-            Some(Overlay::Failure) => vec![
-                ui::key("r", "retry"),
-                ui::key("s", "skip"),
-                ui::key("i", "ignore"),
-                ui::key("q", "stop"),
-                ui::key(glyphs.escape(), "decide later"),
-            ],
-            Some(Overlay::Confirm) => vec![
-                ui::key(glyphs.up_down(), "move"),
-                ui::key(glyphs.enter(), "choose"),
-            ],
-            None => match self.stage {
-                Stage::Home => vec![
-                    ui::key(glyphs.up_down(), "choose"),
-                    ui::key(glyphs.enter(), "run"),
-                    ui::key("t", "theme"),
-                    ui::key("?", "keys"),
-                    ui::key("q", "quit"),
-                ],
-                Stage::Detect => {
-                    let mut keys = vec![
-                        ui::key(glyphs.enter(), "continue"),
-                        ui::key(glyphs.escape(), "back"),
-                    ];
-                    if self.installed() {
-                        keys.insert(1, ui::key("u", "update instead"));
-                    }
-                    keys
-                }
-                Stage::Auth => vec![
-                    ui::key(glyphs.up_down(), "move"),
-                    ui::key(glyphs.enter(), "choose"),
-                    ui::key(glyphs.escape(), "back"),
-                ],
-                Stage::Privilege if self.checking.is_some() => Vec::new(),
-                Stage::Privilege if self.auth == Some(AuthMethod::Fingerprint) => {
-                    vec![ui::key(glyphs.escape(), "back")]
-                }
-                Stage::Privilege if self.attempts > 0 => vec![
-                    ui::key(glyphs.enter(), "continue"),
-                    ui::key("r", "try again"),
-                    ui::key(glyphs.escape(), "back"),
-                ],
-                Stage::Privilege => vec![
-                    ui::key(glyphs.enter(), "continue"),
-                    ui::key(glyphs.escape(), "back"),
-                ],
-                Stage::Options => vec![
-                    ui::key(glyphs.enter(), "continue"),
-                    ui::key(glyphs.up_down(), "move"),
-                    ui::key(glyphs.left_right(), "change"),
-                    ui::key(glyphs.escape(), "back"),
-                    ui::key("r", "reset"),
-                    ui::key("R", "reset all"),
-                ],
-                Stage::Run if self.paused => vec![
-                    ui::key(glyphs.enter(), "the failure"),
-                    ui::key("l", "log"),
-                    ui::key("q", "quit"),
-                ],
-                Stage::Run => {
-                    let mut keys = vec![
-                        ui::key(glyphs.up_down(), "scroll"),
-                        ui::key("f", "follow"),
-                        ui::key("w", "loud only"),
-                    ];
-                    if !self.problem_rows().is_empty() {
-                        keys.push(ui::key("n", "next problem"));
-                        keys.push(ui::key("p", "previous"));
-                    }
-                    keys.push(ui::key("l", "log"));
-                    keys.push(ui::key("q", "quit"));
-                    keys
-                }
-                Stage::Done => {
-                    let mut keys = Vec::new();
-                    if self.tally().unresolved() > 0 {
-                        keys.push(ui::key("r", "retry failed"));
-                    }
-                    keys.push(ui::key("l", "log"));
-                    keys.push(ui::key(glyphs.enter(), "finish"));
-                    keys.push(ui::key("q", "quit"));
-                    keys
-                }
-            },
-        }
-    }
-
     pub(super) fn confirm_install(&mut self) -> Flow {
         self.refresh_detection();
         if self.detection.installed && !self.reinstall_acknowledged {
@@ -886,10 +824,10 @@ impl App {
         self.log_follow = true;
         self.log_problem = None;
         self.failure = None;
-        self.paused = false;
         self.start_next();
     }
 
+    /// Try the failed steps again, without redoing what worked.
     pub fn retry_failed(&mut self) {
         let failed: Vec<usize> = self
             .run
@@ -909,7 +847,6 @@ impl App {
         self.run.cursor_to(failed[0]);
         self.stage = Stage::Run;
         self.failure = None;
-        self.paused = false;
         self.log_follow = true;
         self.log_problem = None;
         self.start_next();
@@ -928,7 +865,7 @@ impl App {
         let events = self.run.advance();
         let finished = self.run.is_complete();
         self.apply(events);
-        if finished && !self.paused {
+        if finished && !self.paused() {
             self.stage = Stage::Done;
             self.landed = Some(Landed::read(&self.bundle));
             self.credential = None;
@@ -940,7 +877,7 @@ impl App {
         let events = self.run.pump();
         let settled = !self.run.is_running();
         self.apply(events);
-        if settled && !self.paused && self.stage == Stage::Run {
+        if settled && !self.paused() && self.stage == Stage::Run {
             self.start_next();
         }
     }
@@ -950,7 +887,7 @@ impl App {
         for event in events {
             match event {
                 crate::run::Event::Skipped { index, reason } => {
-                    let name = STEPS[index].name;
+                    let name = self.run.steps()[index].name;
                     self.log.push(match reason {
                         crate::run::SkipReason::SwitchedOff => {
                             LogLine::skip(format!("{name} is switched off in the options"))
@@ -965,20 +902,20 @@ impl App {
                 crate::run::Event::Finished { index, status } => {
                     self.repaint = true;
                     if status.is_failure() {
-                        self.failure = Some(FailureCard::new(&STEPS[index], &self.log));
-                        self.paused = true;
+                        self.failure = Some(FailureCard::new(&self.run.steps()[index], &self.log));
                         return;
                     }
                     if self.rehearsing() {
-                        self.log
-                            .push(LogLine::ok(format!("{} finished", STEPS[index].name)));
+                        self.log.push(LogLine::ok(format!(
+                            "{} finished",
+                            self.run.steps()[index].name
+                        )));
                     }
                 }
                 crate::run::Event::Broken { index, problem } => {
                     self.repaint = true;
                     self.log.push(LogLine::error(problem));
-                    self.failure = Some(FailureCard::new(&STEPS[index], &self.log));
-                    self.paused = true;
+                    self.failure = Some(FailureCard::new(&self.run.steps()[index], &self.log));
                     return;
                 }
             }
@@ -986,6 +923,9 @@ impl App {
     }
 }
 
+/// Counted once, so the screen and the exit code cannot disagree. Only what the screens ask for:
+/// an install that went through is described by what it left behind, not by how many steps it
+/// took to get there.
 pub struct Tally {
     pub warn: usize,
     pub failed: usize,
@@ -993,6 +933,7 @@ pub struct Tally {
 }
 
 impl Tally {
+    /// Steps that did not do what they were asked to do.
     pub fn unresolved(&self) -> usize {
         self.failed + self.ignored
     }
@@ -1090,6 +1031,7 @@ mod tests {
         press(app, KeyCode::Char(character))
     }
 
+    /// Which question a row lives in, by the row's id.
     fn question_of(id: &str) -> usize {
         (0..menu::question_count())
             .find(|index| menu::items_of(*index).iter().any(|entry| entry.id() == id))
@@ -1107,6 +1049,7 @@ mod tests {
         }
     }
 
+    /// Everything the run screen shows, as a state without any of the work.
     fn run_with(statuses: &[Status]) -> App {
         let mut app = app();
         app.stage = Stage::Run;
@@ -1835,12 +1778,12 @@ mod tests {
         let mut app = run_with(&[Status::Failed]);
         app.run.cursor_to(0);
         app.failure = Some(FailureCard::new(&STEPS[0], &[]));
-        app.paused = true;
+        app.failure = Some(FailureCard::new(&STEPS[0], &[]));
         app.overlay = Some(Overlay::Failure);
 
         press(&mut app, KeyCode::Esc);
         assert_eq!(app.overlay, None);
-        assert!(app.paused);
+        assert!(app.paused());
         assert_eq!(app.status(0), Status::Failed);
         assert_eq!(app.current(), 0, "and nothing advanced past it");
 
@@ -1871,7 +1814,7 @@ mod tests {
             char_key(&mut app, key);
             assert_eq!(app.status(last), expected);
             assert_eq!(app.stage, Stage::Done);
-            assert!(!app.paused);
+            assert!(!app.paused());
         }
     }
 
@@ -2138,12 +2081,12 @@ mod tests {
             LogLine::parse("  [WARN]  slow mirror"),
             LogLine::parse("  [ERR]   a package failed"),
         ];
-        assert_eq!(app.visible_log().len(), 3);
+        assert_eq!(app.visible_log().count(), 3);
         char_key(&mut app, 'w');
-        assert_eq!(app.visible_log().len(), 2);
+        assert_eq!(app.visible_log().count(), 2);
         assert!(app.log_loud_only);
         char_key(&mut app, 'w');
-        assert_eq!(app.visible_log().len(), 3);
+        assert_eq!(app.visible_log().count(), 3);
     }
 
     #[test]

@@ -5,6 +5,7 @@
 //! frame after this key should say.
 
 use super::*;
+use crate::ui::Key;
 
 impl App {
     pub(super) fn home_key(&mut self, key: KeyEvent) -> Flow {
@@ -391,7 +392,7 @@ impl App {
     }
 
     pub(super) fn run_key(&mut self, key: KeyEvent) -> Flow {
-        if self.paused && matches!(key.code, KeyCode::Enter | KeyCode::Char(' ')) {
+        if self.paused() && matches!(key.code, KeyCode::Enter | KeyCode::Char(' ')) {
             self.overlay = Some(Overlay::Failure);
             return Flow::Continue;
         }
@@ -433,7 +434,7 @@ impl App {
     pub(super) fn scroll_log(&mut self, step: isize, rows: usize) {
         self.log_follow = false;
         self.log_problem = None;
-        let furthest = self.visible_log().len().saturating_sub(rows) as isize;
+        let furthest = self.visible_log().count().saturating_sub(rows) as isize;
         self.log_scroll = (self.log_scroll as isize + step).clamp(0, furthest) as usize;
     }
 
@@ -546,7 +547,6 @@ impl App {
             }
             KeyCode::Esc => {
                 self.overlay = None;
-                self.paused = true;
             }
             _ => {}
         }
@@ -555,7 +555,7 @@ impl App {
 
     fn resolve_failure(&mut self, choice: usize) -> Flow {
         self.overlay = None;
-        self.paused = false;
+        self.failure = None;
         match choice {
             0 => {
                 self.run.retry();
@@ -630,5 +630,114 @@ impl App {
         self.confirm = Some(confirm);
         self.confirm_focus = confirm.focus();
         self.overlay = Some(Overlay::Confirm);
+    }
+}
+
+/// The keys each screen and overlay offers, kept next to the handlers that implement them so a
+/// binding cannot move without its hint moving with it.
+impl App {
+    pub fn keys(&self) -> Vec<Key> {
+        let glyphs = self.glyphs;
+        match self.overlay {
+            Some(Overlay::Keys) => vec![ui::key(glyphs.escape(), "close")],
+            Some(Overlay::Log) => {
+                let mut keys = vec![
+                    ui::key(glyphs.up_down(), "scroll"),
+                    ui::key("w", "loud only"),
+                    ui::key("f", "follow"),
+                ];
+                if self.problem_rows().next().is_some() {
+                    keys.push(ui::key("n", "next problem"));
+                    keys.push(ui::key("p", "previous"));
+                }
+                keys.push(ui::key(glyphs.escape(), "close"));
+                keys
+            }
+            Some(Overlay::Failure) => vec![
+                ui::key("r", "retry"),
+                ui::key("s", "skip"),
+                ui::key("i", "ignore"),
+                ui::key("q", "stop"),
+                ui::key(glyphs.escape(), "decide later"),
+            ],
+            Some(Overlay::Confirm) => vec![
+                ui::key(glyphs.up_down(), "move"),
+                ui::key(glyphs.enter(), "choose"),
+            ],
+            None => match self.stage {
+                Stage::Home => vec![
+                    ui::key(glyphs.up_down(), "choose"),
+                    ui::key(glyphs.enter(), "run"),
+                    ui::key("t", "theme"),
+                    ui::key("?", "keys"),
+                    ui::key("q", "quit"),
+                ],
+                Stage::Detect => {
+                    let mut keys = vec![
+                        ui::key(glyphs.enter(), "continue"),
+                        ui::key(glyphs.escape(), "back"),
+                    ];
+                    if self.installed() {
+                        keys.insert(1, ui::key("u", "update instead"));
+                    }
+                    keys
+                }
+                Stage::Auth => vec![
+                    ui::key(glyphs.up_down(), "move"),
+                    ui::key(glyphs.enter(), "choose"),
+                    ui::key(glyphs.escape(), "back"),
+                ],
+                Stage::Privilege if self.checking.is_some() => Vec::new(),
+                Stage::Privilege if self.auth == Some(AuthMethod::Fingerprint) => {
+                    vec![ui::key(glyphs.escape(), "back")]
+                }
+                Stage::Privilege if self.attempts > 0 => vec![
+                    ui::key(glyphs.enter(), "continue"),
+                    ui::key("r", "try again"),
+                    ui::key(glyphs.escape(), "back"),
+                ],
+                Stage::Privilege => vec![
+                    ui::key(glyphs.enter(), "continue"),
+                    ui::key(glyphs.escape(), "back"),
+                ],
+                Stage::Options => vec![
+                    ui::key(glyphs.enter(), "continue"),
+                    ui::key(glyphs.up_down(), "move"),
+                    ui::key(glyphs.left_right(), "change"),
+                    ui::key(glyphs.escape(), "back"),
+                    ui::key("r", "reset"),
+                    ui::key("R", "reset all"),
+                ],
+                Stage::Run if self.paused() => vec![
+                    ui::key(glyphs.enter(), "the failure"),
+                    ui::key("l", "log"),
+                    ui::key("q", "quit"),
+                ],
+                Stage::Run => {
+                    let mut keys = vec![
+                        ui::key(glyphs.up_down(), "scroll"),
+                        ui::key("f", "follow"),
+                        ui::key("w", "loud only"),
+                    ];
+                    if self.problem_rows().next().is_some() {
+                        keys.push(ui::key("n", "next problem"));
+                        keys.push(ui::key("p", "previous"));
+                    }
+                    keys.push(ui::key("l", "log"));
+                    keys.push(ui::key("q", "quit"));
+                    keys
+                }
+                Stage::Done => {
+                    let mut keys = Vec::new();
+                    if self.tally().unresolved() > 0 {
+                        keys.push(ui::key("r", "retry failed"));
+                    }
+                    keys.push(ui::key("l", "log"));
+                    keys.push(ui::key(glyphs.enter(), "finish"));
+                    keys.push(ui::key("q", "quit"));
+                    keys
+                }
+            },
+        }
     }
 }

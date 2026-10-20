@@ -23,6 +23,8 @@ pub fn state_dir() -> PathBuf {
     option("XDG_STATE_HOME").unwrap_or_else(|| home().join(".local").join("state"))
 }
 
+/// The path with this reader's home written as `~`. A home directory is the part of a path that
+/// says the least and takes the most room, and every path a screen shows starts with it.
 pub fn shorten(path: &std::path::Path) -> String {
     shorten_from(path, &home())
 }

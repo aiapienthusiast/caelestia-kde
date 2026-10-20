@@ -8,6 +8,8 @@ pub const TAGLINE: &str = "A Material You desktop for KDE Plasma 6";
 pub const AUTHOR: &str = "By @ladybug-me";
 pub const CO_AUTHOR: &str = "Co-maintainer: 0xSolanaceae";
 
+/// The brand mark, drawn only where the whole of it fits. Full-cell blocks and box characters,
+/// not the `_`, `|` and `/` of line art, which leave gaps wherever a font does not join them.
 pub const SPLASH: [&str; 6] = [
     " ██████╗  █████╗  ███████╗ ██╗      ███████╗ ███████╗ ████████╗ ██╗  █████╗ ",
     "██╔════╝ ██╔══██╗ ██╔════╝ ██║      ██╔════╝ ██╔════╝ ╚══██╔══╝ ██║ ██╔══██╗",
@@ -17,6 +19,7 @@ pub const SPLASH: [&str; 6] = [
     " ╚═════╝ ╚═╝  ╚═╝ ╚══════╝ ╚══════╝ ╚══════╝ ╚══════╝    ╚═╝    ╚═╝ ╚═╝  ╚═╝",
 ];
 
+/// What the terminal can actually render.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Mode {
     Dark,
@@ -156,6 +159,7 @@ impl Theme {
         }
     }
 
+    /// The `t` key: the same terminal, the other mode.
     pub fn cycle(&mut self) {
         self.mode = self.mode.other();
         self.roles = roles(self.mode);
@@ -179,6 +183,8 @@ impl Theme {
             .add_modifier(modifier(role, self.depth))
     }
 
+    /// The surface itself, so every screen starts from the brand background rather than from
+    /// whatever the terminal was showing.
     pub fn surface(&self) -> Style {
         Style::default().bg(self.color(Role::Surface))
     }
@@ -196,6 +202,7 @@ impl Theme {
             .fg(self.color(Role::OnAccent))
     }
 
+    /// The text on the filled bar, for everything that is not a key name.
     pub fn on_bar(&self) -> Style {
         if self.depth == Depth::Mono {
             return Style::default();
@@ -203,6 +210,7 @@ impl Theme {
         self.style(Role::OnAccent)
     }
 
+    /// A key name on the filled bar: the bold half of it.
     pub fn bar_key(&self) -> Style {
         self.on_bar().add_modifier(Modifier::BOLD)
     }
@@ -255,6 +263,7 @@ impl Theme {
         self.style(Role::Ok)
     }
 
+    /// A failure the user chose to move past: still a failure, visibly quieter.
     pub fn ignored_text(&self) -> Style {
         self.style(Role::Ignored)
     }
@@ -279,6 +288,7 @@ fn role_of(status: Status) -> Role {
     }
 }
 
+/// A terminal with no color falls back to weight: loud things bold, quiet things dim.
 fn modifier(role: Role, depth: Depth) -> Modifier {
     if depth != Depth::Mono {
         return Modifier::empty();
@@ -312,6 +322,8 @@ fn ansi(role: Role, mode: Mode) -> Color {
     }
 }
 
+/// The nearest of the 256-color palette, over the cube and the gray ramp but not the sixteen:
+/// those belong to the user's theme.
 fn indexed(rgb: Rgb) -> u8 {
     let Rgb(r, g, b) = rgb;
     let cube = (16 + 36 * cube_level(r) + 6 * cube_level(g) + cube_level(b)) as u8;
@@ -326,6 +338,7 @@ fn indexed(rgb: Rgb) -> u8 {
     }
 }
 
+/// The cube is six levels per channel, not a linear ramp.
 fn cube_level(value: u8) -> usize {
     const LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
     let mut best = 0;

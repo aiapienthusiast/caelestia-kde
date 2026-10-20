@@ -11,6 +11,7 @@ pub enum Verification {
     Unpublished,
 }
 
+/// How many times a download is tried before it is called a failure.
 const ATTEMPTS: u32 = 3;
 
 fn transient(code: i32) -> bool {
@@ -38,6 +39,8 @@ pub fn fetch(url: &str, destination: &Path, extra: &[&str]) -> bool {
     false
 }
 
+/// A download whose failure is expected: no retry, and nothing of curl's own left in the output
+/// whether it answers or not.
 fn probe(url: &str, destination: &Path) -> bool {
     let destination_text = destination.to_string_lossy().to_string();
     process::status_quietly(

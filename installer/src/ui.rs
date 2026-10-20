@@ -9,6 +9,7 @@ use crate::glyphs::Glyphs;
 use crate::steps::Status;
 use crate::theme::{NAME, Role, Theme};
 
+/// Below this the TUI says so rather than drawing a broken frame.
 pub const MIN_WIDTH: u16 = 60;
 pub const MIN_HEIGHT: u16 = 20;
 
@@ -27,6 +28,7 @@ pub const fn key(keys: &'static str, what: &'static str) -> Key {
     Key { keys, what }
 }
 
+/// What the frame says on its top edge.
 pub struct Header {
     pub left: String,
     pub right: String,
@@ -50,6 +52,7 @@ fn rows(area: Rect) -> Rows {
     }
 }
 
+/// Draw the frame and the bar. `None` when the terminal is too small, having said so.
 pub fn chrome(
     frame: &mut Frame,
     theme: &Theme,
@@ -82,6 +85,7 @@ pub fn chrome(
     })
 }
 
+/// The frame's top-left corner.
 fn where_you_are(theme: &Theme, header: &Header) -> Line<'static> {
     Line::from(vec![
         Span::styled(" ".to_string(), theme.title()),
@@ -90,6 +94,7 @@ fn where_you_are(theme: &Theme, header: &Header) -> Line<'static> {
     ])
 }
 
+/// The machine context, in the frame's top-right corner.
 fn what_this_is(theme: &Theme, header: &Header) -> Line<'static> {
     Line::from(Span::styled(format!(" {} ", header.right), theme.muted())).right_aligned()
 }
@@ -108,6 +113,7 @@ pub fn content(area: Rect) -> Rect {
     }
 }
 
+/// The same area, started `rows` further down.
 pub fn dropped(area: Rect, rows: u16) -> Rect {
     let rows = rows.min(area.height.saturating_sub(1));
     Rect {
@@ -117,6 +123,7 @@ pub fn dropped(area: Rect, rows: u16) -> Rect {
     }
 }
 
+/// How far down a short block starts inside a tall area, so it is not pinned to the top edge.
 pub fn slack(area: Rect, height: u16) -> u16 {
     (area.height.saturating_sub(height) / 2).min(16)
 }
@@ -132,6 +139,7 @@ pub fn middle(area: Rect, width: u16, height: u16) -> Rect {
     }
 }
 
+/// The gap between columns, and the least room the second one gets before a screen stays one.
 const RAIL_GAP: u16 = 4;
 const PARTNER_MIN: u16 = 52;
 
@@ -157,6 +165,7 @@ pub fn rail(area: Rect, width: u16) -> Option<(Rect, Rect)> {
     ))
 }
 
+/// The rectangle a panel of `rows` content rows takes: its borders and nothing more.
 pub fn panel_rect(area: Rect, width: u16, rows: u16) -> Rect {
     Rect {
         width,
@@ -165,6 +174,8 @@ pub fn panel_rect(area: Rect, width: u16, rows: u16) -> Rect {
     }
 }
 
+/// A panel inside a screen. The border carries the role, so a panel that *is* the message looks
+/// like one before it is read. An untitled panel is a group of rows, not a section.
 pub fn section(
     frame: &mut Frame,
     rect: Rect,
@@ -197,6 +208,10 @@ pub fn section(
     inner
 }
 
+/// The row the cursor is on, filled right across its column. `bar` is the program's one filled
+/// surface, so a filled row and a filled footer are the same statement: this is the thing Enter
+/// acts on. Text on it uses `OnAccent`, which swaps with the accent, so the fill carries its own
+/// text in either theme.
 pub fn cursor_spans(theme: &Theme, spans: Vec<Span<'static>>, width: u16) -> Line<'static> {
     let used: usize = spans.iter().map(|span| span.content.chars().count()).sum();
     let mut styled: Vec<Span<'static>> = spans
@@ -210,6 +225,7 @@ pub fn cursor_spans(theme: &Theme, spans: Vec<Span<'static>>, width: u16) -> Lin
     Line::from(styled)
 }
 
+/// The row the cursor is on, for a row that is one piece of text.
 pub fn cursor_row(theme: &Theme, glyphs: Glyphs, text: &str, width: u16) -> Line<'static> {
     let text = fit(text, width as usize, glyphs.ellipsis());
     cursor_spans(theme, vec![Span::raw(text)], width)
@@ -244,6 +260,7 @@ pub struct RunLayout {
     pub log: Rect,
 }
 
+/// A centered modal.
 pub fn panel(
     frame: &mut Frame,
     area: Rect,
@@ -265,6 +282,7 @@ pub fn panel(
     )
 }
 
+/// The same modal, placed by the caller.
 pub fn frame_panel(
     frame: &mut Frame,
     rect: Rect,
@@ -286,6 +304,7 @@ pub fn frame_panel(
     inner
 }
 
+/// The gutter a status glyph sits in, so the names beside it never shift.
 pub fn gutter(text: &str, style: Style, glyphs: Glyphs) -> Span<'static> {
     Span::styled(
         format!(" {:>width$} ", text, width = glyphs.status_cell()),
@@ -293,6 +312,7 @@ pub fn gutter(text: &str, style: Style, glyphs: Glyphs) -> Span<'static> {
     )
 }
 
+/// The spinner where the terminal can show one, the static glyph where it cannot.
 pub fn running_glyph(app: &App) -> &'static str {
     if app.env.animates() {
         app.glyphs.spinner(app.spinner)
@@ -301,6 +321,7 @@ pub fn running_glyph(app: &App) -> &'static str {
     }
 }
 
+/// `label   value`, with the label in a fixed column.
 pub fn labeled(label: &str, value: String, theme: &Theme, width: usize) -> Line<'static> {
     Line::from(vec![
         Span::styled(format!("  {label:<width$}  "), theme.muted()),
@@ -331,6 +352,7 @@ pub fn wrap(text: &str, width: usize, min: usize) -> Vec<String> {
     lines
 }
 
+/// A progress bar with its caption; the bar never grows past a readable length.
 pub fn progress(
     filled: usize,
     total: usize,
@@ -361,6 +383,8 @@ pub fn progress(
     Line::from(spans)
 }
 
+/// A one-column scrollbar, drawn only where there is something to scroll. `marks` are rows of the
+/// whole log that went wrong, so the track shows where the trouble is before it is scrolled to.
 pub fn scrollbar(
     frame: &mut Frame,
     area: Rect,
@@ -396,6 +420,7 @@ pub fn scrollbar(
     frame.render_widget(Paragraph::new(Text::from(lines)), area);
 }
 
+/// Where the thumb sits, as a range of rows. A pane that fits its content gets no thumb.
 pub fn thumb_range(offset: usize, total: usize, viewport: usize) -> (usize, usize) {
     if viewport == 0 {
         return (0, 0);
@@ -411,6 +436,7 @@ pub fn thumb_range(offset: usize, total: usize, viewport: usize) -> (usize, usiz
     (position, position + thumb)
 }
 
+/// How many rows of log fit in the pane.
 pub fn log_rows(log: Rect) -> u16 {
     log.height.saturating_sub(LOG_HEADER_ROWS)
 }
@@ -432,6 +458,7 @@ pub fn run_layout(body: Rect) -> RunLayout {
     }
 }
 
+/// Render prose into a box, wrapping rather than clipping it.
 pub fn prose(frame: &mut Frame, area: Rect, lines: Vec<Line<'static>>, style: Style) {
     frame.render_widget(
         Paragraph::new(Text::from(lines))
@@ -441,6 +468,7 @@ pub fn prose(frame: &mut Frame, area: Rect, lines: Vec<Line<'static>>, style: St
     );
 }
 
+/// The same text, started a third of the way down a taller area.
 pub fn prose_middle(frame: &mut Frame, area: Rect, lines: Vec<Line<'static>>, style: Style) {
     let pad = slack(area, lines.len() as u16);
     prose(frame, dropped(area, pad), lines, style);
@@ -468,6 +496,7 @@ pub fn log_overlay_rows(area: Rect) -> u16 {
         .saturating_sub(LOG_HEADER_ROWS)
 }
 
+/// Text cut to a column, with a marker rather than a silent chop.
 pub fn fit(text: &str, width: usize, ellipsis: &str) -> String {
     if text.chars().count() <= width {
         return text.to_string();
@@ -495,6 +524,7 @@ pub fn elapsed(seconds: u64) -> String {
     }
 }
 
+/// The filled bar along the bottom: the keys, and where the user is in the flow.
 fn status_bar(frame: &mut Frame, area: Rect, theme: &Theme, keys: &[Key], counter: Option<&str>) {
     if area.height == 0 {
         return;
@@ -520,6 +550,8 @@ fn status_bar(frame: &mut Frame, area: Rect, theme: &Theme, keys: &[Key], counte
     }
 }
 
+/// The keymap for a screen, whole groups only, dropping the least important hint first: the caller
+/// lists them in priority order.
 fn hints(theme: &Theme, keys: &[Key], width: u16) -> Line<'static> {
     let mut spans: Vec<Span<'static>> = Vec::new();
     let mut used = 0usize;

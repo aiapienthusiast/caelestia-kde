@@ -355,7 +355,16 @@ fn the_step_lists_are_asked_of_the_installer() {
     let update = run(&["steps", "--for", "update"]);
     assert_eq!(
         stdout(&update).lines().collect::<Vec<_>>(),
-        ["03-deploy-configs", "08-build-shell", "09-system-tweaks"]
+        [
+            "03-deploy-configs",
+            "02a-submodules",
+            "02-all-packages",
+            "06-services",
+            "10-autostart",
+            "03a-wallpapers",
+            "08-build-shell",
+            "09-system-tweaks",
+        ]
     );
     let wrong = run(&["steps", "--for", "nonsense"]);
     assert_eq!(code(&wrong), 2, "{}", stderr(&wrong));

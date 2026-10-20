@@ -1,3 +1,13 @@
+//! What a run has already done.
+//!
+//! An installer that takes ten minutes is an installer that gets interrupted, and a half-finished
+//! machine is the state where a user most needs to know what happened. Each step records its own
+//! outcome here as it finishes, so a run can be picked up where it stopped instead of repeating
+//! the work - and so anybody debugging a broken machine can see exactly how far it got.
+//!
+//! The file is append-only and line-oriented: a line per step, the last line for a step winning.
+//! A step that is killed mid-write leaves the previous line intact, which is the behaviour a
+//! journal wants.
 use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -6,6 +16,8 @@ use std::path::{Path, PathBuf};
 use crate::menu::Answers;
 use crate::steps::Status;
 
+/// Carries the plan's name to each step, so a step can record its own progress without being told
+/// anything else. Set by `steps::environment`.
 pub const PLAN_ID_VAR: &str = "CAELESTIA_PLAN_ID";
 
 pub fn plan_id(answers: &Answers) -> String {
@@ -27,6 +39,8 @@ pub fn plan_id(answers: &Answers) -> String {
     format!("{hash:016x}")
 }
 
+/// Where the journals live: the user's state directory, since this is a record of what happened
+/// rather than data the shell reads.
 pub fn directory() -> PathBuf {
     crate::paths::state_dir().join("caelestia")
 }
@@ -62,6 +76,8 @@ pub struct Journal {
 }
 
 impl Journal {
+    /// The journal for a plan, read if it is there. An unreadable file reads as an empty one: a
+    /// corrupt journal must never stop an install.
     pub fn for_plan(plan: &str) -> Self {
         Self::at(path_for(plan))
     }
@@ -75,6 +91,8 @@ impl Journal {
         &self.path
     }
 
+    /// Start this plan over. Called when a run is not resuming, so the journal describes the run
+    /// that is happening rather than a mixture of several.
     pub fn clear(&self) {
         let _ = std::fs::remove_file(&self.path);
     }
@@ -83,6 +101,8 @@ impl Journal {
         self.steps.get(step).copied()
     }
 
+    /// A step that does not need running again: it finished, possibly with a warning, or the
+    /// answers switched it off.
     pub fn done(&self, step: &str) -> bool {
         self.status(step).is_some_and(Status::settles)
     }
@@ -136,6 +156,7 @@ pub fn unfinished() -> Vec<(String, Status)> {
         .collect()
 }
 
+/// The most recently written journal, which is the last run.
 fn newest(journals: Vec<(std::time::SystemTime, PathBuf)>) -> Option<PathBuf> {
     journals
         .into_iter()

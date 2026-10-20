@@ -28,6 +28,7 @@ impl Env {
         }
     }
 
+    /// A terminal that cannot be trusted with escape sequences at all.
     pub fn is_dumb(&self) -> bool {
         matches!(self.term.as_deref(), Some("dumb"))
     }
@@ -48,6 +49,9 @@ impl Env {
             .is_some_and(|value| value.contains("256"))
     }
 
+    /// The background color index a terminal advertises, when it advertises one. `COLORFGBG`
+    /// is written as `foreground;background` in the 16-color palette, so a bright index is a
+    /// light background.
     pub fn background_index(&self) -> Option<u8> {
         self.colorfgbg
             .as_deref()?

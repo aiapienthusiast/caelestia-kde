@@ -40,6 +40,7 @@ impl Phase {
         Phase::Finalize,
     ];
 
+    /// The stable spelling of a phase, for anything machine-read: `--plan --json` prints it.
     pub fn id(self) -> &'static str {
         match self {
             Phase::Prepare => "prepare",
@@ -351,6 +352,9 @@ pub fn find(id: &str) -> Option<&'static Step> {
     STEPS.iter().find(|step| step.id == id)
 }
 
+/// What every step is told about the run it belongs to, whoever started it. The TUI and the
+/// headless path both come through here, because the day they disagree is the day a step behaves
+/// one way on a desktop and another on a server.
 pub fn environment(answers: &Answers, bundle: &std::path::Path) -> Vec<(&'static str, String)> {
     let mut env: Vec<(&'static str, String)> = answers
         .iter()
@@ -387,11 +391,7 @@ pub fn ensure_five_desktops(context: &Context) -> Result<(), Failure> {
         return Ok(());
     }
 
-    let count = crate::process::capture(
-        "kreadconfig6",
-        &["--file", "kwinrc", "--group", "Desktops", "--key", "Number"],
-    )
-    .unwrap_or_default();
+    let count = crate::kde::read("kwinrc", &["Desktops"], "Number").unwrap_or_default();
 
     if !count.is_empty() && count != "1" {
         output::skip(&format!("Keeping the existing {count} virtual desktops."));
@@ -402,27 +402,14 @@ pub fn ensure_five_desktops(context: &Context) -> Result<(), Failure> {
 
     let mut written = true;
     for (key, value) in [("Number", "5"), ("Rows", "1")] {
-        written &= crate::process::succeeds(
-            "kwriteconfig6",
-            &[
-                "--file", "kwinrc", "--group", "Desktops", "--key", key, value,
-            ],
-            None,
-        );
+        written &= crate::kde::write("kwinrc", &["Desktops"], key, value);
     }
     for index in 1..=5 {
-        written &= crate::process::succeeds(
-            "kwriteconfig6",
-            &[
-                "--file",
-                "kwinrc",
-                "--group",
-                "Desktops",
-                "--key",
-                &format!("Name_{index}"),
-                &format!("Desktop {index}"),
-            ],
-            None,
+        written &= crate::kde::write(
+            "kwinrc",
+            &["Desktops"],
+            &format!("Name_{index}"),
+            &format!("Desktop {index}"),
         );
     }
 
@@ -477,6 +464,22 @@ impl Purpose {
     }
 }
 
+/// The steps a step runs before its own body when it is asked to run on its own, because they are
+/// what it needs already in place. The table is the single answer: the update's plan asks for them
+/// too, so a step never runs another one that the plan did not list.
+pub fn prerequisites(step_id: &str) -> &'static [&'static str] {
+    match step_id {
+        "08-build-shell" => &[
+            "02a-submodules",
+            "02-all-packages",
+            "06-services",
+            "10-autostart",
+            "03a-wallpapers",
+        ],
+        _ => &[],
+    }
+}
+
 pub fn ids(purpose: Purpose) -> Vec<&'static str> {
     match purpose {
         Purpose::Install => STEPS.iter().map(|step| step.id).collect(),
@@ -485,49 +488,62 @@ pub fn ids(purpose: Purpose) -> Vec<&'static str> {
             .filter(|step| step.packaged)
             .map(|step| step.id)
             .collect(),
-        Purpose::Update => crate::update::step_ids(),
+        // An update re-runs its repairs, and each repair's prerequisites come first and are named.
+        Purpose::Update => crate::update::step_ids()
+            .into_iter()
+            .flat_map(|id| prerequisites(id).iter().copied().chain(std::iter::once(id)))
+            .collect(),
     }
 }
 
-fn answer_is_true(answers: &Answers, name: &str) -> bool {
-    answers.get(name).map(String::as_str) == Some("true")
+/// The one switch a step hangs on: the answer it watches, and the value that makes it stand down.
+/// The plan and the step's own body read the same table, so a step the plan marks "switched off" is
+/// the same step that does nothing when run on its own.
+enum StandDown {
+    /// An opt-out: the step stands down when this answer is true.
+    WhenTrue(&'static str),
+    /// An opt-in: the step stands down unless this answer is true.
+    WhenFalse(&'static str),
 }
 
-/// The one switch a step hangs on: the answer's name, and whether the step stands down when that
-/// answer is true. The plan and the step's own body both read this table, so a step the plan marks
-/// "switched off" is the same step that does nothing when run on its own.
-fn switch(step_id: &str) -> Option<(&'static str, bool)> {
+fn switch(step_id: &str) -> Option<StandDown> {
     match step_id {
-        "00a-system-update" => Some((SKIP_SYSTEM_UPDATE, true)),
-        "05-login-screen" => Some((SYNC_LOGIN_SCREEN, false)),
+        "00a-system-update" => Some(StandDown::WhenTrue(SKIP_SYSTEM_UPDATE)),
+        "05-login-screen" => Some(StandDown::WhenFalse(SYNC_LOGIN_SCREEN)),
         _ => None,
     }
 }
 
-/// Whether one of the optional apps was asked for; the step stands down when none was.
-fn any_optional_app(asked: impl Fn(&'static str) -> bool) -> bool {
-    OPTIONAL_APP_ANSWERS.iter().any(|answer| asked(answer))
+impl StandDown {
+    fn met_by(&self, asked: impl Fn(&'static str) -> Option<bool>) -> bool {
+        match self {
+            StandDown::WhenTrue(name) => asked(name) == Some(true),
+            StandDown::WhenFalse(name) => asked(name) != Some(true),
+        }
+    }
+}
+
+/// One policy, two sources of answers: the wizard has every answer in hand, a step run on its own
+/// has only the ones it was given.
+fn leaves_out(step_id: &str, asked: impl Fn(&'static str) -> Option<bool>) -> bool {
+    if step_id == "11-optional-apps" {
+        return !OPTIONAL_APP_ANSWERS
+            .iter()
+            .any(|answer| asked(answer) == Some(true));
+    }
+    switch(step_id).is_some_and(|stand_down| stand_down.met_by(asked))
 }
 
 /// Which steps the plan leaves out, from the answers the wizard collected.
 pub fn is_skipped(step: &Step, answers: &Answers) -> bool {
-    if step.id == "11-optional-apps" {
-        return !any_optional_app(|answer| answer_is_true(answers, answer));
-    }
-    switch(step.id).is_some_and(|(name, stands_down_when_true)| {
-        answer_is_true(answers, name) == stands_down_when_true
+    leaves_out(step.id, |name| {
+        answers.get(name).map(|value| value == "true")
     })
 }
 
-/// Whether a step was told to stand down, from the environment a run on its own carries. The same
-/// table as `is_skipped`, which is why a body no longer reads its own switch by hand.
+/// Whether a step was told to stand down, from the answers its context carries.
 pub fn switches_off(step_id: &str, context: &Context) -> bool {
-    if step_id == "11-optional-apps" {
-        return !any_optional_app(|answer| context.flag(answer, false));
-    }
-    switch(step_id).is_some_and(|(name, stands_down_when_true)| {
-        context.flag(name, !stands_down_when_true) == stands_down_when_true
-    })
+    leaves_out(step_id, |name| context.bool_of(name))
 }
 
 #[cfg(test)]
@@ -585,10 +601,27 @@ mod tests {
         let update = ids(Purpose::Update);
         assert_eq!(
             update,
-            ["03-deploy-configs", "08-build-shell", "09-system-tweaks"]
+            [
+                "03-deploy-configs",
+                "02a-submodules",
+                "02-all-packages",
+                "06-services",
+                "10-autostart",
+                "03a-wallpapers",
+                "08-build-shell",
+                "09-system-tweaks",
+            ]
         );
         for id in update {
             assert!(find(id).is_some(), "{id} is not in the step table");
+        }
+    }
+
+    #[test]
+    fn an_update_names_every_step_the_shell_run_would_have_run_itself() {
+        let update = ids(Purpose::Update);
+        for id in prerequisites("08-build-shell") {
+            assert!(update.contains(id), "the update plan leaves out {id}");
         }
     }
 

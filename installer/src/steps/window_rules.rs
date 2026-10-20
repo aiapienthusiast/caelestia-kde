@@ -32,7 +32,7 @@ pub fn run(context: &Context) -> Result<(), Failure> {
         return Ok(());
     }
 
-    if !process::available("kwriteconfig6") {
+    if !crate::kde::available() {
         output::warn("kwriteconfig6 not found - skipping window rules.");
         return Ok(());
     }
@@ -118,11 +118,7 @@ fn rules_path() -> PathBuf {
 }
 
 fn read_key(group: &str, key: &str) -> String {
-    process::capture(
-        "kreadconfig6",
-        &["--file", RULES_FILE, "--group", group, "--key", key],
-    )
-    .unwrap_or_default()
+    crate::kde::read(RULES_FILE, &[group], key).unwrap_or_default()
 }
 
 fn set_key(group: &str, key: &str, value: &str) -> Outcome {
@@ -130,11 +126,7 @@ fn set_key(group: &str, key: &str, value: &str) -> Outcome {
         return Outcome::Unchanged;
     }
 
-    let _ = process::succeeds(
-        "kwriteconfig6",
-        &["--file", RULES_FILE, "--group", group, "--key", key, value],
-        None,
-    );
+    let _ = crate::kde::write(RULES_FILE, &[group], key, value);
 
     if read_key(group, key) == value {
         Outcome::Written

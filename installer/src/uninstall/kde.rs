@@ -31,18 +31,18 @@ impl Uninstaller {
             ("plasmarc", &["OSD"][..], "Enabled"),
             ("plasmarc", &["OSD"][..], "ShowOnActiveScreen"),
         ] {
-            kwrite(file, groups, key, "true");
+            crate::kde::write(file, groups, key, "true");
         }
-        kwrite("kdeglobals", &["KDE"], "OSDEnabled", "true");
-        kwrite(
+        crate::kde::write("kdeglobals", &["KDE"], "OSDEnabled", "true");
+        crate::kde::write(
             "plasmanotifyrc",
             &["Notifications"],
             "LoudnessChangedOSD",
             "true",
         );
-        kwrite("powerdevilrc", &["BrightnessControl"], "showOSD", "true");
-        kwrite("powerdevilrc", &["AC"], "brightnessosd", "true");
-        kwrite("kmixrc", &["Global"], "ShowOSD", "true");
+        crate::kde::write("powerdevilrc", &["BrightnessControl"], "showOSD", "true");
+        crate::kde::write("powerdevilrc", &["AC"], "brightnessosd", "true");
+        crate::kde::write("kmixrc", &["Global"], "ShowOSD", "true");
         output::ok("Re-enabled KDE OSD notifications");
 
         if let Some(archive) = self.konsave_archive.clone() {
@@ -98,7 +98,7 @@ impl Uninstaller {
             ("krohnkiteEnabled", "false"),
             ("kwin_workspace_trackerEnabled", "false"),
         ] {
-            kwrite("kwinrc", &["Plugins"], key, value);
+            crate::kde::write("kwinrc", &["Plugins"], key, value);
         }
         output::ok(
             "Disabled KWin plugins: quickshell-kde-bridge, krohnkite, kwin_workspace_tracker",
@@ -118,18 +118,18 @@ impl Uninstaller {
             ("caelestia-pip", "titlematch"),
             ("caelestia-pip", "aboverule"),
         ] {
-            kwrite_delete("kwinrulesrc", &[group], key);
+            crate::kde::delete("kwinrulesrc", &[group], key);
         }
         self.prune_window_rules();
 
-        kwrite_delete("plasmashellrc", &["Shell"], "ShellPackage");
-        kwrite(
+        crate::kde::delete("plasmashellrc", &["Shell"], "ShellPackage");
+        crate::kde::write(
             "kscreenlockerrc",
             &["Greeter"],
             "Theme",
             "org.kde.breeze.desktop",
         );
-        kwrite(
+        crate::kde::write(
             "kscreenlockerrc",
             &["Greeter"],
             "WallpaperPlugin",
@@ -155,14 +155,14 @@ impl Uninstaller {
                 "fps",
             ),
         ] {
-            kwrite_delete("kscreenlockerrc", &groups, key);
+            crate::kde::delete("kscreenlockerrc", &groups, key);
         }
-        kwrite_delete(
+        crate::kde::delete(
             "kscreenlockerrc",
             &["Greeter", "LnF", "General"],
             "alwaysShowClock",
         );
-        kwrite_delete(
+        crate::kde::delete(
             "kscreenlockerrc",
             &["Greeter", "LnF", "General"],
             "showMediaControls",
@@ -170,10 +170,10 @@ impl Uninstaller {
         output::ok("Restored stock KDE lock screen configuration.");
 
         if !self.theme_restored {
-            kwrite("kwinrc", &["Desktops"], "Number", "1");
-            kwrite("kwinrc", &["Desktops"], "Rows", "1");
+            crate::kde::write("kwinrc", &["Desktops"], "Number", "1");
+            crate::kde::write("kwinrc", &["Desktops"], "Rows", "1");
             for index in 1..=5 {
-                kwrite(
+                crate::kde::write(
                     "kwinrc",
                     &["Desktops"],
                     &format!("Name_{index}"),
@@ -184,13 +184,13 @@ impl Uninstaller {
         }
 
         for index in 1..=5 {
-            kwrite(
+            crate::kde::write(
                 "kglobalshortcutsrc",
                 &["kwin"],
                 &format!("Switch to Desktop {index}"),
                 &format!("none,none,Switch to Desktop {index}"),
             );
-            kwrite(
+            crate::kde::write(
                 "kglobalshortcutsrc",
                 &["kwin"],
                 &format!("Window to Desktop {index}"),
@@ -268,22 +268,22 @@ impl Uninstaller {
     }
     pub(super) fn reset_theme_to_breeze(&self) {
         output::info("No theme backup found. Reverting to default Breeze theme...");
-        kwrite("plasmarc", &["Theme"], "name", "default");
-        kwrite("kdeglobals", &["KDE"], "widgetStyle", "Breeze");
-        kwrite("kdeglobals", &["General"], "ColorScheme", "BreezeLight");
-        kwrite(
+        crate::kde::write("plasmarc", &["Theme"], "name", "default");
+        crate::kde::write("kdeglobals", &["KDE"], "widgetStyle", "Breeze");
+        crate::kde::write("kdeglobals", &["General"], "ColorScheme", "BreezeLight");
+        crate::kde::write(
             "kwinrc",
             &["org.kde.kdecoration2"],
             "library",
             "org.kde.breeze",
         );
-        kwrite("kwinrc", &["org.kde.kdecoration2"], "theme", "@breeze");
-        kwrite("kcminputrc", &["Mouse"], "cursorTheme", "breeze_cursors");
+        crate::kde::write("kwinrc", &["org.kde.kdecoration2"], "theme", "@breeze");
+        crate::kde::write("kcminputrc", &["Mouse"], "cursorTheme", "breeze_cursors");
         output::ok("Reset KDE theme settings to Breeze.");
     }
     pub(super) fn prune_window_rules(&self) {
         let ours = ["caelestia-opacity", "caelestia-dialogs", "caelestia-pip"];
-        let Some(index) = kde_read("kwinrulesrc", &["General"], "rules") else {
+        let Some(index) = crate::kde::read("kwinrulesrc", &["General"], "rules") else {
             return;
         };
 
@@ -294,16 +294,16 @@ impl Uninstaller {
             .collect();
 
         if !kept.is_empty() {
-            kwrite("kwinrulesrc", &["General"], "rules", &kept.join(","));
-            kwrite(
+            crate::kde::write("kwinrulesrc", &["General"], "rules", &kept.join(","));
+            crate::kde::write(
                 "kwinrulesrc",
                 &["General"],
                 "count",
                 &kept.len().to_string(),
             );
         } else {
-            kwrite_delete("kwinrulesrc", &["General"], "rules");
-            kwrite_delete("kwinrulesrc", &["General"], "count");
+            crate::kde::delete("kwinrulesrc", &["General"], "rules");
+            crate::kde::delete("kwinrulesrc", &["General"], "count");
         }
         output::ok("Removed the Caelestia window rules from kwinrulesrc");
     }
@@ -410,77 +410,31 @@ impl Uninstaller {
         }
 
         let recorded = paths::state_dir().join("caelestia/sddm.conf.theme-current");
-        if process::available("kwriteconfig6") {
+        if crate::kde::available() {
             if let Some(previous) = read_line(&recorded) {
-                let arguments: Vec<&str> = if previous == "#none" {
-                    vec![
-                        "--file",
-                        "/etc/sddm.conf",
-                        "--group",
-                        "Theme",
-                        "--key",
-                        "Current",
-                        "--delete",
-                    ]
-                } else {
-                    vec![
-                        "--file",
-                        "/etc/sddm.conf",
-                        "--group",
-                        "Theme",
-                        "--key",
-                        "Current",
-                        &previous,
-                    ]
-                };
-                let _ = privileges::elevated("kwriteconfig6", &arguments, None);
                 if previous == "#none" {
+                    crate::kde::delete_elevated("/etc/sddm.conf", &["Theme"], "Current");
                     output::ok("Removed the SDDM theme selection an older install made");
                 } else {
+                    crate::kde::write_elevated("/etc/sddm.conf", &["Theme"], "Current", &previous);
                     output::ok(&format!(
                         "Restored the SDDM theme selection an older install replaced ({previous})"
                     ));
                 }
                 let _ = fs::remove_file(&recorded);
-            } else if kde_read("/etc/sddm.conf", &["Theme"], "Current").as_deref()
+            } else if crate::kde::read("/etc/sddm.conf", &["Theme"], "Current").as_deref()
                 == Some("caelestia")
             {
-                let _ = privileges::elevated(
-                    "kwriteconfig6",
-                    &[
-                        "--file",
-                        "/etc/sddm.conf",
-                        "--group",
-                        "Theme",
-                        "--key",
-                        "Current",
-                        "--delete",
-                    ],
-                    None,
-                );
+                crate::kde::delete_elevated("/etc/sddm.conf", &["Theme"], "Current");
                 output::ok("Removed the SDDM theme selection an older install made");
             }
         }
 
-        if Path::new("/etc/plasmalogin.conf").is_file() && process::available("kwriteconfig6") {
-            let _ = privileges::elevated(
-                "kwriteconfig6",
-                &[
-                    "--file",
-                    "/etc/plasmalogin.conf",
-                    "--group",
-                    "Greeter",
-                    "--group",
-                    "Wallpaper",
-                    "--group",
-                    "org.kde.image",
-                    "--group",
-                    "General",
-                    "--key",
-                    "Image",
-                    "--delete",
-                ],
-                None,
+        if Path::new("/etc/plasmalogin.conf").is_file() && crate::kde::available() {
+            crate::kde::delete_elevated(
+                "/etc/plasmalogin.conf",
+                &["Greeter", "Wallpaper", "org.kde.image", "General"],
+                "Image",
             );
             output::ok("Removed the login screen wallpaper from /etc/plasmalogin.conf");
         }

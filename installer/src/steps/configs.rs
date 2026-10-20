@@ -146,6 +146,9 @@ pub fn backup_dir(context: &Context) -> PathBuf {
         .join(crate::install_fs::timestamp().unwrap_or_else(|| "backup".to_string()))
 }
 
+/// The backup the last install used, for the screen that says where the settings it replaced went.
+/// Read from the record `backup_dir` keeps, and validated the same way: a path that is not a
+/// backup of this tree is not something to print and send somebody to.
 pub fn recorded_backup_dir(bundle: &Path) -> Option<PathBuf> {
     recorded_backup(&paths::cache_dir().join(CACHE), bundle)
 }

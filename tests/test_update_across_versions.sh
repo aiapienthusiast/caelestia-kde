@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UPDATER="$REPO_ROOT/src/bin/caelestia-update"
-BUILD_SHELL="$REPO_ROOT/installer/src/steps/build_shell.rs"
+BUILD_SHELL="$REPO_ROOT/installer/src/steps/build_shell/mod.rs"
 
 FALLBACK_SOURCE="$(awk '/^const SPARSIFY/{found=1} found{print} found&&/\];/{exit}' "$BUILD_SHELL")"
 PREVIOUS=""
@@ -71,7 +71,7 @@ resolve_previous() {
 }
 
 if [[ -z "$FALLBACK_SOURCE" ]]; then
-    fail "could not find the SPARSIFY rules in installer/src/steps/build_shell.rs"
+    fail "could not find the SPARSIFY rules in installer/src/steps/build_shell/mod.rs"
     run_tests
     exit 1
 fi
@@ -79,7 +79,7 @@ fi
 if ! resolve_previous; then
     PREVIOUS=""
 elif [[ "${#CURRENT_RULES[@]}" -eq 0 || "${#FALLBACK_RULES[@]}" -eq 0 ]]; then
-    fail "could not read the sparse rules from src/bin/caelestia-update or the repair from installer/src/steps/build_shell.rs"
+    fail "could not read the sparse rules from src/bin/caelestia-update or the repair from installer/src/steps/build_shell/mod.rs"
     run_tests
     exit 1
 fi
@@ -93,7 +93,7 @@ test_a_rule_this_release_adds_is_one_the_repair_covers() {
     done < <(new_rules)
 
     [[ -z "$missing" ]] || fail \
-        "this release sparsifies$missing and $PREVIOUS's updater never writes them, so an install still on $PREVIOUS starts the update without them: name them in SPARSIFY in installer/src/steps/build_shell.rs"
+        "this release sparsifies$missing and $PREVIOUS's updater never writes them, so an install still on $PREVIOUS starts the update without them: name them in SPARSIFY in installer/src/steps/build_shell/mod.rs"
 }
 
 test_the_paths_the_repair_fetches_are_the_ones_the_tree_ships() {
@@ -109,7 +109,7 @@ test_the_paths_the_repair_fetches_are_the_ones_the_tree_ships() {
     done
     [[ -z "$absent" ]] || fail "the updater sparsifies paths this tree does not ship:$absent"
 
-    assert_file_exists "$REPO_ROOT/installer/src/steps/build_shell.rs"
+    assert_file_exists "$REPO_ROOT/installer/src/steps/build_shell/mod.rs"
     assert_file_exists "$REPO_ROOT/shell/CMakeLists.txt"
 }
 

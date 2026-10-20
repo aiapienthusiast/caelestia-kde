@@ -257,6 +257,13 @@ pub fn sudo_cached() -> bool {
         .unwrap_or(false)
 }
 
+/// No PAM here to read, and no reader to read from: the route is not offered.
+/// Whether this machine can authorize with a fingerprint: sudo's own stack has a fingerprint
+/// module in it, fprintd has a reader to offer that module, and this user has a finger enrolled.
+/// All three, because a read that cannot succeed is not free — it is a failed authentication.
+///
+/// Read once: what the machine has is a property of the machine, not of a screen, and the answer
+/// costs processes either way.
 pub fn fingerprint_ready() -> bool {
     static READY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *READY.get_or_init(|| fingerprint_configured() && reader_present() && finger_enrolled())
@@ -282,6 +289,9 @@ pub fn finger_enrolled() -> bool {
         .unwrap_or(false)
 }
 
+/// fprintd-list prints one ` - #N: <finger>` line per enrolled print, and the sentence "has no
+/// fingerprints enrolled" when there are none — a test for the word finger matches that sentence
+/// and offers a route that cannot work.
 fn prints_listed(answer: &str) -> bool {
     answer
         .lines()
@@ -302,6 +312,7 @@ pub fn fingerprint_configured() -> bool {
     })
 }
 
+/// Whether a fingerprint module is anywhere in a PAM stack, following the includes it makes.
 fn pam_stack_has_fingerprint(
     text: &str,
     depth: usize,
@@ -336,6 +347,9 @@ fn pam_stack_has_fingerprint(
     false
 }
 
+/// Whether fprintd has a reader to offer. Its manager lists the devices it found, and the listing
+/// needs no authorization to read - unlike the list of fingers enrolled on them, which is what
+/// makes this the question that can be asked from here.
 fn reader_present() -> bool {
     if !crate::process::available("busctl") {
         return false;
@@ -355,6 +369,7 @@ fn reader_present() -> bool {
         .unwrap_or(false)
 }
 
+/// The manager answers with the object paths of the devices it has. No paths is no reader.
 fn readers_listed(answer: &str) -> bool {
     answer.contains("/net/reactivated/Fprint/Device/")
 }
@@ -806,6 +821,7 @@ mod tests {
         assert_eq!(shell_quote(Path::new("/tmp/it's")), "'/tmp/it'\\''s'");
     }
 
+    /// The stack as it is on a machine that has been set up for the reader, includes and all.
     fn read_stack(files: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
         let owned: Vec<(String, String)> = files
             .iter()

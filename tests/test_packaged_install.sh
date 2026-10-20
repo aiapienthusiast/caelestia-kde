@@ -132,7 +132,7 @@ test_shared_runtime_files_have_one_cmake_owner() {
     local cmake pkgbuild build_script workflow
     cmake="$(cat "$REPO_ROOT/shell/CMakeLists.txt")"
     pkgbuild="$(cat "$REPO_ROOT/packaging/aur/caelestia-kde/PKGBUILD")"
-    build_script="$(cat "$REPO_ROOT/installer/src/steps/build_shell.rs")"
+    build_script="$(cat "$REPO_ROOT/installer/src/steps/build_shell/mod.rs")"
     workflow="$(cat "$REPO_ROOT/.github/workflows/version-release.yml")"
 
     assert_contains "$cmake" 'set(INSTALL_BINDIR "usr/bin"' \

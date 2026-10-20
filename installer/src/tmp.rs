@@ -5,6 +5,8 @@ pub struct TempDir {
     path: PathBuf,
 }
 
+/// The next directory name in this process. The pid keeps it unique across processes; the counter
+/// keeps it unique within one, so two calls at the same moment cannot be offered the same name.
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 impl TempDir {

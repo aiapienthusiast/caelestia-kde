@@ -62,6 +62,7 @@ fn record(bundle: &Path, config: &Path, build_skipped: bool) -> bool {
     true
 }
 
+/// The revision the config directory says is installed, as the update screen needs to name it.
 pub struct Installed {
     pub version: String,
     pub commit: String,

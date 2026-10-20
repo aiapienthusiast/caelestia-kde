@@ -9,6 +9,7 @@ pub enum Set {
     Ascii,
 }
 
+/// One column of status glyphs, wide enough for the widest of them.
 const UNICODE_CELL: usize = 1;
 const ASCII_CELL: usize = 3;
 
@@ -22,6 +23,7 @@ impl Glyphs {
         Self { set: pick(env) }
     }
 
+    /// Whether this terminal was given the block and arrow set, or the plain one.
     pub fn is_unicode(self) -> bool {
         matches!(self.set, Set::Unicode)
     }
@@ -52,6 +54,7 @@ impl Glyphs {
         }
     }
 
+    /// The glyph that marks the step being worked on, one frame at a time.
     pub fn spinner(self, frame: usize) -> &'static str {
         const UNICODE: [&str; 8] = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
         const ASCII: [&str; 4] = ["|", "/", "-", "\\"];
@@ -62,6 +65,8 @@ impl Glyphs {
         frames[frame % frames.len()]
     }
 
+    /// The pointer on the row the keys act on. DMS's, character for character: a filled triangle
+    /// in the accent, bold, with no background behind it.
     pub fn cursor(self) -> &'static str {
         match self.set {
             Set::Unicode => "▶",
@@ -69,6 +74,8 @@ impl Glyphs {
         }
     }
 
+    /// What a row will do, in DMS's vocabulary: a tick for done, a circle for pending, a cross for
+    /// skipped.
     pub fn tick(self) -> &'static str {
         match self.set {
             Set::Unicode => "✓",
@@ -118,6 +125,7 @@ impl Glyphs {
         }
     }
 
+    /// What a secret looks like: never the secret.
     pub fn mask(self) -> &'static str {
         match self.set {
             Set::Unicode => "•",
@@ -125,6 +133,7 @@ impl Glyphs {
         }
     }
 
+    /// The marker a clipped string ends with.
     pub fn ellipsis(self) -> &'static str {
         match self.set {
             Set::Unicode => "…",
@@ -160,6 +169,7 @@ impl Glyphs {
         }
     }
 
+    /// A line of the log that went wrong, as a tick on the scrollbar's track.
     pub fn mark(self) -> char {
         match self.set {
             Set::Unicode => '•',
@@ -183,6 +193,7 @@ impl Glyphs {
         }
     }
 
+    /// The border the screen frame is drawn with: rounded where the terminal has the corners.
     pub fn frame_border(self) -> border::Set<'static> {
         match self.set {
             Set::Unicode => border::ROUNDED,

@@ -200,21 +200,7 @@ fn konsave_binary(cache: &Path) -> Result<String, String> {
 }
 
 fn save_previous_look_and_feel(backup: &Path) {
-    if !process::available("kreadconfig6") {
-        return;
-    }
-    if let Some(previous) = process::capture(
-        "kreadconfig6",
-        &[
-            "--file",
-            "kdeglobals",
-            "--group",
-            "KDE",
-            "--key",
-            "LookAndFeelPackage",
-        ],
-    ) && !previous.is_empty()
-    {
+    if let Some(previous) = crate::kde::read("kdeglobals", &["KDE"], "LookAndFeelPackage") {
         let _ = fs::write(
             backup.join("previous_lookandfeel.txt"),
             format!("{previous}\n"),

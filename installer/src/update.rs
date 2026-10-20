@@ -125,6 +125,10 @@ pub fn run(bundle: &Path, requested: Option<String>) -> Result<(), Failure> {
     Ok(())
 }
 
+/// The version the bundle publishes, for an install that had no git to record one from: a release
+/// tarball knows what it is even when the state file is missing.
+/// The version this tree publishes, whether or not a build recorded it: a tarball has no revision
+/// to name, and its `version.env` is still the honest answer to "what was installed".
 pub fn published_version(bundle: &Path) -> Option<update_state::Installed> {
     let published = std::fs::read_to_string(bundle.join(".github").join("version.env")).ok()?;
     Some(update_state::Installed {
@@ -134,6 +138,7 @@ pub fn published_version(bundle: &Path) -> Option<update_state::Installed> {
     })
 }
 
+/// The config directory the shell keeps its update state in: the same one the build writes.
 pub fn config_dir() -> PathBuf {
     install_kind::shell_config_dir()
 }
@@ -174,6 +179,9 @@ fn short(commit: &str) -> String {
     commit.chars().take(7).collect()
 }
 
+/// The revision the channel carries, as the version file it publishes and the commit it is on.
+/// The fetch is what makes this an answer rather than a guess, so it happens here - quietly, and
+/// before anything is checked out.
 fn available(bundle: &Path, channel: &str) -> Option<(String, String)> {
     if !bundle.join(".git").is_dir() {
         return None;
@@ -198,6 +206,7 @@ fn available(bundle: &Path, channel: &str) -> Option<(String, String)> {
     Some((version_of(&published), commit))
 }
 
+/// `VERSION=v2.6.1` in the file the release publishes, as just the version.
 fn version_of(published: &str) -> String {
     published
         .lines()

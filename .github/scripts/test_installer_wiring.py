@@ -12,6 +12,7 @@ are not in test_repo_integrity.py.
 import posixpath
 import re
 import sys
+import os
 import unittest
 from pathlib import Path
 
@@ -67,7 +68,7 @@ class InstallerTests(unittest.TestCase):
         which would leave the fallback silently doing nothing.
         """
         updater = (ROOT / "src" / "bin" / "caelestia-update").read_text(encoding="utf-8")
-        build = (ROOT / "installer" / "src" / "steps" / "build_shell.rs").read_text(encoding="utf-8")
+        build = (ROOT / "installer" / "src" / "steps" / "build_shell" / "mod.rs").read_text(encoding="utf-8")
 
         owned = set(re.findall(r'echo "([^"]+)" >+ \.git/info/sparse-checkout', updater))
         rules = re.search(r"const SPARSIFY: \[&str; \d+\] = \[(.*?)\];", build, re.S)
@@ -142,12 +143,15 @@ class InstallStepSafetyTests(unittest.TestCase):
     """
 
     def test_the_legacy_fonts_cleanup_is_called(self) -> None:
-        script = (ROOT / "installer" / "src" / "steps" / "build_shell.rs").read_text(
+        script = (ROOT / "installer" / "src" / "steps" / "build_shell" / "mod.rs").read_text(
             encoding="utf-8"
         )
 
+        deploy = (ROOT / "installer" / "src" / "steps" / "build_shell" / "deploy.rs").read_text(
+            encoding="utf-8"
+        )
         self.assertIn(
-            "fn cleanup_legacy_fonts(", script, "the cleanup should still be defined"
+            "fn cleanup_legacy_fonts(", deploy, "the cleanup should still be defined"
         )
         self.assertIsNotNone(
             re.search(r"^\s*cleanup_legacy_fonts\(&home\);", script, re.MULTILINE),
@@ -156,7 +160,7 @@ class InstallStepSafetyTests(unittest.TestCase):
 
     def test_shell_config_backup_precedes_the_prebuilt_install(self) -> None:
         """#663: the prebuilt path extracts over $HOME, so it must be backed up first."""
-        script = (ROOT / "installer" / "src" / "steps" / "build_shell.rs").read_text(
+        script = (ROOT / "installer" / "src" / "steps" / "build_shell" / "mod.rs").read_text(
             encoding="utf-8"
         )
 
@@ -307,8 +311,13 @@ class InstallerSourceTests(unittest.TestCase):
     def test_the_installer_sources_are_where_this_expects_them(self) -> None:
         """Keeps the checks above from passing just because they read no files."""
         names = {path.name for path in self.SRC.glob("*.rs")}
-        for expected in ("main.rs", "cli.rs", "menu.rs", "app.rs", "screens.rs", "runner.rs"):
+        for expected in ("main.rs", "cli.rs", "menu.rs", "app.rs", "runner.rs", "kde.rs"):
             self.assertIn(expected, names, f"installer/src/{expected} is missing")
+        for folder in ("screens", "uninstall", os.path.join("steps", "build_shell")):
+            self.assertTrue(
+                (self.SRC / folder / "mod.rs").is_file(),
+                f"installer/src/{folder}/mod.rs is missing",
+            )
         self.assertTrue(
             (self.SRC / "steps" / "mod.rs").is_file(),
             "installer/src/steps/mod.rs is missing",
@@ -316,8 +325,11 @@ class InstallerSourceTests(unittest.TestCase):
 
     def test_step_scripts_are_named_in_one_place_only(self) -> None:
         """The step table is the single list; everything else renders what it holds."""
-        for name in ("app.rs", "screens.rs", "menu.rs", "theme.rs", "bundle.rs"):
-            text = (self.SRC / name).read_text(encoding="utf-8")
+        sources = [self.SRC / name for name in ("app.rs", "menu.rs", "theme.rs", "bundle.rs")]
+        sources += sorted((self.SRC / "screens").glob("*.rs"))
+        for path in sources:
+            name = path.relative_to(self.SRC).as_posix()
+            text = path.read_text(encoding="utf-8")
             self.assertNotIn(
                 "scripts/",
                 text,

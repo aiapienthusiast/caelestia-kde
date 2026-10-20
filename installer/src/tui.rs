@@ -1,3 +1,16 @@
+//! The screen the wizard draws on, and the one thing it must not hand to anyone else: the
+//! process's own standard output.
+//!
+//! The wizard draws on the terminal, and everything it starts inherits that terminal as its
+//! output. A program a step leaves behind - a browser, a Qt tool that warns about the locale -
+//! then writes wherever the cursor happened to be: over the frame, and, five lines later, far
+//! enough down the screen to scroll it. The wizard's own record of the screen still believes those
+//! cells say what it drew, so a drawing pass that only writes what changed never repairs them.
+//!
+//! So the wizard takes a handle on the terminal for itself, and hands the process's own output to
+//! the install log. The drawing goes on through the handle; a stray warning from a stray program
+//! lands in the log, which is where a warning belongs; and the terminal is given back before
+//! anything is printed on it again.
 #[cfg(unix)]
 use std::fs::{File, OpenOptions};
 use std::io::{self, Stdout, Write};
@@ -12,9 +25,16 @@ use ratatui::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 
+/// The wizard's own handle on the terminal, which stays the terminal whatever the process's own
+/// output is pointed at.
 pub struct Screen(Handle);
 
 enum Handle {
+    /// The descriptors this process had before it handed them over, so they can be handed back. Held
+    /// as atomics rather than on the `Tui` because a panic has to hand them back from a hook, which
+    /// cannot reach it.
+    /// Give this process its own output back. Safe when it was never handed over, and safe to call
+    /// twice, which is what lets the panic hook below use it.
     #[cfg(unix)]
     Terminal(File),
     Stdout(Stdout),
@@ -105,6 +125,9 @@ fn hand_over(_log: &Path) {}
 #[cfg(not(unix))]
 fn give_back() {}
 
+/// A panic has to leave the alternate screen through the terminal rather than through the log, and
+/// nothing else is going to do it: a restore that writes to the process's own output writes to the
+/// log while the wizard is drawing.
 fn keep_the_terminal() {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -117,6 +140,7 @@ fn keep_the_terminal() {
     }));
 }
 
+/// The wizard's terminal: what it draws on, and what it owes back when it is done.
 pub struct Tui {
     terminal: ratatui::Terminal<CrosstermBackend<Screen>>,
 }
@@ -139,6 +163,9 @@ impl Tui {
         self.terminal.draw(render).map(|_| ())
     }
 
+    /// Forget what is on the screen and paint the next frame whole. Whatever was written over the
+    /// frame left cells the wizard's record still believes it drew, and a diffing pass would never
+    /// touch them again.
     pub fn repaint(&mut self) {
         let _ = self.terminal.clear();
     }
@@ -159,6 +186,8 @@ mod tests {
 
     use super::*;
 
+    /// The handing over is process-wide, so two tests doing it at once would each be checking the
+    /// other's log. One at a time, and in the order the story reads.
     fn one_at_a_time() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
@@ -166,6 +195,7 @@ mod tests {
             .unwrap_or_else(|error| error.into_inner())
     }
 
+    /// What a program the wizard started does with the output it was given.
     fn write_to_inherited_output(line: &str) -> io::Result<()> {
         let mut inherited = unsafe { File::from_raw_fd(libc::dup(libc::STDOUT_FILENO)) };
         inherited.write_all(line.as_bytes())?;

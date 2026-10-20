@@ -30,7 +30,7 @@ fn apply_darkly(context: &Context) {
     }
 
     output::info("Applying Darkly plasma style...");
-    write_key("plasmarc", "Theme", "name", "darkly");
+    crate::kde::write_key("plasmarc", "Theme", "name", "darkly");
 
     let theme = Path::new("/usr/share/plasma/desktoptheme/darkly");
     if theme.is_dir() {
@@ -44,26 +44,26 @@ fn apply_darkly(context: &Context) {
     }
 
     output::info("Applying Darkly application style...");
-    write_key("kdeglobals", "KDE", "widgetStyle", "darkly");
-    write_key("kdeglobals", "General", "ColorScheme", "Darkly");
+    crate::kde::write_key("kdeglobals", "KDE", "widgetStyle", "darkly");
+    crate::kde::write_key("kdeglobals", "General", "ColorScheme", "Darkly");
 
     output::info("Applying Darkly window decoration...");
     if decoration_installed() {
-        write_key(
+        crate::kde::write_key(
             "kwinrc",
             "org.kde.kdecoration2",
             "library",
             "org.kde.darkly",
         );
-        write_key("kwinrc", "org.kde.kdecoration2", "theme", "@darkly");
+        crate::kde::write_key("kwinrc", "org.kde.kdecoration2", "theme", "@darkly");
     } else {
-        write_key(
+        crate::kde::write_key(
             "kwinrc",
             "org.kde.kdecoration2",
             "library",
             "org.kde.breeze",
         );
-        write_key("kwinrc", "org.kde.kdecoration2", "theme", "Breeze");
+        crate::kde::write_key("kwinrc", "org.kde.kdecoration2", "theme", "Breeze");
     }
 }
 
@@ -188,32 +188,19 @@ fn set_wallpaper(context: &Context) {
         format!("{}\n", chosen.display()),
     );
 
-    if process::available("kwriteconfig6") {
-        write_key(
+    if crate::kde::available() {
+        crate::kde::write_key(
             "kscreenlockerrc",
             "Greeter",
             "WallpaperPlugin",
             "org.kde.image",
         );
         let image = format!("file://{}", chosen.display());
-        let _ = process::succeeds(
-            "kwriteconfig6",
-            &[
-                "--file",
-                "kscreenlockerrc",
-                "--group",
-                "Greeter",
-                "--group",
-                "Wallpaper",
-                "--group",
-                "org.kde.image",
-                "--group",
-                "General",
-                "--key",
-                "Image",
-                &image,
-            ],
-            None,
+        crate::kde::write(
+            "kscreenlockerrc",
+            &["Greeter", "Wallpaper", "org.kde.image", "General"],
+            "Image",
+            &image,
         );
     }
 }
@@ -249,14 +236,6 @@ fn plasma_script(url: &str) -> String {
             }}
         "
     )
-}
-
-fn write_key(file: &str, group: &str, key: &str, value: &str) {
-    let _ = process::succeeds(
-        "kwriteconfig6",
-        &["--file", file, "--group", group, "--key", key, value],
-        None,
-    );
 }
 
 fn basename(path: &Path) -> String {

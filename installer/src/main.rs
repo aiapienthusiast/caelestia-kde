@@ -13,6 +13,7 @@ mod install_fs;
 mod install_kind;
 mod journal;
 mod js;
+mod kde;
 mod logline;
 mod logout;
 mod menu;
@@ -242,6 +243,8 @@ fn run(args: Args) -> Outcome {
     }
 }
 
+/// Say what would happen, and do none of it. This is the one path that is expected to run
+/// unprivileged and outside a terminal.
 fn print_plan(bundle: &Bundle, args: &Args) -> Outcome {
     let answers = plan::answers(&args.set);
     let rows = plan::rows(&answers);
@@ -264,6 +267,7 @@ fn record_answers(answers: &menu::Answers) {
     }
 }
 
+/// The terminal decides, unless the caller said otherwise.
 fn look(args: &Args) -> Env {
     let mut env = Env::capture();
     if let Some(glyphs) = &args.look.glyphs {

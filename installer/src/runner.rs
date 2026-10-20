@@ -68,6 +68,8 @@ impl Running {
         })
     }
 
+    /// Stop the step and everything it started: a term first so a package manager can put its
+    /// lock back, and a kill only if it will not go.
     pub fn stop(&mut self) {
         if matches!(self.child.try_wait(), Ok(Some(_))) {
             return;

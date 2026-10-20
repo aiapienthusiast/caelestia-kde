@@ -519,10 +519,7 @@ fn remove_by_prefix(directory: &Path, prefix: &str) -> bool {
 }
 
 fn copy_file(source: &Path, target: &Path) -> bool {
-    if let Some(parent) = target.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    fs::copy(source, target).is_ok()
+    crate::copy::file(source, target).is_ok()
 }
 
 fn copy_tree(source: &Path, target: &Path) -> bool {
@@ -536,41 +533,6 @@ fn sudo_remove(path: &Path, tree: bool) -> bool {
     } else {
         privileges::elevated("rm", &["-f", &target], None) == Ok(0)
     }
-}
-
-fn kwrite(file: &str, groups: &[&str], key: &str, value: &str) {
-    let mut args = vec!["--file", file];
-    for group in groups {
-        args.push("--group");
-        args.push(group);
-    }
-    args.push("--key");
-    args.push(key);
-    args.push(value);
-    let _ = process::succeeds("kwriteconfig6", &args, None);
-}
-
-fn kwrite_delete(file: &str, groups: &[&str], key: &str) {
-    let mut args = vec!["--file", file];
-    for group in groups {
-        args.push("--group");
-        args.push(group);
-    }
-    args.push("--key");
-    args.push(key);
-    args.push("--delete");
-    let _ = process::succeeds("kwriteconfig6", &args, None);
-}
-
-fn kde_read(file: &str, groups: &[&str], key: &str) -> Option<String> {
-    let mut args = vec!["--file", file];
-    for group in groups {
-        args.push("--group");
-        args.push(group);
-    }
-    args.push("--key");
-    args.push(key);
-    process::capture("kreadconfig6", &args).filter(|value| !value.is_empty())
 }
 
 fn unit_is_enabled_or_active(unit: &str) -> bool {

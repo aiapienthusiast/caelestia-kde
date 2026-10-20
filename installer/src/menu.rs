@@ -52,6 +52,9 @@ impl Entry {
         }
     }
 
+    /// The one line a row can add to its own label, or `None` where the label says it all. The
+    /// bar is a fact the row cannot show — what `full` and `mini` look like, which fonts get
+    /// applied — because a line that restates its row is a line the reader has to spend anyway.
     pub fn help(&self) -> Option<&'static str> {
         let text = match self {
             Entry::Toggle { help, .. }
@@ -75,12 +78,17 @@ impl Entry {
     }
 }
 
+/// Whether a row holds an answer of its own, as opposed to being a view of answers that live
+/// elsewhere. Counting, resetting and "changed" all mean the answers.
 pub fn holds_an_answer(entry: &Entry) -> bool {
     matches!(entry, Entry::Toggle { .. } | Entry::Choice { .. })
 }
 
 const APP_THEMING: [&str; 6] = crate::apps::Apps::IDS;
 
+/// The look, and the packages it is made of. The icon set, the theme and the Qt style the look is
+/// built on are not offered one at a time: turning any of them off does not give a smaller
+/// Caelestia, it gives a broken one that the configuration deployed later does not match.
 const APPEARANCE: [Entry; 4] = [
     Entry::Toggle {
         id: "SYNC_LOGIN_SCREEN",
@@ -177,6 +185,10 @@ const OPTIONS: [Entry; 2] = [
     },
 ];
 
+/// The wizard asks one question at a time, one screen each, in this order. Every entry here is a
+/// group of answers that belong to the same decision, so a screen is never a list of unrelated
+/// settings and never needs a second level of menus. The last one is the knobs a fresh install is
+/// right to leave alone; its name is what a reader expects to find there.
 pub const QUESTIONS: [Entry; 3] = [
     Entry::Submenu {
         id: "menu_appearance",
@@ -195,6 +207,7 @@ pub const QUESTIONS: [Entry; 3] = [
     },
 ];
 
+/// How many questions there are: what the question counter counts to.
 pub fn question_count() -> usize {
     QUESTIONS.len()
 }
@@ -206,6 +219,7 @@ pub fn items_of(question: usize) -> &'static [Entry] {
     }
 }
 
+/// What one question is called, by position.
 pub fn question(question: usize) -> &'static str {
     match QUESTIONS.get(question) {
         Some(entry) => entry.title(),
@@ -213,6 +227,9 @@ pub fn question(question: usize) -> &'static str {
     }
 }
 
+/// Fish is installed when it is the login shell. They used to be two rows on two screens, which
+/// let somebody ask to log in to a shell that was never installed: one decision about the shell
+/// cannot contradict itself. The row itself now lives with the other appearance choices.
 fn fish_follows_the_shell(answers: &mut Answers) {
     let shell = answers
         .get("DEFAULT_SHELL")
@@ -221,6 +238,8 @@ fn fish_follows_the_shell(answers: &mut Answers) {
     answers.insert("INSTALL_FISH", (shell == "fish").to_string());
 }
 
+/// Every answerable entry the wizard asks about, in the order it asks them: the question tree
+/// flattened, which is what the change tally and the step-policy check walk.
 pub fn every_entry() -> Vec<&'static Entry> {
     fn walk(entries: &'static [Entry], into: &mut Vec<&'static Entry>) {
         for entry in entries {
@@ -282,10 +301,29 @@ pub fn seed_answers(entries: &[Entry], answers: &mut Answers) {
     fish_follows_the_shell(answers);
 }
 
+/// The answers a run starts from: the menu defaults, what this machine already has, then what the
+/// caller was told. The wizard, the unattended run and `--plan` all start here, so their view of an
+/// answer and a step's view cannot differ.
+pub fn starting(set: &[(&'static str, String)]) -> Answers {
+    let mut answers = Answers::new();
+    seed_answers(&QUESTIONS, &mut answers);
+    for (id, answer) in crate::apps::Apps::here().answers() {
+        answers.insert(id, answer.to_string());
+    }
+    for (id, value) in set {
+        answers.insert(id, value.clone());
+    }
+    answers
+}
+
 pub fn value<'a>(entry: &Entry, answers: &'a Answers) -> Option<&'a str> {
     answers.get(entry.id()).map(String::as_str)
 }
 
+/// The answer the wizard started this row at on this machine. For everything the wizard decides
+/// that is the value in the table; for the apps it is what was found. "Changed" and "reset" mean
+/// the answers the wizard was seeded with, so the apps a machine already has do not read as six
+/// things the user just switched on.
 pub fn baseline_of<'a>(entry: &Entry, baseline: &'a Answers) -> Option<&'a str> {
     match entry {
         Entry::Toggle { .. } | Entry::Choice { .. } => baseline.get(entry.id()).map(String::as_str),
@@ -403,6 +441,9 @@ pub fn change(entry: &Entry, answers: &mut Answers) -> bool {
     changed
 }
 
+/// Read one `ID=value` from the command line: the answer a script gives without walking the
+/// wizard. Checked against the tables here, so a mistyped id or a value a row cannot hold is
+/// refused before anything runs rather than quietly dropped half way through an install.
 pub fn parse_set(setting: &str) -> Result<(&'static str, String), String> {
     let (id, value) = setting
         .split_once('=')
@@ -434,6 +475,8 @@ pub fn parse_set(setting: &str) -> Result<(&'static str, String), String> {
     }
 }
 
+/// Apply the answers a script gave, on top of the seeded ones. A script's answers are where the
+/// wizard starts, so they are also the baseline a later change is measured against.
 pub fn apply_set(settings: &[(&'static str, String)], answers: &mut Answers) {
     for (id, value) in settings {
         answers.insert(id, value.clone());
@@ -460,6 +503,9 @@ mod tests {
         entry(PRESET_THEME_APPS)
     }
 
+    /// A wizard on a machine that has every app, and the answers it started with. Most rows only
+    /// mean something next to a baseline, and "the apps this machine has" is not something a test
+    /// can arrange any other way.
     struct Wizard {
         answers: Answers,
         baseline: Answers,

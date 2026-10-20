@@ -5,7 +5,7 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_SCRIPT="$REPO_ROOT/installer/src/steps/build_shell.rs"
+BUILD_SCRIPT="$REPO_ROOT/installer/src/steps/build_shell/mod.rs"
 RESTART_SCRIPT="$REPO_ROOT/shell/scripts/restart_shell.sh"
 UNINSTALL_STEP="$REPO_ROOT/installer/src/uninstall.rs"
 IPC="$REPO_ROOT/src/bin/caelestia-shell-ipc"

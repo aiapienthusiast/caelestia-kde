@@ -1,3 +1,14 @@
+//! The login screen, as much of it as anyone is allowed to own.
+//!
+//! Plasma Login draws its own screen: the QML the greeter runs is compiled into the greeter
+//! binary, and nothing in its configuration names a theme, a package or a directory of ours. The
+//! only part of it an install can reach is what it shows - the wallpaper and the colour scheme -
+//! which is what the sync helper writes into the greeter user's own configuration after every
+//! wallpaper or theme change.
+//!
+//! A machine that boots another display manager is left alone. Caelestia does not install a login
+//! theme any more; the screen it draws itself is the lock screen, and that one is a Plasma shell
+//! package kscreenlocker reads from a path the session names.
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -11,6 +22,8 @@ use crate::process;
 use crate::steps::{Context, Failure};
 use crate::tmp::TempDir;
 
+/// The helper the desktop runs after a wallpaper or colour change: where a checkout puts it, and
+/// where a package does.
 const LOCAL_SYNC: &str = "/usr/local/bin/caelestia-greeter-sync";
 const PACKAGED_SYNC: &str = "/usr/bin/caelestia-greeter-sync";
 const SUDOERS_FILE: &str = "/etc/sudoers.d/caelestia-greeter-sync";
@@ -72,6 +85,10 @@ pub fn run(context: &Context) -> Result<(), Failure> {
     step.register_sync("Login screen configured for Plasma Login.")
 }
 
+/// Whether the machine boots Plasma Login.
+///
+/// The boot alias is the answer when there is one: a machine that has both units enabled is
+/// decided by which of them the display-manager symlink points at.
 fn plasma_login() -> bool {
     let alias = process::capture(
         "readlink",
@@ -124,6 +141,9 @@ struct LoginScreen<'a> {
 }
 
 impl LoginScreen<'_> {
+    /// Put the helper where the desktop can call it. A package ships its own; a checkout installs
+    /// the one it carries. The location is a variable so that a package which keeps it somewhere
+    /// else - and a test on a machine it may not write to - can say where.
     fn install_helper(&mut self) -> Result<(), Failure> {
         self.sync = match self.context.variable("CAELESTIA_GREETER_SYNC") {
             Some(path) => PathBuf::from(path),
@@ -181,6 +201,8 @@ impl LoginScreen<'_> {
         Ok(())
     }
 
+    /// Run it once, so the screen is right before the next logout rather than after the next
+    /// wallpaper change.
     fn run_helper(&mut self) {
         match privileges::elevated(&self.sync.to_string_lossy(), &[], None) {
             Ok(0) => output::ok("Initial login screen sync complete."),

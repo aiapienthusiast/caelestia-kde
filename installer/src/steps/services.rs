@@ -97,18 +97,11 @@ pub fn run(context: &Context) -> Result<(), Failure> {
 
     disable_legacy_bridge();
     clear_legacy_shortcuts();
-    let _ = process::succeeds(
-        "kwriteconfig6",
-        &[
-            "--file",
-            "kwinrc",
-            "--group",
-            "Plugins",
-            "--key",
-            "quickshell-kde-bridgeEnabled",
-            "false",
-        ],
-        None,
+    let _ = crate::kde::write(
+        "kwinrc",
+        &["Plugins"],
+        "quickshell-kde-bridgeEnabled",
+        "false",
     );
 
     super::ensure_five_desktops(context)?;
@@ -164,19 +157,7 @@ fn clear_legacy_shortcuts() {
                 format!("none,none,Move Window to Desktop {index}"),
             ),
         ] {
-            let _ = process::succeeds(
-                "kwriteconfig6",
-                &[
-                    "--file",
-                    "kglobalshortcutsrc",
-                    "--group",
-                    "kwin",
-                    "--key",
-                    &key,
-                    &value,
-                ],
-                None,
-            );
+            crate::kde::write("kglobalshortcutsrc", &["kwin"], &key, &value);
         }
     }
 }

@@ -13,6 +13,7 @@ pub struct Args {
     pub bundle: Option<PathBuf>,
     pub action: PresetAction,
     pub debug: bool,
+    /// How the TUI should draw itself, when the environment did not say.
     pub look: Look,
     pub set: Vec<(&'static str, String)>,
     pub plan: bool,
