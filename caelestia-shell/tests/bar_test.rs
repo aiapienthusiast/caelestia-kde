@@ -259,3 +259,129 @@ fn test_tray_registry_service() {
     tray.unregister_item("discord");
     assert_eq!(tray.state.items.len(), 0);
 }
+
+#[test]
+fn test_all_bar_components_render() {
+    use caelestia_shell::infrastructure::theme::CaelestiaColours;
+    use caelestia_shell::modules::bar::components::*;
+
+    let c = CaelestiaColours::default();
+
+    // 1. ClockWidget
+    let clock_snap = ClockSnapshot {
+        time_str: "12:34".to_string(),
+        date_str: "Sun, Oct 25".to_string(),
+        hours: 12,
+        minutes: 34,
+        seconds: 0,
+    };
+    let _ = ClockWidget::render(&clock_snap, &c);
+
+    // 2. DockWidget
+    let dock_snap = DockSnapshot {
+        title: "Editor".to_string(),
+        app_id: "code".to_string(),
+        has_window: true,
+    };
+    let _ = DockWidget::render(&dock_snap, &c);
+
+    // 3. GithubActivityWidget
+    let _ = GithubActivityWidget::render(42, &c);
+
+    // 4. GithubStore
+    let store = GithubStore::new();
+    let snap = store.snapshot();
+    assert_eq!(snap.total, 0);
+
+    // 5. GreeterWidget
+    let _ = GreeterWidget::render("Alice", &c);
+
+    // 6. KbLayoutIndicatorWidget
+    let _ = KbLayoutIndicatorWidget::render("US", &c);
+
+    // 7. KeepAwakeWidget
+    let _ = KeepAwakeWidget::render(true, &c);
+
+    // 8. MediaWidget
+    let _ = MediaWidget::render("Track", true, 0.5, &c);
+
+    // 9. NotesWidget
+    let _ = NotesWidget::render(&c);
+
+    // 10. NotificationsIndicatorWidget
+    let _ = NotificationsIndicatorWidget::render(5, &c);
+
+    // 11. OsIconWidget
+    let _ = OsIconWidget::render(&c);
+
+    // 12. PerformanceWidget
+    let _ = PerformanceWidget::render(15, 45, &c);
+
+    // 13. PowerWidget
+    let _ = PowerWidget::render(&c);
+
+    // 14. ScreenCaptureWidget
+    let _ = ScreenCaptureWidget::render(false, &c);
+
+    // 15. ShortcutsWidget
+    let _ = ShortcutsWidget::render(&c);
+
+    // 16. ShowDesktopWidget
+    let _ = ShowDesktopWidget::render(&c);
+
+    // 17. StatusIconsWidget
+    let status_snap = BarStatusSnapshot {
+        volume_icon: "volume_up",
+        volume_pct: 65,
+        volume_muted: false,
+        network_icon: "wifi",
+        network_name: "Home".to_string(),
+        bluetooth_icon: "bluetooth",
+        bluetooth_connected_count: 1,
+        battery_pct: 90,
+        battery_charging: true,
+    };
+    let _ = StatusIconsWidget::render(&status_snap, &c);
+
+    // 18. TrayWidget
+    let _ = TrayWidget::render(&[], &c);
+
+    // 19. TrayItemWidget
+    let _ = TrayItemWidget::render("discord", "Discord", "discord", &c);
+
+    // 20. UpdateIndicatorWidget
+    let _ = UpdateIndicatorWidget::render(12, &c);
+
+    // 21. WeatherWidget
+    let _ = WeatherWidget::render(21, "sunny", &c);
+
+    // Performance submodules (7)
+    let _ = performance::PerfBattery::render(80, true, &c);
+    let _ = performance::PerfCpu::render(25, &c);
+    let _ = performance::PerfGpu::render(40, &c);
+    let _ = performance::PerfMemory::render(8.0, 16.0, &c);
+    let _ = performance::PerfNetwork::render(1250, 320, &c);
+    let _ = performance::PerfStat::render("IO", "12 MB/s", &c);
+    let _ = performance::PerfStorage::render(120, &c);
+
+    // Status submodules (3)
+    let _ = status::BatteryStatusWidget::render(85, false, &c);
+    let _ = status::BluetoothStatusWidget::render("bluetooth", 1, &c);
+    let _ = status::LockStatusWidget::render(true, false, &c);
+
+    // Workspaces submodules (6)
+    let _ = workspaces::ActiveIndicatorWidget::render(0, 10.0, true, &c);
+    let _ = workspaces::GapMarkersWidget::render(&[10.0, 30.0], true, &c);
+    let _ = workspaces::OccupiedBgWidget::render(&[(0.0, 50.0)], true, &c);
+    let _ = workspaces::SpecialWorkspacesWidget::render(&["special:scratch".to_string()], "special:scratch", &c);
+    let pill = WorkspacePill {
+        index: 0,
+        id: 1,
+        name: "1".to_string(),
+        active: true,
+        occupied: true,
+    };
+    let _ = workspaces::WorkspacePillWidget::render(&pill, &c);
+    let _ = workspaces::WorkspacesStripWidget::render(&[pill], true, &c);
+}
+

@@ -1,7 +1,10 @@
-//! Workspaces Bar Widget
+//! Workspaces Strip Component & Model
 //! Complete parity with `shell/modules/bar/components/workspaces/Workspaces.qml`.
 
+use super::workspace::WorkspacePillWidget;
+use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::kwin::KWinService;
+use gpui::{div, prelude::*, Div, Styled};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,5 +74,24 @@ impl WorkspacesModel {
         }
 
         pills
+    }
+}
+
+pub struct WorkspacesStripWidget;
+
+impl WorkspacesStripWidget {
+    pub fn render(pills: &[WorkspacePill], is_horizontal: bool, c: &CaelestiaColours) -> Div {
+        let mut strip = div()
+            .flex()
+            .when(is_horizontal, |d| d.flex_row())
+            .when(!is_horizontal, |d| d.flex_col())
+            .items_center()
+            .gap_1();
+
+        for pill in pills {
+            strip = strip.child(WorkspacePillWidget::render(pill, c));
+        }
+
+        strip
     }
 }

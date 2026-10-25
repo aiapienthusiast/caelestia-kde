@@ -1,7 +1,9 @@
-//! Bar Dock / Active Window Component
-//! Parity with `shell/modules/bar/components/Dock.qml`.
+//! Bar Dock / Active Window Component & Model
+//! Complete parity with `shell/modules/bar/components/Dock.qml`.
 
+use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::kwin::WindowItem;
+use gpui::{div, prelude::*, px, rgba, Div, Styled};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,5 +36,31 @@ impl BarDockModel {
                 has_window: false,
             }
         }
+    }
+}
+
+pub struct DockWidget;
+
+impl DockWidget {
+    pub fn render(snapshot: &DockSnapshot, c: &CaelestiaColours) -> Div {
+        if !snapshot.has_window {
+            return div();
+        }
+
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_1()
+            .px(px(6.0))
+            .py(px(2.0))
+            .rounded_md()
+            .bg(rgba(c.surface_container))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgba(c.on_surface_variant))
+                    .child(snapshot.title.clone()),
+            )
     }
 }

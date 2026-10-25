@@ -5,12 +5,12 @@
 //! supporting island borders, workspace pills, active window dock, status cluster,
 //! clock, system tray, media spectrum visualizer, and contextual popouts.
 
-use super::clock::{BarClockModel, ClockSnapshot};
+use super::components::{
+    BarClockModel, BarDockModel, BarStatusSnapshot, ClockSnapshot, DockSnapshot, StatusIconsModel,
+    WorkspacePill, WorkspacesModel,
+};
 use super::config::BarConfig;
-use super::dock::{BarDockModel, DockSnapshot};
 use super::popouts::{BarPopouts, BarPopoutsState, PopoutType};
-use super::status::{BarStatusSnapshot, StatusIconsModel};
-use super::workspaces::{WorkspacePill, WorkspacesModel};
 use crate::components::styled_text::StyledTextExt;
 use crate::components::widgets::visualizer_bars::VisualizerBars;
 use crate::infrastructure::theme::CaelestiaColours;

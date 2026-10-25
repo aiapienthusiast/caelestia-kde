@@ -1,8 +1,10 @@
-//! Clock Bar Widget
+//! Clock Bar Widget & Model
 //! Complete parity with `shell/modules/bar/components/Clock.qml`.
 
 use chrono::{Local, Timelike};
 use serde::{Deserialize, Serialize};
+use crate::infrastructure::theme::CaelestiaColours;
+use gpui::{div, prelude::*, rgba, Div, Styled};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClockSnapshot {
@@ -47,5 +49,25 @@ impl BarClockModel {
             minutes,
             seconds,
         }
+    }
+}
+
+pub struct ClockWidget;
+
+impl ClockWidget {
+    pub fn render(snapshot: &ClockSnapshot, c: &CaelestiaColours) -> Div {
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_1()
+            .cursor_pointer()
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(rgba(c.on_surface))
+                    .child(snapshot.time_str.clone()),
+            )
     }
 }

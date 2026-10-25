@@ -1,9 +1,12 @@
-//! Status Icons Bar Cluster
-//! Complete parity with `shell/modules/bar/components/StatusIcons.qml` and `components/status/`.
+//! Status Icons Bar Cluster & Model
+//! Complete parity with `shell/modules/bar/components/StatusIcons.qml`.
 
+use crate::components::styled_text::StyledTextExt;
+use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::audio::AudioService;
 use crate::services::bluetooth::BluetoothService;
 use crate::services::network::{NetworkKind, NetworkService};
+use gpui::{div, prelude::*, rgba, Div, Styled};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -84,5 +87,29 @@ impl StatusIconsModel {
             battery_pct,
             battery_charging,
         }
+    }
+}
+
+pub struct StatusIconsWidget;
+
+impl StatusIconsWidget {
+    pub fn render(snapshot: &BarStatusSnapshot, c: &CaelestiaColours) -> Div {
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_2()
+            .child(
+                StyledTextExt::icon_size(div().child(snapshot.volume_icon), 16.0)
+                    .text_color(rgba(c.on_surface)),
+            )
+            .child(
+                StyledTextExt::icon_size(div().child(snapshot.network_icon), 16.0)
+                    .text_color(rgba(c.on_surface)),
+            )
+            .child(
+                StyledTextExt::icon_size(div().child(snapshot.bluetooth_icon), 16.0)
+                    .text_color(rgba(c.on_surface)),
+            )
     }
 }
