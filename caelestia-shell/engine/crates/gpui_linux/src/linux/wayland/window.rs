@@ -174,9 +174,15 @@ impl WaylandSurfaceState {
                 surface.id(),
             );
 
-            let width = f32::from(params.bounds.size.width);
-            let height = f32::from(params.bounds.size.height);
-            layer_surface.set_size(width as u32, height as u32);
+            let mut width = f32::from(params.bounds.size.width) as u32;
+            let mut height = f32::from(params.bounds.size.height) as u32;
+            if options.anchor.contains(Anchor::LEFT) && options.anchor.contains(Anchor::RIGHT) {
+                width = 0;
+            }
+            if options.anchor.contains(Anchor::TOP) && options.anchor.contains(Anchor::BOTTOM) {
+                height = 0;
+            }
+            layer_surface.set_size(width, height);
 
             layer_surface.set_anchor(super::layer_shell::wayland_anchor(options.anchor));
             layer_surface.set_keyboard_interactivity(
@@ -888,6 +894,7 @@ impl WaylandWindow {
 
         // Kick things off
         surface.commit();
+        this.0.frame_ping.ping();
 
         Ok((this, surface.id()))
     }
