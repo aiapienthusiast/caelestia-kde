@@ -3,6 +3,7 @@
 
 pub mod containers;
 pub mod controls;
+pub mod effects;
 pub mod icon;
 pub mod state_layer;
 pub mod styled_rect;
@@ -12,6 +13,7 @@ pub mod widgets;
 // Flatten top-level foundational elements
 pub use containers::*;
 pub use controls::*;
+pub use effects::*;
 pub use widgets::*;
 pub use icon::{IconSize, MaterialIcon};
 pub use state_layer::StateLayer;

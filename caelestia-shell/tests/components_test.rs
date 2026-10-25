@@ -118,3 +118,115 @@ fn test_design_tokens_parity() {
     assert_eq!(SWITCH_TRACK_WIDTH, 52.0);
     assert_eq!(SWITCH_TRACK_HEIGHT, 32.0);
 }
+
+#[test]
+fn test_m3_controls_render_contract() {
+    use caelestia_shell::components::containers::{SectionHeader, StyledFlickable, VerticalFadeListView};
+    use caelestia_shell::components::controls::{
+        ListRow, Menu, MenuItem, SearchBar, SelectRow, SliderRow, StepperRow, ToggleRow,
+    };
+
+    let c = CaelestiaColours::default();
+
+    // Verify render functions execute without panics and produce Divs
+    let _list_row = ListRow::render(
+        "Wi-Fi",
+        Some("Connected to Home-5G"),
+        Some("wifi"),
+        None,
+        false,
+        false,
+        false,
+        &c,
+    );
+
+    let _toggle_row = ToggleRow::render(
+        "Bluetooth",
+        Some("Visible to nearby devices"),
+        Some("bluetooth"),
+        true,
+        false,
+        false,
+        false,
+        &c,
+    );
+
+    let _slider_row = SliderRow::render(
+        "Display Brightness",
+        "75%",
+        0.75,
+        200.0,
+        Some("brightness_6"),
+        false,
+        false,
+        false,
+        &c,
+    );
+
+    let _stepper_row = StepperRow::render(
+        "Volume Boost",
+        Some("Max output amplification"),
+        "120%",
+        Some("volume_up"),
+        false,
+        false,
+        false,
+        &c,
+    );
+
+    let _select_row = SelectRow::render(
+        "Power Profile",
+        Some("Performance strategy"),
+        "Balanced",
+        Some("speed"),
+        false,
+        false,
+        false,
+        &c,
+    );
+
+    let _search_bar = SearchBar::render(
+        "terminal",
+        "Search applications...",
+        true,
+        false,
+        false,
+        &c,
+    );
+
+    let _menu_item = MenuItem::render(
+        "Open in Terminal",
+        Some("terminal"),
+        Some("Ctrl+Shift+T"),
+        false,
+        false,
+        false,
+        false,
+        &c,
+    );
+
+    let _menu = Menu::render(200.0, vec![_menu_item], &c);
+
+    let _section = SectionHeader::render("Networking", Some("Manage interfaces"), &c);
+
+    let _flickable = StyledFlickable::render("test_flick", Some(300.0), vec![_list_row]);
+
+    let _fade_list = VerticalFadeListView::render("test_fade", Some(400.0), 8.0, vec![_toggle_row], &c);
+}
+
+#[test]
+fn test_elevation_and_effects() {
+    use caelestia_shell::components::effects::{Elevation, ElevationLevel, InnerBorder};
+    use gpui::div;
+
+    let c = CaelestiaColours::default();
+
+    let _l0 = Elevation::apply(div(), ElevationLevel::Level0);
+    let _l1 = Elevation::apply(div(), ElevationLevel::Level1);
+    let _l2 = Elevation::apply(div(), ElevationLevel::Level2);
+    let _l3 = Elevation::apply(div(), ElevationLevel::Level3);
+    let _l4 = Elevation::apply(div(), ElevationLevel::Level4);
+    let _l5 = Elevation::apply(div(), ElevationLevel::Level5);
+
+    let _inner_border = InnerBorder::overlay(12.0, &c);
+}

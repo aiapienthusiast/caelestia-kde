@@ -20,3 +20,5 @@ dhat-heap.json
 # Environment & local overrides
 .env
 .env.local
+
+/MISSING_FILES.md
