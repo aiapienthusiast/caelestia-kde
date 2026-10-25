@@ -33,12 +33,17 @@ impl NightLightService {
         let mut service = Self {
             state: NightLightState::default(),
         };
-        service.poll();
+        if !crate::infrastructure::is_test_environment() {
+            service.poll();
+        }
         service
     }
 
     /// Refresh Night Light properties from KWin D-Bus
     pub fn poll(&mut self) {
+        if crate::infrastructure::is_test_environment() {
+            return;
+        }
         if let Ok(output) = Command::new("qdbus6")
             .args(["org.kde.KWin", "/org/kde/KWin/NightLight", "org.kde.KWin.NightLight.running"])
             .output()
@@ -72,6 +77,31 @@ impl NightLightService {
         }
     }
 
+    /// Returns command specification for night light preview via qdbus6
+    pub fn command_for_preview(temp: u32) -> (&'static str, Vec<String>) {
+        (
+            "qdbus6",
+            vec![
+                "org.kde.KWin".to_string(),
+                "/org/kde/KWin/NightLight".to_string(),
+                "org.kde.KWin.NightLight.preview".to_string(),
+                temp.clamp(1000, 10000).to_string(),
+            ],
+        )
+    }
+
+    /// Returns command specification for stopping night light preview
+    pub fn command_for_stop_preview() -> (&'static str, [&'static str; 3]) {
+        (
+            "qdbus6",
+            [
+                "org.kde.KWin",
+                "/org/kde/KWin/NightLight",
+                "org.kde.KWin.NightLight.stopPreview",
+            ],
+        )
+    }
+
     /// Toggle Night Light active state
     pub fn toggle(&mut self) {
         self.state.running = !self.state.running;
@@ -83,14 +113,14 @@ impl NightLightService {
             6500
         };
 
-        if self.state.running {
-            let _ = Command::new("qdbus6")
-                .args(["org.kde.KWin", "/org/kde/KWin/NightLight", "org.kde.KWin.NightLight.preview", &target_temp.to_string()])
-                .spawn();
-        } else {
-            let _ = Command::new("qdbus6")
-                .args(["org.kde.KWin", "/org/kde/KWin/NightLight", "org.kde.KWin.NightLight.stopPreview"])
-                .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            if self.state.running {
+                let (prog, args) = Self::command_for_preview(target_temp);
+                let _ = Command::new(prog).args(args).spawn();
+            } else {
+                let (prog, args) = Self::command_for_stop_preview();
+                let _ = Command::new(prog).args(args).spawn();
+            }
         }
     }
 
@@ -98,8 +128,9 @@ impl NightLightService {
     pub fn set_temperature(&mut self, temp: u32) {
         let clamped = temp.clamp(1000, 10000);
         self.state.current_temperature = clamped;
-        let _ = Command::new("qdbus6")
-            .args(["org.kde.KWin", "/org/kde/KWin/NightLight", "org.kde.KWin.NightLight.preview", &clamped.to_string()])
-            .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_preview(clamped);
+            let _ = Command::new(prog).args(args).spawn();
+        }
     }
 }

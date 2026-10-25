@@ -57,6 +57,40 @@ impl CaptureCardModel {
         Self::default()
     }
 
+    /// Returns command specification for starting screen recording via gpu-screen-recorder
+    pub fn command_for_start_record(output_path: &str) -> (&'static str, Vec<String>) {
+        (
+            "gpu-screen-recorder",
+            vec![
+                "-w".to_string(),
+                "screen".to_string(),
+                "-f".to_string(),
+                "60".to_string(),
+                "-o".to_string(),
+                output_path.to_string(),
+            ],
+        )
+    }
+
+    /// Returns command specification for stopping screen recording via pkill
+    pub fn command_for_stop_record() -> (&'static str, [&'static str; 3]) {
+        ("pkill", ["-SIGINT", "-f", "gpu-screen-recorder"])
+    }
+
+    /// Returns command specification for taking screenshot via spectacle
+    pub fn command_for_screenshot(region: bool, output_path: &str) -> (&'static str, Vec<String>) {
+        (
+            "spectacle",
+            vec![
+                if region { "-r".to_string() } else { "-f".to_string() },
+                "-b".to_string(),
+                "-n".to_string(),
+                "-o".to_string(),
+                output_path.to_string(),
+            ],
+        )
+    }
+
     /// Start a screen recording session via pipewire / gpu-screen-recorder
     pub fn start_recording(&mut self) {
         if self.is_recording {
@@ -71,10 +105,9 @@ impl CaptureCardModel {
         self.record_start_secs = Some(now);
         info!("Started screen recording session at {}", now);
 
-        if !cfg!(test) && std::env::var("CAELESTIA_TEST").is_err() {
-            let _ = Command::new("gpu-screen-recorder")
-                .args(["-w", "screen", "-f", "60", "-o", "/tmp/caelestia-recording.mp4"])
-                .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_start_record("/tmp/caelestia-recording.mp4");
+            let _ = Command::new(prog).args(args).spawn();
         }
     }
 
@@ -93,10 +126,9 @@ impl CaptureCardModel {
         self.record_start_secs = None;
         info!("Stopped screen recording session. Duration: {}s", duration);
 
-        if !cfg!(test) && std::env::var("CAELESTIA_TEST").is_err() {
-            let _ = Command::new("pkill")
-                .args(["-SIGINT", "-f", "gpu-screen-recorder"])
-                .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_stop_record();
+            let _ = Command::new(prog).args(args).spawn();
         }
 
         let filename = format!("Recording-{}.mp4", now);
@@ -125,16 +157,10 @@ impl CaptureCardModel {
 
         info!("Triggering screenshot (region={}): {:?}", region, path);
 
-        if !cfg!(test) && std::env::var("CAELESTIA_TEST").is_err() {
-            if region {
-                let _ = Command::new("spectacle")
-                    .args(["-r", "-b", "-n", "-o", path.to_str().unwrap_or("/tmp/screenshot.png")])
-                    .spawn();
-            } else {
-                let _ = Command::new("spectacle")
-                    .args(["-f", "-b", "-n", "-o", path.to_str().unwrap_or("/tmp/screenshot.png")])
-                    .spawn();
-            }
+        if !crate::infrastructure::is_test_environment() {
+            let out_str = path.to_str().unwrap_or("/tmp/screenshot.png");
+            let (prog, args) = Self::command_for_screenshot(region, out_str);
+            let _ = Command::new(prog).args(args).spawn();
         }
 
         let item = CaptureItem {

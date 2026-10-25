@@ -78,7 +78,7 @@ fn test_workspaces_pill_model_computation() {
 #[test]
 fn test_status_icons_model_snapshots() {
     let mut audio = AudioService::new();
-    let mut network = NetworkService::new();
+    let mut network = NetworkService::new_mock(true, Some("Home_WiFi".to_string()), Vec::new());
     let mut bluetooth = BluetoothService::new();
 
     // 1. Audio Muted

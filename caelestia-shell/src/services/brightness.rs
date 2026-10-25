@@ -37,7 +37,9 @@ impl BrightnessService {
             state: BrightnessState::default(),
             sysfs_path,
         };
-        service.poll();
+        if !crate::infrastructure::is_test_environment() {
+            service.poll();
+        }
         service
     }
 
@@ -57,6 +59,9 @@ impl BrightnessService {
 
     /// Refresh current brightness from sysfs or brightnessctl
     pub fn poll(&mut self) {
+        if crate::infrastructure::is_test_environment() {
+            return;
+        }
         if let Some(ref path) = self.sysfs_path {
             if let (Ok(curr_str), Ok(max_str)) = (
                 fs::read_to_string(path.join("brightness")),
@@ -108,13 +113,23 @@ impl BrightnessService {
         })
     }
 
+    /// Returns command specification for setting display brightness via brightnessctl
+    pub fn command_for_set_percent(pct: u32) -> (&'static str, Vec<String>) {
+        let clamped = pct.clamp(1, 100);
+        (
+            "brightnessctl",
+            vec!["set".to_string(), format!("{}%", clamped)],
+        )
+    }
+
     /// Set brightness percentage (1% to 100%, clamped to prevent black screen)
     pub fn set_percent(&mut self, pct: u32) {
         let clamped = pct.clamp(1, 100);
         self.state.current_pct = clamped;
-        let _ = Command::new("brightnessctl")
-            .args(["set", &format!("{}%", clamped)])
-            .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_set_percent(clamped);
+            let _ = Command::new(prog).args(args).spawn();
+        }
     }
 
     /// Step brightness by delta percentage, e.g. +5 or -5

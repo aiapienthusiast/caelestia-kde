@@ -113,7 +113,7 @@ impl ScreenshotState {
         info!("Executing screenshot snip action: {:?}", self.action);
         self.dismiss();
 
-        if !cfg!(test) && std::env::var("CAELESTIA_TEST").is_err() {
+        if !crate::infrastructure::is_test_environment() {
             let _ = std::process::Command::new("bash")
                 .arg("-c")
                 .arg(&script)

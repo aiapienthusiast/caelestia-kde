@@ -143,21 +143,36 @@ impl QuickTogglesModel {
             }
             "hotspot" => {
                 self.hotspot_active = !self.hotspot_active;
-                let _ = Command::new("nmcli")
-                    .args([
-                        "connection",
-                        if self.hotspot_active { "up" } else { "down" },
-                        "Hotspot",
-                    ])
-                    .spawn();
+                if !crate::infrastructure::is_test_environment() {
+                    let (prog, args) = Self::command_for_hotspot(self.hotspot_active);
+                    let _ = Command::new(prog).args(args).spawn();
+                }
             }
             "restart_shell" => {
                 info!("Restarting Caelestia Shell via systemctl");
-                let _ = Command::new("systemctl")
-                    .args(["--user", "restart", "caelestia-shell.service"])
-                    .spawn();
+                if !crate::infrastructure::is_test_environment() {
+                    let (prog, args) = Self::command_for_restart_shell();
+                    let _ = Command::new(prog).args(args).spawn();
+                }
             }
             _ => {}
         }
+    }
+
+    /// Returns command specification for toggling hotspot via nmcli
+    pub fn command_for_hotspot(active: bool) -> (&'static str, [&'static str; 3]) {
+        (
+            "nmcli",
+            [
+                "connection",
+                if active { "up" } else { "down" },
+                "Hotspot",
+            ],
+        )
+    }
+
+    /// Returns command specification for restarting shell service via systemctl
+    pub fn command_for_restart_shell() -> (&'static str, [&'static str; 3]) {
+        ("systemctl", ["--user", "restart", "caelestia-shell.service"])
     }
 }

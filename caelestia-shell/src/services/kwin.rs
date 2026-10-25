@@ -118,12 +118,17 @@ impl KWinService {
         let mut service = Self {
             state: KWinState::default(),
         };
-        service.poll();
+        if !crate::infrastructure::is_test_environment() {
+            service.poll();
+        }
         service
     }
 
     /// Refresh virtual desktops and active window state
     pub fn poll(&mut self) {
+        if crate::infrastructure::is_test_environment() {
+            return;
+        }
         self.poll_workspaces();
         self.poll_active_window();
     }
@@ -248,6 +253,58 @@ impl KWinService {
             .map(|w| w.uuid.clone())
     }
 
+    /// Returns command specification for switching current virtual desktop via qdbus6
+    pub fn command_for_switch_desktop(uuid: &str) -> (&'static str, Vec<String>) {
+        (
+            "qdbus6",
+            vec![
+                "org.kde.KWin".to_string(),
+                "/VirtualDesktopManager".to_string(),
+                "org.kde.KWin.VirtualDesktopManager.current".to_string(),
+                uuid.to_string(),
+            ],
+        )
+    }
+
+    /// Returns command specification for closing active window via KWin shortcut
+    pub fn command_for_close_window() -> (&'static str, [&'static str; 4]) {
+        (
+            "qdbus6",
+            [
+                "org.kde.kglobalaccel",
+                "/component/kwin",
+                "invokeShortcut",
+                "Window Close",
+            ],
+        )
+    }
+
+    /// Returns command specification for showing desktop
+    pub fn command_for_show_desktop(showing: bool) -> (&'static str, [&'static str; 4]) {
+        (
+            "qdbus6",
+            [
+                "org.kde.KWin",
+                "/KWin",
+                "org.kde.KWin.showDesktop",
+                if showing { "true" } else { "false" },
+            ],
+        )
+    }
+
+    /// Returns command specification for toggling KWin overview
+    pub fn command_for_overview() -> (&'static str, [&'static str; 4]) {
+        (
+            "qdbus6",
+            [
+                "org.kde.kglobalaccel",
+                "/component/kwin",
+                "invokeShortcut",
+                "Overview",
+            ],
+        )
+    }
+
     /// Switch active workspace by UUID
     pub fn switch_to(&mut self, uuid: &str, output: Option<&str>) {
         if let Some(target_uuid) = self.resolve_desktop_uuid(uuid) {
@@ -265,9 +322,10 @@ impl KWinService {
                 self.state.active_by_output.insert(out.to_string(), self.state.active_id);
             }
 
-            let _ = Command::new("qdbus6")
-                .args(["org.kde.KWin", "/VirtualDesktopManager", "org.kde.KWin.VirtualDesktopManager.current", &target_uuid])
-                .spawn();
+            if !crate::infrastructure::is_test_environment() {
+                let (prog, args) = Self::command_for_switch_desktop(&target_uuid);
+                let _ = Command::new(prog).args(args).spawn();
+            }
         }
     }
 
@@ -280,18 +338,22 @@ impl KWinService {
 
     /// Cycle to next desktop
     pub fn next_desktop(&mut self) {
-        let _ = Command::new("qdbus6")
-            .args(["org.kde.KWin", "/KWin", "org.kde.KWin.nextDesktop"])
-            .spawn();
-        self.poll_workspaces();
+        if !crate::infrastructure::is_test_environment() {
+            let _ = Command::new("qdbus6")
+                .args(["org.kde.KWin", "/KWin", "org.kde.KWin.nextDesktop"])
+                .spawn();
+            self.poll_workspaces();
+        }
     }
 
     /// Cycle to previous desktop
     pub fn previous_desktop(&mut self) {
-        let _ = Command::new("qdbus6")
-            .args(["org.kde.KWin", "/KWin", "org.kde.KWin.previousDesktop"])
-            .spawn();
-        self.poll_workspaces();
+        if !crate::infrastructure::is_test_environment() {
+            let _ = Command::new("qdbus6")
+                .args(["org.kde.KWin", "/KWin", "org.kde.KWin.previousDesktop"])
+                .spawn();
+            self.poll_workspaces();
+        }
     }
 
     /// Create a new virtual desktop
@@ -303,28 +365,34 @@ impl KWinService {
             name.to_string()
         };
 
-        let _ = Command::new("qdbus6")
-            .args(["org.kde.KWin", "/VirtualDesktopManager", "org.kde.KWin.VirtualDesktopManager.createDesktop", &position.to_string(), &final_name])
-            .spawn();
-        self.poll_workspaces();
+        if !crate::infrastructure::is_test_environment() {
+            let _ = Command::new("qdbus6")
+                .args(["org.kde.KWin", "/VirtualDesktopManager", "org.kde.KWin.VirtualDesktopManager.createDesktop", &position.to_string(), &final_name])
+                .spawn();
+            self.poll_workspaces();
+        }
     }
 
     /// Remove a virtual desktop by UUID
     pub fn remove_workspace(&mut self, uuid: &str) {
         if let Some(target) = self.resolve_desktop_uuid(uuid) {
-            let _ = Command::new("qdbus6")
-                .args(["org.kde.KWin", "/VirtualDesktopManager", "org.kde.KWin.VirtualDesktopManager.removeDesktop", &target])
-                .spawn();
-            self.poll_workspaces();
+            if !crate::infrastructure::is_test_environment() {
+                let _ = Command::new("qdbus6")
+                    .args(["org.kde.KWin", "/VirtualDesktopManager", "org.kde.KWin.VirtualDesktopManager.removeDesktop", &target])
+                    .spawn();
+                self.poll_workspaces();
+            }
         }
     }
 
     /// Set showing desktop
     pub fn set_showing_desktop(&mut self, showing: bool) {
         self.state.showing_desktop = showing;
-        let _ = Command::new("qdbus6")
-            .args(["org.kde.KWin", "/KWin", "org.kde.KWin.showDesktop", if showing { "true" } else { "false" }])
-            .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let _ = Command::new("qdbus6")
+                .args(["org.kde.KWin", "/KWin", "org.kde.KWin.showDesktop", if showing { "true" } else { "false" }])
+                .spawn();
+        }
     }
 
     /// Toggle showing desktop
@@ -335,9 +403,11 @@ impl KWinService {
 
     /// Toggle KWin Overview effect
     pub fn toggle_overview() {
-        let _ = Command::new("qdbus6")
-            .args(["org.kde.kglobalaccel", "/component/kwin", "invokeShortcut", "Overview"])
-            .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let _ = Command::new("qdbus6")
+                .args(["org.kde.kglobalaccel", "/component/kwin", "invokeShortcut", "Overview"])
+                .spawn();
+        }
     }
 
 
@@ -456,9 +526,11 @@ impl KWinService {
             self.state.active_window = None;
         }
 
-        let _ = Command::new("qdbus6")
-            .args(["org.kde.kglobalaccel", "/component/kwin", "invokeShortcut", "Window Close"])
-            .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let _ = Command::new("qdbus6")
+                .args(["org.kde.kglobalaccel", "/component/kwin", "invokeShortcut", "Window Close"])
+                .spawn();
+        }
     }
 
     /// Minimize a window by address / UUID

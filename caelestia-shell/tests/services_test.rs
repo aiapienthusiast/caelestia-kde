@@ -339,3 +339,220 @@ fn test_night_light_state_defaults_and_toggles() {
     night_light.state.current_temperature = 4000.clamp(1000, 10000);
     assert_eq!(night_light.state.current_temperature, 4000);
 }
+
+#[test]
+fn test_network_service_in_memory_mock_operations() {
+    let mock_aps = vec![
+        caelestia_shell::services::network::AccessPoint {
+            ssid: "Office_WiFi".to_string(),
+            signal: 85,
+            security: "WPA2".to_string(),
+            in_use: true,
+        },
+        caelestia_shell::services::network::AccessPoint {
+            ssid: "Guest_WiFi".to_string(),
+            signal: 50,
+            security: "Open".to_string(),
+            in_use: false,
+        },
+    ];
+
+    let mut net = NetworkService::new_mock(
+        true,
+        Some("Office_WiFi".to_string()),
+        mock_aps,
+    );
+
+    assert!(net.is_mock);
+    assert!(net.state.wifi_enabled);
+    assert_eq!(net.state.active_ssid.as_deref(), Some("Office_WiFi"));
+    assert_eq!(net.state.signal_strength, 85);
+
+    // Toggle off wifi in memory
+    net.toggle_wifi();
+    assert!(!net.state.wifi_enabled);
+
+    // Toggle on wifi in memory
+    net.toggle_wifi();
+    assert!(net.state.wifi_enabled);
+
+    // Disconnect in memory
+    net.disconnect();
+    assert!(!net.state.connected);
+    assert_eq!(net.state.active_ssid, None);
+
+    // Connect to another AP in memory
+    net.connect("Guest_WiFi", None);
+    assert!(net.state.connected);
+    assert_eq!(net.state.active_ssid.as_deref(), Some("Guest_WiFi"));
+}
+
+#[test]
+fn test_services_command_generation_contracts() {
+    // 1. NetworkService command generation
+    assert_eq!(
+        NetworkService::command_for_wifi_toggle(true),
+        ("nmcli", ["radio", "wifi", "on"])
+    );
+    assert_eq!(
+        NetworkService::command_for_wifi_toggle(false),
+        ("nmcli", ["radio", "wifi", "off"])
+    );
+    assert_eq!(
+        NetworkService::command_for_connect("GuestNet", Some("secret123")),
+        (
+            "nmcli",
+            vec![
+                "device".to_string(),
+                "wifi".to_string(),
+                "connect".to_string(),
+                "GuestNet".to_string(),
+                "password".to_string(),
+                "secret123".to_string()
+            ]
+        )
+    );
+    assert_eq!(
+        NetworkService::command_for_disconnect("GuestNet"),
+        (
+            "nmcli",
+            vec![
+                "connection".to_string(),
+                "down".to_string(),
+                "GuestNet".to_string()
+            ]
+        )
+    );
+
+    // 2. AudioService command generation
+    assert_eq!(
+        AudioService::command_for_set_volume("@DEFAULT_AUDIO_SINK@", 0.85),
+        (
+            "wpctl",
+            vec![
+                "set-volume".to_string(),
+                "@DEFAULT_AUDIO_SINK@".to_string(),
+                "0.85".to_string()
+            ]
+        )
+    );
+    assert_eq!(
+        AudioService::command_for_set_mute("@DEFAULT_AUDIO_SINK@", true),
+        (
+            "wpctl",
+            vec![
+                "set-mute".to_string(),
+                "@DEFAULT_AUDIO_SINK@".to_string(),
+                "toggle".to_string()
+            ]
+        )
+    );
+    assert_eq!(
+        AudioService::command_for_set_default(54),
+        ("wpctl", vec!["set-default".to_string(), "54".to_string()])
+    );
+
+    // 3. BrightnessService command generation
+    assert_eq!(
+        BrightnessService::command_for_set_percent(65),
+        ("brightnessctl", vec!["set".to_string(), "65%".to_string()])
+    );
+
+    // 4. BluetoothService command generation
+    assert_eq!(
+        BluetoothService::command_for_toggle_power(true),
+        ("bluetoothctl", ["power", "on"])
+    );
+    assert_eq!(
+        BluetoothService::command_for_toggle_power(false),
+        ("bluetoothctl", ["power", "off"])
+    );
+    assert_eq!(
+        BluetoothService::command_for_connect("AA:BB:CC:DD:EE:FF"),
+        (
+            "bluetoothctl",
+            vec!["connect".to_string(), "AA:BB:CC:DD:EE:FF".to_string()]
+        )
+    );
+    assert_eq!(
+        BluetoothService::command_for_disconnect("AA:BB:CC:DD:EE:FF"),
+        (
+            "bluetoothctl",
+            vec!["disconnect".to_string(), "AA:BB:CC:DD:EE:FF".to_string()]
+        )
+    );
+
+    // 5. NightLightService command generation
+    assert_eq!(
+        NightLightService::command_for_preview(3500),
+        (
+            "qdbus6",
+            vec![
+                "org.kde.KWin".to_string(),
+                "/org/kde/KWin/NightLight".to_string(),
+                "org.kde.KWin.NightLight.preview".to_string(),
+                "3500".to_string()
+            ]
+        )
+    );
+    assert_eq!(
+        NightLightService::command_for_stop_preview(),
+        (
+            "qdbus6",
+            [
+                "org.kde.KWin",
+                "/org/kde/KWin/NightLight",
+                "org.kde.KWin.NightLight.stopPreview"
+            ]
+        )
+    );
+    // 6. KWinService command generation
+    assert_eq!(
+        KWinService::command_for_switch_desktop("uuid-123"),
+        (
+            "qdbus6",
+            vec![
+                "org.kde.KWin".to_string(),
+                "/VirtualDesktopManager".to_string(),
+                "org.kde.KWin.VirtualDesktopManager.current".to_string(),
+                "uuid-123".to_string()
+            ]
+        )
+    );
+    assert_eq!(
+        KWinService::command_for_close_window(),
+        (
+            "qdbus6",
+            [
+                "org.kde.kglobalaccel",
+                "/component/kwin",
+                "invokeShortcut",
+                "Window Close"
+            ]
+        )
+    );
+    assert_eq!(
+        KWinService::command_for_show_desktop(true),
+        (
+            "qdbus6",
+            [
+                "org.kde.KWin",
+                "/KWin",
+                "org.kde.KWin.showDesktop",
+                "true"
+            ]
+        )
+    );
+    assert_eq!(
+        KWinService::command_for_overview(),
+        (
+            "qdbus6",
+            [
+                "org.kde.kglobalaccel",
+                "/component/kwin",
+                "invokeShortcut",
+                "Overview"
+            ]
+        )
+    );
+}

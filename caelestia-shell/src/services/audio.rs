@@ -50,12 +50,17 @@ impl AudioService {
         let mut service = Self {
             state: AudioState::default(),
         };
-        service.poll();
+        if !crate::infrastructure::is_test_environment() {
+            service.poll();
+        }
         service
     }
 
     /// Refresh sink/source volume, mute states, and devices
     pub fn poll(&mut self) {
+        if crate::infrastructure::is_test_environment() {
+            return;
+        }
         if let Ok(output) = Command::new("wpctl")
             .args(["get-volume", "@DEFAULT_AUDIO_SINK@"])
             .output()
@@ -198,13 +203,46 @@ impl AudioService {
         })
     }
 
+    /// Returns command specification for setting audio volume via wpctl
+    pub fn command_for_set_volume(target: &str, volume: f32) -> (&'static str, Vec<String>) {
+        (
+            "wpctl",
+            vec![
+                "set-volume".to_string(),
+                target.to_string(),
+                format!("{:.2}", volume.clamp(0.0, 1.5)),
+            ],
+        )
+    }
+
+    /// Returns command specification for toggling or setting mute via wpctl
+    pub fn command_for_set_mute(target: &str, toggle: bool) -> (&'static str, Vec<String>) {
+        (
+            "wpctl",
+            vec![
+                "set-mute".to_string(),
+                target.to_string(),
+                if toggle { "toggle".to_string() } else { "1".to_string() },
+            ],
+        )
+    }
+
+    /// Returns command specification for setting default device via wpctl
+    pub fn command_for_set_default(id: u32) -> (&'static str, Vec<String>) {
+        (
+            "wpctl",
+            vec!["set-default".to_string(), id.to_string()],
+        )
+    }
+
     /// Set volume as ratio (0.0 to 1.5, clamped to 1.5 max)
     pub fn set_volume(&mut self, volume: f32) {
         let clamped = volume.clamp(0.0, 1.5);
         self.state.sink_volume = clamped;
-        let _ = Command::new("wpctl")
-            .args(["set-volume", "@DEFAULT_AUDIO_SINK@", &format!("{:.2}", clamped)])
-            .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_set_volume("@DEFAULT_AUDIO_SINK@", clamped);
+            let _ = Command::new(prog).args(args).spawn();
+        }
     }
 
     /// Step volume by delta, e.g. 0.05 (+5%) or -0.05 (-5%)
@@ -215,41 +253,46 @@ impl AudioService {
     /// Toggle mute for default sink
     pub fn toggle_mute(&mut self) {
         self.state.sink_muted = !self.state.sink_muted;
-        let _ = Command::new("wpctl")
-            .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
-            .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_set_mute("@DEFAULT_AUDIO_SINK@", true);
+            let _ = Command::new(prog).args(args).spawn();
+        }
     }
 
     /// Set source (mic) volume
     pub fn set_source_volume(&mut self, volume: f32) {
         let clamped = volume.clamp(0.0, 1.0);
         self.state.source_volume = clamped;
-        let _ = Command::new("wpctl")
-            .args(["set-volume", "@DEFAULT_AUDIO_SOURCE@", &format!("{:.2}", clamped)])
-            .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_set_volume("@DEFAULT_AUDIO_SOURCE@", clamped);
+            let _ = Command::new(prog).args(args).spawn();
+        }
     }
 
     /// Toggle mute for default microphone
     pub fn toggle_source_mute(&mut self) {
         self.state.source_muted = !self.state.source_muted;
-        let _ = Command::new("wpctl")
-            .args(["set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"])
-            .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_set_mute("@DEFAULT_AUDIO_SOURCE@", true);
+            let _ = Command::new(prog).args(args).spawn();
+        }
     }
 
     /// Set default sink by device ID
     pub fn set_default_sink(&mut self, id: u32) {
-        let _ = Command::new("wpctl")
-            .args(["set-default", &id.to_string()])
-            .spawn();
-        self.poll();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_set_default(id);
+            let _ = Command::new(prog).args(args).spawn();
+            self.poll();
+        }
     }
 
     /// Set default source by device ID
     pub fn set_default_source(&mut self, id: u32) {
-        let _ = Command::new("wpctl")
-            .args(["set-default", &id.to_string()])
-            .spawn();
-        self.poll();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_set_default(id);
+            let _ = Command::new(prog).args(args).spawn();
+            self.poll();
+        }
     }
 }

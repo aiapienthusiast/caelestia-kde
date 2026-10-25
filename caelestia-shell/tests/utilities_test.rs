@@ -8,7 +8,7 @@ use caelestia_shell::modules::utilities::{
 };
 use caelestia_shell::services::audio::AudioService;
 use caelestia_shell::services::bluetooth::BluetoothService;
-use caelestia_shell::services::network::NetworkService;
+use caelestia_shell::services::network::{AccessPoint, NetworkService};
 use caelestia_shell::services::night_light::NightLightService;
 use caelestia_shell::services::notifications::NotificationsService;
 use std::path::PathBuf;
@@ -162,8 +162,19 @@ fn test_quick_toggles_pagination_and_service_reaction() {
     assert_eq!(toggles.current_page, 0);
 
     // Reaction to mock services
-    let mut network = NetworkService::new();
-    network.state.wifi_enabled = true;
+    let mock_ap = AccessPoint {
+        ssid: "Mock_Mesh_5G".to_string(),
+        signal: 88,
+        security: "WPA2".to_string(),
+        in_use: true,
+    };
+    let mut network = NetworkService::new_mock(
+        true,
+        Some("Mock_Mesh_5G".to_string()),
+        vec![mock_ap],
+    );
+    assert!(network.is_mock);
+    assert_eq!(network.state.active_ssid, Some("Mock_Mesh_5G".to_string()));
 
     let mut bt = BluetoothService::new();
     bt.state.powered = true;
@@ -183,12 +194,95 @@ fn test_quick_toggles_pagination_and_service_reaction() {
     assert!(toggles.is_active("dnd", None, None, None, Some(&notif), None));
     assert!(toggles.is_active("mic_mute", None, None, None, None, Some(&audio)));
 
-    // Toggle actions
+    // Toggle actions in memory without touching host nmcli
     toggles.toggle_action("wifi", Some(&mut network), None, None, None, None);
     assert!(!network.state.wifi_enabled);
+    assert!(!toggles.is_active("wifi", Some(&network), None, None, None, None));
+
+    // Toggle back on in memory
+    toggles.toggle_action("wifi", Some(&mut network), None, None, None, None);
+    assert!(network.state.wifi_enabled);
+    assert!(toggles.is_active("wifi", Some(&network), None, None, None, None));
 
     toggles.toggle_action("pause_wallpaper", None, None, None, None, None);
     assert!(toggles.wallpaper_paused);
+}
+
+#[test]
+fn test_utilities_command_contracts() {
+    // 1. IdleInhibitor D-Bus commands
+    assert_eq!(
+        IdleInhibitor::command_for_inhibit(),
+        (
+            "qdbus6",
+            [
+                "org.freedesktop.ScreenSaver",
+                "/ScreenSaver",
+                "org.freedesktop.ScreenSaver.Inhibit",
+                "caelestia-shell",
+                "User requested Keep Awake",
+            ]
+        )
+    );
+    assert_eq!(
+        IdleInhibitor::command_for_uninhibit(42),
+        (
+            "qdbus6",
+            vec![
+                "org.freedesktop.ScreenSaver".to_string(),
+                "/ScreenSaver".to_string(),
+                "org.freedesktop.ScreenSaver.UnInhibit".to_string(),
+                "42".to_string(),
+            ]
+        )
+    );
+
+    // 2. CaptureCardModel commands
+    assert_eq!(
+        CaptureCardModel::command_for_start_record("/tmp/rec.mp4"),
+        (
+            "gpu-screen-recorder",
+            vec![
+                "-w".to_string(),
+                "screen".to_string(),
+                "-f".to_string(),
+                "60".to_string(),
+                "-o".to_string(),
+                "/tmp/rec.mp4".to_string(),
+            ]
+        )
+    );
+    assert_eq!(
+        CaptureCardModel::command_for_stop_record(),
+        ("pkill", ["-SIGINT", "-f", "gpu-screen-recorder"])
+    );
+    assert_eq!(
+        CaptureCardModel::command_for_screenshot(true, "/tmp/shot.png"),
+        (
+            "spectacle",
+            vec![
+                "-r".to_string(),
+                "-b".to_string(),
+                "-n".to_string(),
+                "-o".to_string(),
+                "/tmp/shot.png".to_string(),
+            ]
+        )
+    );
+
+    // 3. QuickTogglesModel commands
+    assert_eq!(
+        QuickTogglesModel::command_for_hotspot(true),
+        ("nmcli", ["connection", "up", "Hotspot"])
+    );
+    assert_eq!(
+        QuickTogglesModel::command_for_hotspot(false),
+        ("nmcli", ["connection", "down", "Hotspot"])
+    );
+    assert_eq!(
+        QuickTogglesModel::command_for_restart_shell(),
+        ("systemctl", ["--user", "restart", "caelestia-shell.service"])
+    );
 }
 
 #[test]

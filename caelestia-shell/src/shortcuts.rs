@@ -327,7 +327,7 @@ impl ShortcutManager {
                 coordinator.set_drawer("utilities", target);
             }
             ShellShortcutAction::Krohnkite(krohnkite_action) => {
-                if !cfg!(test) && std::env::var("CAELESTIA_TEST").is_err() {
+                if !crate::infrastructure::is_test_environment() {
                     let _ = std::process::Command::new("qdbus6")
                         .args([
                             "org.kde.kglobalaccel",

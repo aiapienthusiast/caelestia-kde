@@ -35,6 +35,33 @@ impl IdleInhibitor {
         }
     }
 
+    /// Returns command specification for D-Bus ScreenSaver inhibit
+    pub fn command_for_inhibit() -> (&'static str, [&'static str; 5]) {
+        (
+            "qdbus6",
+            [
+                "org.freedesktop.ScreenSaver",
+                "/ScreenSaver",
+                "org.freedesktop.ScreenSaver.Inhibit",
+                "caelestia-shell",
+                "User requested Keep Awake",
+            ],
+        )
+    }
+
+    /// Returns command specification for D-Bus ScreenSaver uninhibit
+    pub fn command_for_uninhibit(cookie: u32) -> (&'static str, Vec<String>) {
+        (
+            "qdbus6",
+            vec![
+                "org.freedesktop.ScreenSaver".to_string(),
+                "/ScreenSaver".to_string(),
+                "org.freedesktop.ScreenSaver.UnInhibit".to_string(),
+                cookie.to_string(),
+            ],
+        )
+    }
+
     /// Enable or disable sleep inhibitor
     pub fn set_enabled(&mut self, enabled: bool) {
         if self.state.enabled == enabled {
@@ -50,29 +77,19 @@ impl IdleInhibitor {
             self.state.enabled_since_secs = Some(now);
             info!("Keep Awake enabled at epoch timestamp: {}", now);
 
-            // Invoke D-Bus ScreenSaver Inhibit
-            let _ = Command::new("qdbus6")
-                .args([
-                    "org.freedesktop.ScreenSaver",
-                    "/ScreenSaver",
-                    "org.freedesktop.ScreenSaver.Inhibit",
-                    "caelestia-shell",
-                    "User requested Keep Awake",
-                ])
-                .spawn();
+            if !crate::infrastructure::is_test_environment() {
+                let (prog, args) = Self::command_for_inhibit();
+                let _ = Command::new(prog).args(args).spawn();
+            }
         } else {
             info!("Keep Awake disabled");
             self.state.enabled_since_secs = None;
 
             if let Some(cookie) = self.state.cookie.take() {
-                let _ = Command::new("qdbus6")
-                    .args([
-                        "org.freedesktop.ScreenSaver",
-                        "/ScreenSaver",
-                        "org.freedesktop.ScreenSaver.UnInhibit",
-                        &cookie.to_string(),
-                    ])
-                    .spawn();
+                if !crate::infrastructure::is_test_environment() {
+                    let (prog, args) = Self::command_for_uninhibit(cookie);
+                    let _ = Command::new(prog).args(args).spawn();
+                }
             }
         }
     }

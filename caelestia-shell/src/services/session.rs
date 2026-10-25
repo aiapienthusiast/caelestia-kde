@@ -7,29 +7,35 @@ use tracing::{error, info};
 pub struct SessionService;
 
 impl SessionService {
+    /// Pure command and arguments mapping for session actions (used for verification and dispatch)
+    pub fn command_for_action(kind: SessionActionKind) -> (&'static str, &'static [&'static str]) {
+        match kind {
+            SessionActionKind::Lock => (
+                "qdbus6",
+                &[
+                    "org.freedesktop.ScreenSaver",
+                    "/ScreenSaver",
+                    "org.freedesktop.ScreenSaver.Lock",
+                ],
+            ),
+            SessionActionKind::Suspend => ("systemctl", &["suspend"]),
+            SessionActionKind::Hibernate => ("systemctl", &["hibernate"]),
+            SessionActionKind::Reboot => ("systemctl", &["reboot"]),
+            SessionActionKind::Shutdown => ("systemctl", &["poweroff"]),
+            SessionActionKind::Logout => (
+                "qdbus6",
+                &["org.kde.Shutdown", "/Shutdown", "org.kde.Shutdown.logout"],
+            ),
+        }
+    }
+
     pub fn execute(kind: SessionActionKind) {
         info!("Executing session action: {:?}", kind);
-        let res = match kind {
-            SessionActionKind::Lock => Command::new("qdbus6")
-                .args(["org.freedesktop.ScreenSaver", "/ScreenSaver", "org.freedesktop.ScreenSaver.Lock"])
-                .spawn(),
-            SessionActionKind::Suspend => Command::new("systemctl")
-                .arg("suspend")
-                .spawn(),
-            SessionActionKind::Hibernate => Command::new("systemctl")
-                .arg("hibernate")
-                .spawn(),
-            SessionActionKind::Reboot => Command::new("systemctl")
-                .arg("reboot")
-                .spawn(),
-            SessionActionKind::Shutdown => Command::new("systemctl")
-                .arg("poweroff")
-                .spawn(),
-            SessionActionKind::Logout => Command::new("qdbus6")
-                .args(["org.kde.Shutdown", "/Shutdown", "org.kde.Shutdown.logout"])
-                .spawn(),
-        };
-
+        if crate::infrastructure::is_test_environment() {
+            return;
+        }
+        let (prog, args) = Self::command_for_action(kind);
+        let res = Command::new(prog).args(args).spawn();
         if let Err(e) = res {
             error!("Failed to execute session action {:?}: {}", kind, e);
         }

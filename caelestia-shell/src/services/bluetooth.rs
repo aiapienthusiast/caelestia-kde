@@ -37,12 +37,17 @@ impl BluetoothService {
         let mut service = Self {
             state: BluetoothState::default(),
         };
-        service.poll();
+        if !crate::infrastructure::is_test_environment() {
+            service.poll();
+        }
         service
     }
 
     /// Refresh bluetooth power and connected devices
     pub fn poll(&mut self) {
+        if crate::infrastructure::is_test_environment() {
+            return;
+        }
         if let Ok(output) = Command::new("bluetoothctl").arg("show").output() {
             if output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout);
@@ -98,28 +103,46 @@ impl BluetoothService {
         devices
     }
 
+    /// Returns command specification for toggling bluetooth radio power
+    pub fn command_for_toggle_power(powered: bool) -> (&'static str, [&'static str; 2]) {
+        ("bluetoothctl", ["power", if powered { "on" } else { "off" }])
+    }
+
+    /// Returns command specification for connecting to a bluetooth device
+    pub fn command_for_connect(mac: &str) -> (&'static str, Vec<String>) {
+        ("bluetoothctl", vec!["connect".to_string(), mac.to_string()])
+    }
+
+    /// Returns command specification for disconnecting a bluetooth device
+    pub fn command_for_disconnect(mac: &str) -> (&'static str, Vec<String>) {
+        ("bluetoothctl", vec!["disconnect".to_string(), mac.to_string()])
+    }
+
     /// Toggle Bluetooth radio power
     pub fn toggle_power(&mut self) {
-        let target = if self.state.powered { "off" } else { "on" };
-        self.state.powered = !self.state.powered;
-        let _ = Command::new("bluetoothctl")
-            .args(["power", target])
-            .spawn();
+        let next_powered = !self.state.powered;
+        self.state.powered = next_powered;
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_toggle_power(next_powered);
+            let _ = Command::new(prog).args(args).spawn();
+        }
     }
 
     /// Connect to a device by MAC address
     pub fn connect(&mut self, mac: &str) {
         info!("Connecting Bluetooth device: {}", mac);
-        let _ = Command::new("bluetoothctl")
-            .args(["connect", mac])
-            .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_connect(mac);
+            let _ = Command::new(prog).args(args).spawn();
+        }
     }
 
     /// Disconnect a device by MAC address
     pub fn disconnect(&mut self, mac: &str) {
         info!("Disconnecting Bluetooth device: {}", mac);
-        let _ = Command::new("bluetoothctl")
-            .args(["disconnect", mac])
-            .spawn();
+        if !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_disconnect(mac);
+            let _ = Command::new(prog).args(args).spawn();
+        }
     }
 }

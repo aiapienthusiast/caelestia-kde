@@ -74,7 +74,7 @@ impl SessionView {
         &self,
         index: usize,
         title: &'static str,
-        icon_name: &'static str,
+        _icon_name: &'static str,
         kind: SessionActionKind,
         cx: &mut gpui::Context<Self>,
     ) -> impl IntoElement {
@@ -94,18 +94,18 @@ impl SessionView {
         };
 
         let radius = if is_pressed {
-            Tokens::rounding::MEDIUM
+            ROUNDING_MEDIUM
         } else if is_focused {
-            Tokens::rounding::EXTRA_LARGE
+            ROUNDING_EXTRA_LARGE
         } else {
-            Tokens::rounding::LARGE_INCREASED
+            ROUNDING_LARGE_INCREASED
         };
 
         div()
             .id(index)
-            .w(px(Tokens::sizes::session::BUTTON))
+            .w(px(BUTTON_WIDTH))
             .min_h(px(56.0))
-            .p(px(Tokens::padding::MEDIUM))
+            .p(px(PADDING_MEDIUM))
             .rounded(px(radius))
             .bg(bg_color)
             .border_1()
@@ -117,7 +117,7 @@ impl SessionView {
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(Tokens::spacing::MEDIUM))
+            .gap(px(SPACING_MEDIUM))
             .cursor(CursorStyle::PointingHand)
             .hover(|d| d.bg(rgba(self.colours.surface_container_highest)))
             .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _win, cx| {
@@ -132,7 +132,7 @@ impl SessionView {
             }))
             .child(
                 div()
-                    .text_size(px(Tokens::sizes::ICON_MEDIUM))
+                    .text_size(px(ICON_SIZE_MEDIUM))
                     .text_color(text_color)
                     .child(match kind {
                         SessionActionKind::Logout => "󰗽",
@@ -154,8 +154,8 @@ impl SessionView {
     /// Center Dinosaur / Mascot Emblem matching `Content.qml`
     fn render_mascot_emblem(&self) -> impl IntoElement {
         div()
-            .w(px(Tokens::sizes::session::BUTTON))
-            .h(px(Tokens::sizes::session::BUTTON))
+            .w(px(BUTTON_WIDTH))
+            .h(px(BUTTON_WIDTH))
             .flex()
             .items_center()
             .justify_center()
@@ -183,12 +183,12 @@ impl Render for SessionView {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _win, cx| {
                 this.handle_key_down(event, cx);
             }))
-            .p(px(Tokens::padding::LARGE))
+            .p(px(PADDING_LARGE))
             .flex()
             .flex_col()
-            .gap(px(Tokens::spacing::LARGE))
+            .gap(px(SPACING_LARGE))
             .bg(rgba(self.colours.surface_container_low))
-            .rounded(px(Tokens::rounding::EXTRA_LARGE))
+            .rounded(px(ROUNDING_EXTRA_LARGE))
             .border_1()
             .border_color(rgba(self.colours.outline_variant))
             .shadow_xl()

@@ -47,19 +47,65 @@ impl Default for NetworkState {
 
 pub struct NetworkService {
     pub state: NetworkState,
+    pub is_mock: bool,
 }
 
 impl NetworkService {
     pub fn new() -> Self {
         let mut service = Self {
             state: NetworkState::default(),
+            is_mock: false,
         };
-        service.poll();
+        if !crate::infrastructure::is_test_environment() {
+            service.poll();
+        }
         service
+    }
+
+    /// Creates an in-memory mock network service for unit tests without system calls
+    pub fn new_mock(
+        wifi_enabled: bool,
+        connected_ssid: Option<String>,
+        access_points: Vec<AccessPoint>,
+    ) -> Self {
+        let connected = connected_ssid.is_some();
+        let kind = if connected {
+            NetworkKind::Wifi
+        } else {
+            NetworkKind::Disconnected
+        };
+        let signal = connected_ssid
+            .as_ref()
+            .and_then(|ssid| access_points.iter().find(|ap| &ap.ssid == ssid).map(|ap| ap.signal))
+            .unwrap_or(0);
+
+        Self {
+            state: NetworkState {
+                kind,
+                connected,
+                active_ssid: connected_ssid,
+                signal_strength: signal,
+                wifi_enabled,
+                ethernet_connected: false,
+                access_points,
+            },
+            is_mock: true,
+        }
+    }
+
+    pub fn new_simulated(
+        wifi_enabled: bool,
+        connected_ssid: Option<String>,
+        access_points: Vec<AccessPoint>,
+    ) -> Self {
+        Self::new_mock(wifi_enabled, connected_ssid, access_points)
     }
 
     /// Refresh device status and active connections
     pub fn poll(&mut self) {
+        if self.is_mock || crate::infrastructure::is_test_environment() {
+            return;
+        }
         if let Ok(output) = Command::new("nmcli")
             .args(["-t", "-f", "TYPE,STATE,CONNECTION", "device", "status"])
             .output()
@@ -182,33 +228,86 @@ impl NetworkService {
         aps
     }
 
+    /// Returns command specification for toggling wifi radio
+    pub fn command_for_wifi_toggle(enabled: bool) -> (&'static str, [&'static str; 3]) {
+        (
+            "nmcli",
+            [
+                "radio",
+                "wifi",
+                if enabled { "on" } else { "off" },
+            ],
+        )
+    }
+
+    /// Returns command specification for connecting to a wifi SSID
+    pub fn command_for_connect(ssid: &str, password: Option<&str>) -> (&'static str, Vec<String>) {
+        let mut args = vec![
+            "device".to_string(),
+            "wifi".to_string(),
+            "connect".to_string(),
+            ssid.to_string(),
+        ];
+        if let Some(pass) = password {
+            args.push("password".to_string());
+            args.push(pass.to_string());
+        }
+        ("nmcli", args)
+    }
+
+    /// Returns command specification for disconnecting an SSID
+    pub fn command_for_disconnect(ssid: &str) -> (&'static str, Vec<String>) {
+        (
+            "nmcli",
+            vec![
+                "connection".to_string(),
+                "down".to_string(),
+                ssid.to_string(),
+            ],
+        )
+    }
+
     /// Toggle WiFi radio on/off
     pub fn toggle_wifi(&mut self) {
-        let target = if self.state.wifi_enabled { "off" } else { "on" };
-        self.state.wifi_enabled = !self.state.wifi_enabled;
-        let _ = Command::new("nmcli")
-            .args(["radio", "wifi", target])
-            .spawn();
+        let next_state = !self.state.wifi_enabled;
+        self.state.wifi_enabled = next_state;
+        if !self.is_mock && !crate::infrastructure::is_test_environment() {
+            let (prog, args) = Self::command_for_wifi_toggle(next_state);
+            let _ = Command::new(prog).args(args).spawn();
+        }
     }
 
     /// Connect to a WiFi network
     pub fn connect(&mut self, ssid: &str, password: Option<&str>) {
         info!("Connecting to WiFi network: {}", ssid);
-        let mut cmd = Command::new("nmcli");
-        cmd.args(["device", "wifi", "connect", ssid]);
-        if let Some(pass) = password {
-            cmd.args(["password", pass]);
+        if self.is_mock || crate::infrastructure::is_test_environment() {
+            self.state.active_ssid = Some(ssid.to_string());
+            self.state.connected = true;
+            self.state.kind = NetworkKind::Wifi;
+            for ap in &mut self.state.access_points {
+                ap.in_use = ap.ssid == ssid;
+            }
+            return;
         }
-        let _ = cmd.spawn();
+        let (prog, args) = Self::command_for_connect(ssid, password);
+        let _ = Command::new(prog).args(args).spawn();
     }
 
     /// Disconnect active WiFi connection
     pub fn disconnect(&mut self) {
-        if let Some(ref ssid) = self.state.active_ssid {
+        if let Some(ref ssid) = self.state.active_ssid.clone() {
             info!("Disconnecting WiFi network: {}", ssid);
-            let _ = Command::new("nmcli")
-                .args(["connection", "down", ssid])
-                .spawn();
+            if self.is_mock || crate::infrastructure::is_test_environment() {
+                self.state.active_ssid = None;
+                self.state.connected = false;
+                self.state.kind = NetworkKind::Disconnected;
+                for ap in &mut self.state.access_points {
+                    ap.in_use = false;
+                }
+                return;
+            }
+            let (prog, args) = Self::command_for_disconnect(&ssid);
+            let _ = Command::new(prog).args(args).spawn();
         }
     }
 }

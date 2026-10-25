@@ -90,7 +90,7 @@ impl DesktopContextMenuModel {
                 self.edit_mode = true;
             }
             DesktopMenuAction::OpenTerminal => {
-                if !cfg!(test) && std::env::var("CAELESTIA_TEST").is_err() {
+                if !crate::infrastructure::is_test_environment() {
                     let _ = std::process::Command::new("alacritty")
                         .spawn()
                         .or_else(|_| std::process::Command::new("kitty").spawn())
@@ -98,7 +98,7 @@ impl DesktopContextMenuModel {
                 }
             }
             DesktopMenuAction::OpenSettings => {
-                if !cfg!(test) && std::env::var("CAELESTIA_TEST").is_err() {
+                if !crate::infrastructure::is_test_environment() {
                     let _ = std::process::Command::new("systemsettings").spawn();
                 }
             }
