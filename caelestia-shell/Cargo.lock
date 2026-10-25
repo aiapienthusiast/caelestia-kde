@@ -884,10 +884,12 @@ name = "caelestia-shell"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "gpui",
  "gpui_linux",
  "serde",
  "serde_json",
+ "sysinfo",
  "tracing",
  "tracing-subscriber",
 ]

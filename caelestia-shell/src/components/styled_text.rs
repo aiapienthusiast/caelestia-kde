@@ -81,3 +81,22 @@ impl StyledText {
             .child(text.into())
     }
 }
+
+pub trait StyledTextExt {
+    fn color(self, color: u32) -> Self;
+    fn font_size(self, size: f32) -> Self;
+    fn icon_size(self, size: f32) -> Self;
+}
+
+impl StyledTextExt for Div {
+    fn color(self, color: u32) -> Self {
+        self.text_color(rgba(color))
+    }
+    fn font_size(self, size: f32) -> Self {
+        self.text_size(px(size))
+    }
+    fn icon_size(self, size: f32) -> Self {
+        self.text_size(px(size))
+    }
+}
+

@@ -7,11 +7,13 @@ pub mod icon;
 pub mod state_layer;
 pub mod styled_rect;
 pub mod styled_text;
+pub mod widgets;
 
 // Flatten top-level foundational elements
 pub use containers::*;
 pub use controls::*;
+pub use widgets::*;
 pub use icon::{IconSize, MaterialIcon};
 pub use state_layer::StateLayer;
 pub use styled_rect::{styled_clipping_rect, styled_rect, StyledRectExt};
-pub use styled_text::{StyledText, TypographyScale};
+pub use styled_text::{StyledText, StyledTextExt, TypographyScale};

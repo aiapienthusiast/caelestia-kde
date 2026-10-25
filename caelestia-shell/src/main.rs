@@ -12,6 +12,7 @@ use gpui::{
     layer_shell::*, point, px, size, App, AppContext, Bounds,
     WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
 };
+use modules::dashboard::DashboardDrawer;
 use modules::nexus::NexusDrawer;
 use modules::session::SessionDrawer;
 use tracing::info;
@@ -31,10 +32,38 @@ fn main() {
     app.run(|cx: &mut App| {
         cx.set_quit_mode(gpui::QuitMode::Explicit);
 
+        let is_dashboard = std::env::var("DASHBOARD_OPEN").is_ok()
+            || std::env::args().any(|arg| arg == "--dashboard" || arg == "dashboard");
         let is_nexus = std::env::var("NEXUS_OPEN").is_ok()
             || std::env::args().any(|arg| arg == "--nexus" || arg == "nexus");
 
-        if is_nexus {
+        if is_dashboard {
+            info!("Launching Dashboard Multi-Tab Drawer...");
+            let dash_options = WindowOptions {
+                titlebar: None,
+                window_bounds: Some(WindowBounds::Windowed(Bounds {
+                    origin: point(px(0.), px(0.)),
+                    size: size(px(1920.), px(1080.)),
+                })),
+                app_id: Some("caelestia-dashboard".to_string()),
+                window_background: WindowBackgroundAppearance::Transparent,
+                kind: WindowKind::LayerShell(LayerShellOptions {
+                    namespace: "caelestia-drawers".to_string(),
+                    layer: Layer::Overlay,
+                    anchor: Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+                    margin: Some((px(0.), px(0.), px(0.), px(0.))),
+                    exclusive_zone: None,
+                    keyboard_interactivity: KeyboardInteractivity::OnDemand,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+
+            match cx.open_window(dash_options, |_, cx| cx.new(DashboardDrawer::new)) {
+                Ok(handle) => info!("Dashboard window handle opened successfully: {:?}", handle),
+                Err(err) => tracing::error!("Failed to open Dashboard window: {:?}", err),
+            }
+        } else if is_nexus {
             info!("Launching Nexus Control Center & Settings Drawer...");
             let nexus_options = WindowOptions {
                 titlebar: None,
