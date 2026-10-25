@@ -174,4 +174,50 @@ impl ContentWindowCoordinator {
         }
         None
     }
+
+    /// Toggles a named drawer
+    pub fn toggle_drawer(&mut self, target: &str) {
+        match target {
+            "launcher" => self.visibilities.launcher = !self.visibilities.launcher,
+            "dashboard" => self.visibilities.dashboard = !self.visibilities.dashboard,
+            "sidebar" => self.visibilities.sidebar = !self.visibilities.sidebar,
+            "session" => self.visibilities.session = !self.visibilities.session,
+            "utilities" => self.visibilities.utilities = !self.visibilities.utilities,
+            "osd" => self.visibilities.osd = !self.visibilities.osd,
+            "overview" => self.set_overview(!self.visibilities.overview),
+            _ => {}
+        }
+    }
+
+    /// Sets visibility of a named drawer
+    pub fn set_drawer(&mut self, target: &str, open: bool) {
+        match target {
+            "launcher" => self.visibilities.launcher = open,
+            "dashboard" => self.visibilities.dashboard = open,
+            "sidebar" => self.visibilities.sidebar = open,
+            "session" => self.visibilities.session = open,
+            "utilities" => self.visibilities.utilities = open,
+            "osd" => self.visibilities.osd = open,
+            "overview" => self.set_overview(open),
+            _ => {}
+        }
+    }
+
+    /// Sets overview mode, closing other transient overlays
+    pub fn set_overview(&mut self, open: bool) {
+        self.visibilities.overview = open;
+        if open {
+            self.visibilities.dashboard = false;
+            self.visibilities.launcher = false;
+            self.visibilities.session = false;
+            self.visibilities.utilities = false;
+            self.visibilities.osd = false;
+        }
+    }
+}
+
+impl Default for ContentWindowCoordinator {
+    fn default() -> Self {
+        Self::new("eDP-1", 1920.0, 1080.0, BarPosition::Top)
+    }
 }
