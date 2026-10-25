@@ -4,6 +4,7 @@
 pub mod containers;
 pub mod controls;
 pub mod effects;
+pub mod filedialog;
 pub mod icon;
 pub mod misc;
 pub mod state_layer;
@@ -15,6 +16,7 @@ pub mod widgets;
 pub use containers::*;
 pub use controls::*;
 pub use effects::*;
+pub use filedialog::*;
 pub use misc::*;
 pub use widgets::*;
 pub use icon::{IconSize, MaterialIcon};
