@@ -1,0 +1,22 @@
+# Build artifacts
+/target
+target/
+**/*.rs.bk
+*.log
+
+# Editor & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Profiling and diagnostics
+perf.data*
+massif.out.*
+dhat-heap.json
+
+# Environment & local overrides
+.env
+.env.local
