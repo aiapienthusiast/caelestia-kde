@@ -7,3 +7,4 @@ pub mod notifications;
 pub mod osd;
 pub mod overview;
 pub mod session;
+pub mod utilities;
