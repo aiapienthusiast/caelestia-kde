@@ -8,4 +8,5 @@ pub mod night_light;
 pub mod notifications;
 pub mod session;
 pub mod system_monitor;
+pub mod tray_registry;
 pub mod weather;

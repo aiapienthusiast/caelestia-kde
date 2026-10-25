@@ -182,3 +182,80 @@ fn test_bar_popouts_state_toggle_and_close() {
     popouts.close();
     assert!(!popouts.is_open);
 }
+
+#[test]
+fn test_all_popout_types_render() {
+    use caelestia_shell::infrastructure::theme::CaelestiaColours;
+
+    let c = CaelestiaColours::default();
+
+    let all_popouts = [
+        PopoutType::Audio,
+        PopoutType::Battery,
+        PopoutType::Bluetooth,
+        PopoutType::Calendar,
+        PopoutType::DockContext,
+        PopoutType::Github,
+        PopoutType::Greeter,
+        PopoutType::KbLayout,
+        PopoutType::KeepAwake,
+        PopoutType::LockStatus,
+        PopoutType::Media,
+        PopoutType::Network,
+        PopoutType::NightLight,
+        PopoutType::Notes,
+        PopoutType::Notifications,
+        PopoutType::Performance,
+        PopoutType::PeripheralBattery,
+        PopoutType::Power,
+        PopoutType::Privacy,
+        PopoutType::ScreenCapture,
+        PopoutType::Shortcuts,
+        PopoutType::TrayMenu,
+        PopoutType::Updates,
+        PopoutType::Weather,
+        PopoutType::WirelessPassword,
+    ];
+
+    assert_eq!(all_popouts.len(), 25);
+
+    for popout in all_popouts {
+        let _div = BarPopouts::render(popout, 500.0, &c);
+    }
+}
+
+#[test]
+fn test_tray_registry_service() {
+    use caelestia_shell::services::tray_registry::{TrayItem, TrayItemCategory, TrayItemStatus, TrayRegistryService};
+
+    let mut tray = TrayRegistryService::new();
+    assert_eq!(tray.state.items.len(), 0);
+
+    let item = TrayItem {
+        id: "discord".to_string(),
+        title: "Discord".to_string(),
+        icon_name: String::new(),
+        icon_theme_path: None,
+        category: TrayItemCategory::Communications,
+        status: TrayItemStatus::Active,
+        service_name: "org.kde.StatusNotifierItem-1234-1".to_string(),
+        object_path: "/StatusNotifierItem".to_string(),
+        menu_path: Some("/MenuBar".to_string()),
+        tooltip: Some("Discord - Chatting".to_string()),
+        is_collapsed: false,
+    };
+
+    tray.register_item(item);
+    assert_eq!(tray.state.items.len(), 1);
+
+    // Verify fallback icon mapping from trayicons.js
+    let resolved_icon = tray.resolve_icon("discord", "");
+    assert_eq!(resolved_icon, "discord");
+
+    let default_icon = tray.resolve_icon("unknown-app", "");
+    assert_eq!(default_icon, "application-x-executable");
+
+    // Unregister
+    tray.unregister_item("discord");
+    assert_eq!(tray.state.items.len(), 0);
+}

@@ -17,7 +17,7 @@ pub mod workspaces;
 pub use clock::{BarClockModel, ClockSnapshot};
 pub use config::BarConfig;
 pub use dock::{BarDockModel, DockSnapshot};
-pub use popouts::{BarPopoutsState, PopoutType};
+pub use popouts::{BarPopouts, BarPopoutsState, PopoutType};
 pub use status::{BarStatusSnapshot, StatusIconsModel};
 pub use view::BarView;
 pub use widgets::{BarWidgetEntry, BarWidgetId, BarWidgets, BarZone};
