@@ -7,7 +7,6 @@
 use super::config::OsdConfig;
 use super::state::OsdState;
 use crate::components::icon::MaterialIcon;
-use crate::components::styled_text::StyledTextExt;
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{
     div, prelude::*, px, rgba, CursorStyle, IntoElement, Render, Styled, Window,

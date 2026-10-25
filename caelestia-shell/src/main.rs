@@ -8,7 +8,6 @@ pub mod modules;
 pub mod services;
 pub mod shortcuts;
 
-use domain::tokens::DRAWER_WIDTH;
 use gpui::{
     layer_shell::*, point, px, size, App, AppContext, Bounds,
     WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
@@ -23,7 +22,7 @@ use modules::notifications::NotificationsView;
 use modules::osd::{OsdConfig, OsdState, OsdView};
 use modules::overview::OverviewView;
 use modules::screenshot::{
-    ScreenshotOverlayView, SelectionMode, SelectionPhase, SelectionRect, SelectionRegion,
+    ScreenshotOverlayView, SelectionMode, SelectionPhase, SelectionRegion,
 };
 use modules::session::SessionDrawer;
 use modules::sidebar::SidebarView;

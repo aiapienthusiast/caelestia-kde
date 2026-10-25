@@ -6,7 +6,6 @@
 use super::config::NotificationConfig;
 use super::manager::NotificationManager;
 use crate::components::icon::MaterialIcon;
-use crate::components::styled_text::StyledTextExt;
 use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::notifications::{NotificationsService, Urgency};
 use gpui::{

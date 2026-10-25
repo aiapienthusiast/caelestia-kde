@@ -7,7 +7,6 @@ use super::media::MediaView;
 use super::performance::PerformanceView;
 use super::tabs::{DashboardTab, DashboardTabs};
 use super::weather_tab::WeatherTabView;
-use crate::domain::tokens::*;
 use crate::infrastructure::paths::CaelestiaPaths;
 use crate::infrastructure::sysinfo::SystemInfo;
 use crate::infrastructure::theme::CaelestiaColours;

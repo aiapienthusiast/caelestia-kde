@@ -89,12 +89,6 @@ impl SessionView {
             rgba(self.colours.surface_container)
         };
 
-        let text_color = if is_focused {
-            rgba(self.colours.on_secondary_container)
-        } else {
-            rgba(self.colours.on_surface)
-        };
-
         let radius = if is_pressed {
             ROUNDING_MEDIUM
         } else if is_focused {

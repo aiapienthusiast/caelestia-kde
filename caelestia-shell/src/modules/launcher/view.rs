@@ -8,7 +8,6 @@ use super::entry::DesktopEntry;
 use super::executor::AppExecutor;
 use super::searcher::AppSearcher;
 use crate::components::icon::MaterialIcon;
-use crate::components::styled_text::StyledTextExt;
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{
     div, prelude::*, px, rgba, CursorStyle, FocusHandle, IntoElement, KeyDownEvent,
