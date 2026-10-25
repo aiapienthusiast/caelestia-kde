@@ -5,6 +5,7 @@
 
 use super::config::NotificationConfig;
 use super::manager::NotificationManager;
+use crate::components::icon::MaterialIcon;
 use crate::components::styled_text::StyledTextExt;
 use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::notifications::{NotificationsService, Urgency};
@@ -21,8 +22,23 @@ pub struct NotificationsView {
 
 impl NotificationsView {
     pub fn new(colours: CaelestiaColours) -> Self {
+        let config = NotificationConfig::default();
+        let mut manager = NotificationManager::new(config);
+        manager.toasts.push(super::toast::ToastItem::new(
+            crate::services::notifications::NotificationItem {
+                id: 1,
+                app_name: "Caelestia Desktop".to_string(),
+                app_icon: "notifications".to_string(),
+                summary: "System Ready".to_string(),
+                body: "All KDE shell services connected and active.".to_string(),
+                urgency: Urgency::Normal,
+                timestamp_secs: 0,
+            },
+            60000,
+            true,
+        ));
         Self {
-            manager: NotificationManager::new(NotificationConfig::default()),
+            manager,
             colours,
             has_fullscreen: false,
             overview_open: false,
@@ -113,7 +129,7 @@ impl Render for NotificationsView {
                                                 .flex()
                                                 .items_center()
                                                 .justify_center()
-                                                .child(StyledTextExt::icon_size(div().child("notifications"), 14.0)),
+                                                .child(MaterialIcon::new("notifications").text_size(px(14.0))),
                                         )
                                         .child(
                                             div()
@@ -127,7 +143,7 @@ impl Render for NotificationsView {
                                     div()
                                         .text_color(rgba(c.on_surface_variant))
                                         .cursor(CursorStyle::PointingHand)
-                                        .child(StyledTextExt::icon_size(div().child("close"), 16.0))
+                                        .child(MaterialIcon::new("close").text_size(px(16.0)))
                                         .on_mouse_down(
                                             gpui::MouseButton::Left,
                                             cx.listener(move |this, _, _, _cx| {

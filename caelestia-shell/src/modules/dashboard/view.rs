@@ -238,24 +238,17 @@ impl Render for DashboardView {
             .on_key_down(cx.listener(Self::handle_key_down))
             .size_full()
             .flex()
-            .flex_row()
-            // Click outside backdrop to dismiss
+            .flex_col()
+            .items_center()
+            // Top-anchored dropdown drawer panel
             .child(
                 div()
-                    .flex_1()
-                    .h_full()
-                    .cursor(CursorStyle::PointingHand)
-                    .on_mouse_down(MouseButton::Left, cx.listener(|_, _, _win, cx| {
-                        cx.quit();
-                    })),
-            )
-            // Left-sliding drawer panel
-            .child(
-                div()
-                    .w(px(DRAWER_WIDTH))
-                    .h_full()
+                    .w(px(854.0))
+                    .h(px(540.0))
                     .bg(rgba(c.surface_container_lowest))
-                    .border_r_1()
+                    .rounded_b_3xl()
+                    .border_b_1()
+                    .border_x_1()
                     .border_color(rgba(c.outline_variant))
                     .shadow_xl()
                     .flex()
@@ -275,9 +268,20 @@ impl Render for DashboardView {
                         div()
                             .flex_1()
                             .w_full()
+                            .p(px(20.0))
                             .overflow_hidden()
                             .child(content),
                     ),
+            )
+            // Click outside backdrop to dismiss
+            .child(
+                div()
+                    .flex_1()
+                    .w_full()
+                    .cursor(CursorStyle::PointingHand)
+                    .on_mouse_down(MouseButton::Left, cx.listener(|_, _, _win, cx| {
+                        cx.quit();
+                    })),
             )
     }
 }

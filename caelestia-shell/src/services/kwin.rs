@@ -413,24 +413,9 @@ impl KWinService {
 
 
     fn poll_active_window(&mut self) {
-        if let Ok(output) = Command::new("qdbus6")
-            .args(["org.kde.KWin", "/KWin", "org.kde.KWin.queryWindowInfo"])
-            .output()
-        {
-            if output.status.success() {
-                let text = String::from_utf8_lossy(&output.stdout);
-                if let Some(win) = Self::parse_window_info_map(&text) {
-                    self.state.active_window = Some(win.clone());
-                    self.state.active_output_name = win.output.clone();
-
-                    if let Some(idx) = self.state.window_list.iter().position(|w| w.address == win.address) {
-                        self.state.window_list[idx] = win;
-                    } else if !win.address.is_empty() {
-                        self.state.window_list.push(win);
-                    }
-                }
-            }
-        }
+        // NOTE: In KWin 6 Wayland, org.kde.KWin.queryWindowInfo is an interactive
+        // click-to-query window picker that blocks the process waiting for user input.
+        // Window tracking is instead driven by Wayland protocols or window_list updates.
     }
 
     /// Parse QVariantMap output from queryWindowInfo or getWindowInfo

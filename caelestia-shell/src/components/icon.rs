@@ -31,6 +31,7 @@ impl MaterialIcon {
     /// Create a new MaterialIcon with default medium size.
     pub fn new(glyph: impl Into<SharedString>) -> Div {
         div()
+            .font_family("Material Symbols Rounded")
             .text_size(px(IconSize::Medium.pixels()))
             .font_weight(FontWeight::NORMAL)
             .flex()
@@ -42,6 +43,7 @@ impl MaterialIcon {
     /// Create a MaterialIcon with explicit size and color.
     pub fn with_size(glyph: impl Into<SharedString>, size: IconSize, color: u32) -> Div {
         div()
+            .font_family("Material Symbols Rounded")
             .text_size(px(size.pixels()))
             .text_color(rgba(color))
             .font_weight(FontWeight::NORMAL)

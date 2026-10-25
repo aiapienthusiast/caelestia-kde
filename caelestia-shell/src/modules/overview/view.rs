@@ -35,19 +35,18 @@ pub struct OverviewView {
 
 impl OverviewView {
     pub fn new(cx: &mut gpui::Context<Self>, colours: CaelestiaColours) -> Self {
+        let mut kwin = crate::services::kwin::KWinService::new();
+        let windows = kwin.windows_for_workspace(0, false);
+        let indicator = WorkspaceIndicatorModel::compute(&kwin.state, None, 800.0);
+        let mut state = OverviewState::new();
+        state.is_open = true;
+
         Self {
-            state: OverviewState::new(),
+            state,
             config: OverviewConfig::default(),
             colours,
-            windows: Vec::new(),
-            indicator: WorkspaceIndicatorModel {
-                pills: Vec::new(),
-                active_index: 0,
-                swipe_offset: 0.0,
-                is_swiping: false,
-                scale_factor: 1.0,
-                required_width: 800.0,
-            },
+            windows,
+            indicator,
             area_width: 1920.0,
             area_height: 1080.0,
             focus_handle: cx.focus_handle(),

@@ -3,6 +3,8 @@
 
 use super::config::SessionConfig;
 use super::state::SessionState;
+use crate::components::icon::MaterialIcon;
+use crate::components::styled_text::{StyledText, StyledTextExt};
 use crate::domain::session::SessionActionKind;
 use crate::domain::tokens::*;
 use crate::infrastructure::theme::CaelestiaColours;
@@ -104,8 +106,8 @@ impl SessionView {
         div()
             .id(index)
             .w(px(BUTTON_WIDTH))
-            .min_h(px(56.0))
-            .p(px(PADDING_MEDIUM))
+            .h(px(BUTTON_HEIGHT))
+            .p(px(PADDING_SMALL))
             .rounded(px(radius))
             .bg(bg_color)
             .border_1()
@@ -115,9 +117,10 @@ impl SessionView {
                 rgba(0x00000000)
             })
             .flex()
-            .flex_row()
+            .flex_col()
             .items_center()
-            .gap(px(SPACING_MEDIUM))
+            .justify_center()
+            .gap(px(SPACING_EXTRA_SMALL))
             .cursor(CursorStyle::PointingHand)
             .hover(|d| d.bg(rgba(self.colours.surface_container_highest)))
             .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _win, cx| {
@@ -131,23 +134,29 @@ impl SessionView {
                 cx.notify();
             }))
             .child(
-                div()
-                    .text_size(px(ICON_SIZE_MEDIUM))
-                    .text_color(text_color)
-                    .child(match kind {
-                        SessionActionKind::Logout => "󰗽",
-                        SessionActionKind::Shutdown => "⏻",
-                        SessionActionKind::Hibernate => "󰒲",
-                        SessionActionKind::Reboot => "󰜉",
-                        _ => "•",
-                    }),
+                MaterialIcon::new(match kind {
+                    SessionActionKind::Logout => "logout",
+                    SessionActionKind::Shutdown => "power_settings_new",
+                    SessionActionKind::Hibernate => "bedtime",
+                    SessionActionKind::Reboot => "restart_alt",
+                    _ => "more_horiz",
+                })
+                .text_size(px(ICON_SIZE_MEDIUM * 1.2))
+                .child("")
+                .color(if is_focused {
+                    self.colours.on_secondary_container
+                } else {
+                    self.colours.on_surface
+                }),
             )
             .child(
-                div()
-                    .text_size(px(14.0))
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(text_color)
-                    .child(title),
+                StyledText::new(title)
+                    .color(if is_focused {
+                        self.colours.on_secondary_container
+                    } else {
+                        self.colours.on_surface
+                    })
+                    .font_size(FONT_SIZE_SMALL),
             )
     }
 

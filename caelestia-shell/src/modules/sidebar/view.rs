@@ -23,7 +23,8 @@ pub struct SidebarView {
 impl SidebarView {
     pub fn new(cx: &mut gpui::Context<Self>, colours: CaelestiaColours, screen_width: f32) -> Self {
         let config = SidebarConfig::default();
-        let state = SidebarState::new(&config, screen_width);
+        let mut state = SidebarState::new(&config, screen_width);
+        state.is_open = true;
         Self {
             state,
             config,

@@ -7,6 +7,7 @@ use super::categories::{Categories, CATEGORY_DEFINITIONS};
 use super::entry::DesktopEntry;
 use super::executor::AppExecutor;
 use super::searcher::AppSearcher;
+use crate::components::icon::MaterialIcon;
 use crate::components::styled_text::StyledTextExt;
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{
@@ -140,9 +141,9 @@ impl Render for LauncherView {
                     .items_center()
                     .gap_3()
                     .child(
-                        div()
+                        MaterialIcon::new("search")
                             .text_color(rgba(c.on_surface_variant))
-                            .child(StyledTextExt::icon_size(div().child("search"), 20.0)),
+                            .text_size(px(20.0)),
                     )
                     .child(
                         div()
@@ -242,10 +243,8 @@ impl Render for LauncherView {
                                             .items_center()
                                             .justify_center()
                                             .child(
-                                                StyledTextExt::icon_size(
-                                                    div().child("apps"),
-                                                    20.0,
-                                                ),
+                                                MaterialIcon::new("apps")
+                                                    .text_size(px(20.0)),
                                             ),
                                     )
                                     .child(

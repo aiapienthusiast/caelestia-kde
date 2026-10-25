@@ -241,6 +241,7 @@ pub(crate) fn take_wayland_socket_from_environment() -> Option<UnixStream> {
 
 #[derive(Clone)]
 pub struct Globals {
+    pub conn: Connection,
     pub qh: QueueHandle<WaylandClientStatePtr>,
     pub activation: Option<xdg_activation_v1::XdgActivationV1>,
     pub compositor: wl_compositor::WlCompositor,
@@ -269,6 +270,7 @@ pub struct Globals {
 
 impl Globals {
     fn new(
+        conn: Connection,
         globals: GlobalList,
         executor: ForegroundExecutor,
         qh: QueueHandle<WaylandClientStatePtr>,
@@ -277,6 +279,7 @@ impl Globals {
     ) -> anyhow::Result<Self> {
         let dialog_v = XdgWmDialogV1::interface().version;
         Ok(Globals {
+            conn,
             activation: globals.bind(&qh, 1..=1, ()).ok(),
             compositor: globals
                 .bind(
@@ -1041,6 +1044,7 @@ impl WaylandConnection {
         let foreground_executor = common.borrow().foreground_executor.clone();
         let background_executor = common.borrow().background_executor.clone();
         let globals = Globals::new(
+            conn.clone(),
             globals,
             foreground_executor,
             qh.clone(),
@@ -1347,6 +1351,7 @@ impl WaylandConnection {
             state.consume_startup_activation_token(&window.0.surface());
         }
         state.windows.insert(surface_id, window.0.clone());
+        let _ = state.globals.conn.flush();
 
         Ok(Box::new(window))
     }

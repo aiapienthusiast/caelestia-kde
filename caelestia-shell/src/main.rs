@@ -20,8 +20,11 @@ use modules::dashboard::DashboardDrawer;
 use modules::launcher::LauncherView;
 use modules::nexus::NexusDrawer;
 use modules::notifications::NotificationsView;
+use modules::osd::{OsdConfig, OsdState, OsdView};
 use modules::overview::OverviewView;
-use modules::screenshot::ScreenshotOverlayView;
+use modules::screenshot::{
+    ScreenshotOverlayView, SelectionMode, SelectionPhase, SelectionRect, SelectionRegion,
+};
 use modules::session::SessionDrawer;
 use modules::sidebar::SidebarView;
 use modules::utilities::UtilitiesView;
@@ -45,6 +48,10 @@ fn main() {
         let args: Vec<String> = std::env::args().collect();
         let colours = CaelestiaColours::load();
 
+        let is_bar = std::env::var("BAR_OPEN").is_ok()
+            || args.iter().any(|arg| arg == "--bar" || arg == "bar");
+        let is_osd = std::env::var("OSD_OPEN").is_ok()
+            || args.iter().any(|arg| arg == "--osd" || arg == "osd");
         let is_dashboard = std::env::var("DASHBOARD_OPEN").is_ok()
             || args.iter().any(|arg| arg == "--dashboard" || arg == "dashboard");
         let is_nexus = std::env::var("NEXUS_OPEN").is_ok()
@@ -66,7 +73,69 @@ fn main() {
         let is_background = std::env::var("BACKGROUND_OPEN").is_ok()
             || args.iter().any(|arg| arg == "--background" || arg == "background");
 
-        if is_dashboard {
+        if is_bar {
+            info!("Launching Status Bar Surface...");
+            let bar_options = WindowOptions {
+                titlebar: None,
+                window_bounds: Some(WindowBounds::Windowed(Bounds {
+                    origin: point(px(0.), px(0.)),
+                    size: size(px(1920.), px(48.)),
+                })),
+                app_id: Some("caelestia-bar".to_string()),
+                window_background: WindowBackgroundAppearance::Transparent,
+                kind: WindowKind::LayerShell(LayerShellOptions {
+                    namespace: "caelestia-bar".to_string(),
+                    layer: Layer::Top,
+                    anchor: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
+                    exclusive_zone: Some(px(48.)),
+                    keyboard_interactivity: KeyboardInteractivity::None,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            match cx.open_window(bar_options, |_, cx| {
+                cx.new(|_| BarView::new(colours))
+            }) {
+                Ok(handle) => info!("Bar window opened successfully: {:?}", handle),
+                Err(err) => tracing::error!("Failed to open Bar window: {:?}", err),
+            }
+        } else if is_osd {
+            info!("Launching OSD Surface...");
+            let osd_options = WindowOptions {
+                titlebar: None,
+                window_bounds: Some(WindowBounds::Windowed(Bounds {
+                    origin: point(px(1920. - 100.), px(400.)),
+                    size: size(px(100.), px(300.)),
+                })),
+                app_id: Some("caelestia-osd".to_string()),
+                window_background: WindowBackgroundAppearance::Transparent,
+                kind: WindowKind::LayerShell(LayerShellOptions {
+                    namespace: "caelestia-osd".to_string(),
+                    layer: Layer::Overlay,
+                    anchor: Anchor::RIGHT,
+                    exclusive_zone: None,
+                    keyboard_interactivity: KeyboardInteractivity::None,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            match cx.open_window(osd_options, |_, cx| {
+                cx.new(|_| OsdView::new(
+                    OsdConfig::default(),
+                    OsdState {
+                        is_open: true,
+                        offset_scale: 0.0,
+                        volume: 0.75,
+                        brightness: 0.60,
+                        ..Default::default()
+                    },
+                    colours
+                ))
+            }) {
+                Ok(handle) => info!("OSD window opened successfully: {:?}", handle),
+                Err(err) => tracing::error!("Failed to open OSD window: {:?}", err),
+            }
+        } else if is_dashboard {
             info!("Launching Dashboard Multi-Tab Drawer...");
             let dash_options = WindowOptions {
                 titlebar: None,
@@ -243,7 +312,20 @@ fn main() {
             };
 
             match cx.open_window(sc_options, |_, cx| {
-                cx.new(|cx| ScreenshotOverlayView::new(cx, colours, 1920.0, 1080.0))
+                cx.new(|cx| {
+                    let mut view = ScreenshotOverlayView::new(cx, colours, 1920.0, 1080.0);
+                    view.state.is_active = true;
+                    view.state.phase = SelectionPhase::Post;
+                    view.state.selection = Some(SelectionRegion {
+                        mode: SelectionMode::RectCorners,
+                        start_x: 480.0,
+                        start_y: 320.0,
+                        current_x: 1040.0,
+                        current_y: 640.0,
+                        snapped_window_address: None,
+                    });
+                    view
+                })
             }) {
                 Ok(handle) => info!("Screenshot window opened: {:?}", handle),
                 Err(err) => tracing::error!("Failed to open Screenshot window: {:?}", err),
@@ -279,8 +361,8 @@ fn main() {
             let options = WindowOptions {
                 titlebar: None,
                 window_bounds: Some(WindowBounds::Windowed(Bounds {
-                    origin: point(px(0.), px(0.)),
-                    size: size(px(DRAWER_WIDTH), px(500.)),
+                    origin: point(px(1920. - 116.), px(280.)),
+                    size: size(px(116.), px(520.)),
                 })),
                 app_id: Some("caelestia-session".to_string()),
                 window_background: WindowBackgroundAppearance::Transparent,

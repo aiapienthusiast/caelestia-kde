@@ -6,6 +6,7 @@
 
 use super::config::OsdConfig;
 use super::state::OsdState;
+use crate::components::icon::MaterialIcon;
 use crate::components::styled_text::StyledTextExt;
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{
@@ -60,9 +61,9 @@ impl OsdView {
                     .justify_center()
                     .pb_2()
                     .child(
-                        div()
+                        MaterialIcon::new(icon)
                             .text_color(icon_color)
-                            .child(StyledTextExt::icon_size(div().child(icon.to_string()), 18.0)),
+                            .text_size(px(18.0)),
                     ),
             )
     }

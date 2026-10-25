@@ -20,7 +20,8 @@ pub struct UtilitiesView {
 impl UtilitiesView {
     pub fn new(cx: &mut gpui::Context<Self>, colours: CaelestiaColours) -> Self {
         let config = UtilitiesConfig::default();
-        let state = UtilitiesState::new(&config);
+        let mut state = UtilitiesState::new(&config);
+        state.is_open = true;
         Self {
             state,
             config,

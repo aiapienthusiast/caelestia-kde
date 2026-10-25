@@ -438,9 +438,19 @@ impl WaylandSurfaceState {
             WaylandSurfaceState::Xdg(WaylandXdgSurfaceState { xdg_surface, .. }) => {
                 xdg_surface.set_window_geometry(x, y, width, height);
             }
-            WaylandSurfaceState::LayerShell(WaylandLayerSurfaceState { layer_surface, .. }) => {
-                // cannot set window position of a layer surface
-                layer_surface.set_size(width as u32, height as u32);
+            WaylandSurfaceState::LayerShell(WaylandLayerSurfaceState {
+                layer_surface,
+                anchor,
+            }) => {
+                let mut w = width as u32;
+                let mut h = height as u32;
+                if anchor.contains(Anchor::LEFT) && anchor.contains(Anchor::RIGHT) {
+                    w = 0;
+                }
+                if anchor.contains(Anchor::TOP) && anchor.contains(Anchor::BOTTOM) {
+                    h = 0;
+                }
+                layer_surface.set_size(w, h);
             }
             WaylandSurfaceState::Popup(WaylandPopupSurfaceState { xdg_surface, .. }) => {
                 xdg_surface.set_window_geometry(x, y, width, height);
@@ -880,7 +890,7 @@ impl WaylandWindow {
                 appearance,
                 viewport,
                 client,
-                globals,
+                globals.clone(),
                 gpu_context,
                 compositor_gpu,
                 params,
@@ -894,6 +904,7 @@ impl WaylandWindow {
 
         // Kick things off
         surface.commit();
+        let _ = globals.conn.flush();
         this.0.frame_ping.ping();
 
         Ok((this, surface.id()))
@@ -1158,6 +1169,7 @@ impl WaylandWindowStatePtr {
             }
             let state = self.state.borrow_mut();
             state.surface_state.ack_configure(serial);
+            let _ = state.globals.conn.flush();
 
             let window_geometry = inset_by_tiling(
                 state.bounds.map_origin(|_| px(0.0)),
