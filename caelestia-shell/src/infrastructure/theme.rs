@@ -49,6 +49,9 @@ pub struct CaelestiaColours {
     pub is_light: bool,
 }
 
+impl gpui::Global for CaelestiaColours {}
+
+
 pub fn parse_hex_color(s: &str, alpha: f32) -> u32 {
     let clean = s.trim().trim_start_matches('#');
     if clean.len() >= 6 {
