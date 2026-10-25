@@ -207,6 +207,123 @@ fn test_kwin_service_desktops_parsing_and_selection() {
     assert_eq!(workspaces[2].id, 2);
     assert_eq!(workspaces[2].name, "Coding");
     assert!(workspaces[2].active); // Matches active_uuid
+
+    // Workspace state index and resolution methods
+    let mut kwin = KWinService::new();
+    kwin.state.workspaces = workspaces;
+
+    assert_eq!(kwin.index_for_id("47d4de5b-53ab-4d53-9b74-745ecb8b62ba"), Some(2));
+    assert_eq!(kwin.uuid_for_index(0), Some("8b0caf0f-5c74-4d00-a6a2-ca6d10722121".to_string()));
+
+    // Resolution by UUID, position, and name
+    assert_eq!(kwin.resolve_desktop_uuid("47d4de5b-53ab-4d53-9b74-745ecb8b62ba"), Some("47d4de5b-53ab-4d53-9b74-745ecb8b62ba".to_string()));
+    assert_eq!(kwin.resolve_desktop_uuid("0"), Some("8b0caf0f-5c74-4d00-a6a2-ca6d10722121".to_string()));
+    assert_eq!(kwin.resolve_desktop_uuid("Coding"), Some("47d4de5b-53ab-4d53-9b74-745ecb8b62ba".to_string()));
+    assert_eq!(kwin.resolve_desktop_uuid("NonExistent"), None);
+}
+
+#[test]
+fn test_kwin_service_window_management_and_filtering() {
+    let mock_win_info = r#"
+caption: Visual Studio Code
+resourceClass: code
+uuid: 1234-5678-abcd
+output: eDP-1
+x: 100
+y: 100
+width: 1200
+height: 800
+isMinimized: false
+isMaximized: true
+isFullscreen: false
+desktop: 2
+"#;
+
+    let win = KWinService::parse_window_info_map(mock_win_info).unwrap();
+    assert_eq!(win.title, "Visual Studio Code");
+    assert_eq!(win.app_id, "code");
+    assert_eq!(win.address, "1234-5678-abcd");
+    assert_eq!(win.output, "eDP-1");
+    assert!(win.is_maximized);
+    assert!(!win.is_minimized);
+    assert_eq!(win.desktops, vec!["2"]);
+
+    let mut kwin = KWinService::new();
+    kwin.state.workspaces = vec![
+        caelestia_shell::services::kwin::VirtualWorkspace {
+            id: 0,
+            uuid: "uuid-ws0".to_string(),
+            name: "Workspace 1".to_string(),
+            active: true,
+        },
+        caelestia_shell::services::kwin::VirtualWorkspace {
+            id: 1,
+            uuid: "uuid-ws1".to_string(),
+            name: "Workspace 2".to_string(),
+            active: false,
+        },
+    ];
+
+    let w1 = caelestia_shell::services::kwin::WindowItem {
+        address: "win-1".to_string(),
+        title: "Browser".to_string(),
+        app_id: "firefox".to_string(),
+        desktops: vec!["0".to_string()],
+        ..Default::default()
+    };
+    let w2 = caelestia_shell::services::kwin::WindowItem {
+        address: "win-2".to_string(),
+        title: "Music".to_string(),
+        app_id: "spotify".to_string(),
+        desktops: vec!["-1".to_string()], // On all workspaces
+        ..Default::default()
+    };
+    let w3 = caelestia_shell::services::kwin::WindowItem {
+        address: "win-3".to_string(),
+        title: "Discord".to_string(),
+        app_id: "discord".to_string(),
+        desktops: vec!["uuid-ws1".to_string()],
+        ..Default::default()
+    };
+
+    kwin.state.window_list = vec![w1, w2, w3];
+
+    // Filter workspace 0
+    let ws0_windows = kwin.windows_for_workspace(0, true);
+    assert_eq!(ws0_windows.len(), 2); // Browser + Music (on all)
+    assert!(ws0_windows.iter().any(|w| w.address == "win-1"));
+    assert!(ws0_windows.iter().any(|w| w.address == "win-2"));
+
+    // Filter workspace 0 without include_on_all
+    let ws0_strict = kwin.windows_for_workspace(0, false);
+    assert_eq!(ws0_strict.len(), 1);
+    assert_eq!(ws0_strict[0].address, "win-1");
+
+    // Window operations
+    kwin.focus_window("win-1");
+    assert_eq!(kwin.state.pending_focus_address.as_deref(), Some("win-1"));
+    assert!(kwin.state.window_list[0].is_active);
+
+    kwin.minimize_window("win-1");
+    assert!(kwin.state.window_list[0].is_minimized);
+    assert!(!kwin.state.window_list[0].is_active);
+
+    kwin.maximize_window("win-1", true, true);
+    assert!(kwin.state.window_list[0].is_maximized);
+
+    kwin.set_fullscreen("win-1", true);
+    assert!(kwin.state.window_list[0].is_fullscreen);
+
+    kwin.set_window_desktop("win-1", 1);
+    assert_eq!(kwin.state.window_list[0].desktops, vec!["1"]);
+
+    kwin.highlight_window("win-1");
+    assert_eq!(kwin.state.highlighted_address.as_deref(), Some("win-1"));
+    kwin.clear_highlight();
+    assert_eq!(kwin.state.highlighted_address, None);
+
+    kwin.close_window("win-1");
+    assert!(!kwin.state.window_list.iter().any(|w| w.address == "win-1"));
 }
 
 #[test]
