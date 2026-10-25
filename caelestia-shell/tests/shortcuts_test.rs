@@ -67,3 +67,99 @@ fn test_shortcut_dispatching_to_coordinator() {
     assert!(coordinator.visibilities.dashboard);
     assert!(coordinator.visibilities.utilities);
 }
+
+#[test]
+fn test_custom_shortcut_component_lifecycle() {
+    use caelestia_shell::components::misc::CustomShortcut;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    let pressed_count = Arc::new(AtomicUsize::new(0));
+    let released_count = Arc::new(AtomicUsize::new(0));
+
+    let p_clone = pressed_count.clone();
+    let r_clone = released_count.clone();
+
+    let shortcut = CustomShortcut::new("test_action", "Test Description")
+        .with_key("Meta+Shift+T")
+        .on_pressed(move || {
+            p_clone.fetch_add(1, Ordering::SeqCst);
+        })
+        .on_released(move || {
+            r_clone.fetch_add(1, Ordering::SeqCst);
+        });
+
+    assert_eq!(shortcut.name, "test_action");
+    assert_eq!(shortcut.description, "Test Description");
+    assert_eq!(shortcut.key, Some("Meta+Shift+T".to_string()));
+    assert!(shortcut.enabled);
+
+    // Test press and release
+    shortcut.press();
+    assert_eq!(pressed_count.load(Ordering::SeqCst), 1);
+    assert_eq!(released_count.load(Ordering::SeqCst), 0);
+
+    shortcut.release();
+    assert_eq!(released_count.load(Ordering::SeqCst), 1);
+
+    // Test activate (calls press then release)
+    shortcut.activate();
+    assert_eq!(pressed_count.load(Ordering::SeqCst), 2);
+    assert_eq!(released_count.load(Ordering::SeqCst), 2);
+
+    // Test disabled state
+    let disabled = shortcut.with_enabled(false);
+    disabled.activate();
+    // Counts should remain unchanged
+    assert_eq!(pressed_count.load(Ordering::SeqCst), 2);
+    assert_eq!(released_count.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn test_global_shortcut_dispatcher_and_collisions() {
+    use caelestia_shell::services::global_shortcut::{
+        GlobalShortcutDispatcher, RegisteredShortcut, StolenShortcut,
+    };
+
+    let dispatcher = GlobalShortcutDispatcher::global();
+    let mut lock = dispatcher.lock().unwrap();
+
+    // Register a shortcut
+    lock.register(RegisteredShortcut {
+        name: "test_nexus".to_string(),
+        description: "Open nexus".to_string(),
+        key: "Meta+N".to_string(),
+        enabled: true,
+        stolen_shortcuts: vec![StolenShortcut {
+            component: "kwin".to_string(),
+            action: "Window Quick Tile Top".to_string(),
+            component_friendly_name: "KWin".to_string(),
+            action_friendly_name: "Quick Tile Top".to_string(),
+            keys: vec!["Meta+N".to_string()],
+            trigger_key: "Meta+N".to_string(),
+        }],
+    });
+
+    // Verify collision detection
+    let collision = lock.collision_for_key("Meta+N");
+    assert!(collision.is_some());
+    assert_eq!(collision.unwrap(), "KWin - Quick Tile Top");
+
+    // Clean up
+    lock.unregister("test_nexus");
+    assert!(lock.collision_for_key("Meta+N").is_none());
+}
+
+#[test]
+fn test_shortcut_manager_custom_shortcuts_integration() {
+    let manager = ShortcutManager::new();
+    let custom_list = manager.custom_shortcuts();
+    assert!(!custom_list.is_empty());
+
+    // Verify nexus custom shortcut is present
+    let nexus_sc = custom_list.iter().find(|s| s.name == "nexus");
+    assert!(nexus_sc.is_some());
+    let nexus = nexus_sc.unwrap();
+    assert_eq!(nexus.description, "Open nexus");
+    assert_eq!(nexus.key, Some("Meta+N".to_string()));
+}

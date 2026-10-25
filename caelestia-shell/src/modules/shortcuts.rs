@@ -1,6 +1,7 @@
 //! Global shortcuts and keybinding coordinator
 //! Achieves 100% parity with `shell/modules/Shortcuts.qml` and Krohnkite integration.
 
+use crate::components::misc::CustomShortcut;
 use crate::modules::drawers::ContentWindowCoordinator;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -138,6 +139,7 @@ pub struct ShortcutDefinition {
 pub struct ShortcutManager {
     shortcuts: Vec<ShortcutDefinition>,
     key_map: HashMap<String, ShellShortcutAction>,
+    custom_shortcuts: Vec<CustomShortcut>,
     pub launcher_interrupted: bool,
 }
 
@@ -146,6 +148,7 @@ impl Default for ShortcutManager {
         let mut manager = Self {
             shortcuts: Vec::new(),
             key_map: HashMap::new(),
+            custom_shortcuts: Vec::new(),
             launcher_interrupted: false,
         };
         manager.register_defaults();
@@ -280,7 +283,28 @@ impl ShortcutManager {
         if !sc.default_key.is_empty() {
             self.key_map.insert(sc.default_key.clone(), sc.action);
         }
+        let custom = CustomShortcut::new(sc.name.clone(), sc.description.clone())
+            .with_key(sc.default_key.clone());
+        self.custom_shortcuts.push(custom);
         self.shortcuts.push(sc);
+    }
+
+    /// Returns all registered custom shortcut instances
+    pub fn custom_shortcuts(&self) -> &[CustomShortcut] {
+        &self.custom_shortcuts
+    }
+
+    /// Registers a new custom shortcut and synchronizes with global dispatcher
+    pub fn register_custom_shortcut(&mut self, sc: CustomShortcut) {
+        sc.register_global();
+        self.custom_shortcuts.push(sc);
+    }
+
+    /// Synchronizes all registered custom shortcuts with GlobalShortcutDispatcher
+    pub fn sync_with_global_dispatcher(&self) {
+        for sc in &self.custom_shortcuts {
+            sc.register_global();
+        }
     }
 
     /// Looks up an action by key combination string
