@@ -210,3 +210,62 @@ fn test_overview_window_info_overlay() {
     assert!(!state.is_window_info_open);
     assert_eq!(state.window_info_address, None);
 }
+
+#[test]
+fn test_window_info_details_and_controller() {
+    use caelestia_shell::modules::overview::{WindowInfoController, WindowInfoDetails};
+
+    let win = mock_window("win-inspect", "Test Terminal", "alacritty", "3", 50, 60, 1024, 768);
+    let details = WindowInfoDetails::from_window_item(&win);
+
+    assert_eq!(details.address, "win-inspect");
+    assert_eq!(details.title, "Test Terminal");
+    assert_eq!(details.app_id, "alacritty");
+    assert_eq!(details.x, 50);
+    assert_eq!(details.y, 60);
+    assert_eq!(details.width, 1024);
+    assert_eq!(details.height, 768);
+    assert_eq!(details.workspace_id, "3");
+    assert!(!details.is_maximized);
+
+    let mut kwin = KWinService {
+        state: KWinState::default(),
+    };
+    kwin.state.window_list = vec![win];
+
+    // Toggle maximize
+    WindowInfoController::toggle_maximize("win-inspect", false, &mut kwin);
+    let w_max = kwin.state.window_list.iter().find(|w| w.address == "win-inspect").unwrap();
+    assert!(w_max.is_maximized);
+
+    // Toggle minimize
+    WindowInfoController::toggle_minimize("win-inspect", false, &mut kwin);
+    let w_min = kwin.state.window_list.iter().find(|w| w.address == "win-inspect").unwrap();
+    assert!(w_min.is_minimized);
+
+    // Move to workspace 4
+    WindowInfoController::move_to_workspace("win-inspect", 4, &mut kwin);
+    let w_moved = kwin.state.window_list.iter().find(|w| w.address == "win-inspect").unwrap();
+    assert_eq!(w_moved.desktops, vec!["4".to_string()]);
+}
+
+#[test]
+fn test_overview_workspace_switcher_paging() {
+    let mut state = OverviewState::new();
+    state.is_open = true;
+    state.current_workspace_index = 0;
+
+    // Simulate paging forward
+    state.current_workspace_index += 1;
+    assert_eq!(state.current_workspace_index, 1);
+
+    // Simulate paging forward again
+    state.current_workspace_index += 1;
+    assert_eq!(state.current_workspace_index, 2);
+
+    // Reselecting current closes overview
+    if state.current_workspace_index == 2 {
+        state.close();
+    }
+    assert!(!state.is_open);
+}

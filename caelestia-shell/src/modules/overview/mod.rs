@@ -9,9 +9,11 @@ pub mod indicator;
 pub mod layout;
 pub mod state;
 pub mod view;
+pub mod window_info;
 
 pub use config::{OverviewConfig, OverviewLayoutType};
 pub use indicator::{WorkspaceIndicatorModel, WorkspacePill};
 pub use layout::{calculate_gnome_layout, calculate_kde_layout, calculate_layout, WindowRect};
 pub use state::OverviewState;
 pub use view::OverviewView;
+pub use window_info::{WindowInfoController, WindowInfoDetails};

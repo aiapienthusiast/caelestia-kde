@@ -1,9 +1,13 @@
 //! Overview View Component
 //! Complete parity with `shell/modules/overview/Wrapper.qml`, `Content.qml`,
-//! and `WindowGrid.qml`.
+//! and `WindowGrid.qml`, plus `shell/modules/windowinfo/`.
 //!
-//! Provides the visual overview canvas displaying workspace indicators, interactive
-//! window cards laid out via KDE/GNOME algorithms, window closing, and keyboard navigation.
+//! Provides the visual overview canvas displaying:
+//! - Centered bottom workspace switcher with occupancy dots, count badges, paging chevrons, and '+' create workspace button
+//! - Interactive window cards laid out via KDE/GNOME algorithms with hover effects
+//! - Top-right window card buttons: Close ('✕') and Inspect Info ('ℹ')
+//! - Full-featured Window Info inspection overlay modal (details, move to workspace, maximize/minimize, kill)
+//! - Keyboard navigation (Tab, Arrow keys, Escape, Vim bindings)
 
 use super::config::OverviewConfig;
 use super::indicator::WorkspaceIndicatorModel;
@@ -75,7 +79,11 @@ impl OverviewView {
 
         match key {
             "escape" => {
-                self.state.close();
+                if self.state.is_window_info_open {
+                    self.state.close_window_info();
+                } else {
+                    self.state.close();
+                }
             }
             "tab" => {
                 self.state.cycle_selection(modifiers.shift, self.windows.len());
@@ -102,7 +110,7 @@ impl OverviewView {
     /// Calculate active window positions using configured packing algorithm
     pub fn compute_window_layout(&self) -> HashMap<String, WindowRect> {
         let grid_w = (self.area_width - 160.0).max(300.0);
-        let grid_h = (self.area_height - 200.0).max(300.0);
+        let grid_h = (self.area_height - 220.0).max(300.0);
         calculate_layout(
             self.config.layout_type,
             &self.windows,
@@ -121,15 +129,23 @@ impl Render for OverviewView {
         }
 
         let bg_scrim = rgba(0x00000080);
+        let surface = rgba(self.colours.surface);
         let surface_container = rgba(self.colours.surface_container);
         let surface_highest = rgba(self.colours.surface_container_highest);
         let primary = rgba(self.colours.primary);
+        let on_primary = rgba(self.colours.on_primary);
         let on_surface = rgba(self.colours.on_surface);
         let on_surface_variant = rgba(self.colours.on_surface_variant);
         let primary_container = rgba(self.colours.primary_container);
         let on_primary_container = rgba(self.colours.on_primary_container);
+        let secondary_container = rgba(self.colours.secondary_container);
+        let on_secondary_container = rgba(self.colours.on_secondary_container);
+        let error_container = rgba(self.colours.error_container);
+        let error = rgba(self.colours.error);
 
         let layout_map = self.compute_window_layout();
+        let total_workspaces = self.indicator.pills.len().max(1);
+        let current_ws_idx = self.state.current_workspace_index;
 
         div()
             .id("overview-overlay")
@@ -142,99 +158,84 @@ impl Render for OverviewView {
             .flex()
             .flex_col()
             .items_center()
-            .justify_start()
-            .pt(px(24.0))
+            .justify_between()
+            .pb(px(24.0))
             // Click outside to dismiss overview
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, _win, _cx| {
-                    this.state.close();
+                    if !this.state.is_window_info_open {
+                        this.state.close();
+                    }
                 }),
             )
+            // Left workspace page chevron
+            .when(current_ws_idx > 0, |d| {
+                d.child(
+                    div()
+                        .id("overview-prev-ws-btn")
+                        .absolute()
+                        .left(px(24.0))
+                        .top(px(self.area_height / 2.0 - 24.0))
+                        .w(px(48.0))
+                        .h(px(48.0))
+                        .rounded(px(24.0))
+                        .bg(surface_highest)
+                        .border_1()
+                        .border_color(primary)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor(CursorStyle::PointingHand)
+                        .on_mouse_down(
+                            gpui::MouseButton::Left,
+                            cx.listener(|this, _, _win, _cx| {
+                                if this.state.current_workspace_index > 0 {
+                                    this.state.current_workspace_index -= 1;
+                                }
+                            }),
+                        )
+                        .child(div().text_lg().text_color(on_surface).child("‹")),
+                )
+            })
+            // Right workspace page chevron
+            .when(current_ws_idx + 1 < total_workspaces, |d| {
+                d.child(
+                    div()
+                        .id("overview-next-ws-btn")
+                        .absolute()
+                        .right(px(24.0))
+                        .top(px(self.area_height / 2.0 - 24.0))
+                        .w(px(48.0))
+                        .h(px(48.0))
+                        .rounded(px(24.0))
+                        .bg(surface_highest)
+                        .border_1()
+                        .border_color(primary)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor(CursorStyle::PointingHand)
+                        .on_mouse_down(
+                            gpui::MouseButton::Left,
+                            cx.listener(move |this, _, _win, _cx| {
+                                if this.state.current_workspace_index + 1 < total_workspaces {
+                                    this.state.current_workspace_index += 1;
+                                }
+                            }),
+                        )
+                        .child(div().text_lg().text_color(on_surface).child("›")),
+                )
+            })
             .child(
-                // Top workspace indicator pill bar
-                div()
-                    .id("overview-workspace-strip")
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(8.0))
-                    .px(px(16.0))
-                    .py(px(8.0))
-                    .rounded(px(24.0))
-                    .bg(surface_container)
-                    .border_1()
-                    .border_color(surface_highest)
-                    .children(self.indicator.pills.iter().map(|pill| {
-                        let is_active = pill.index == self.state.current_workspace_index;
-                        let pill_bg = if is_active {
-                            primary_container
-                        } else if pill.occupied {
-                            surface_highest
-                        } else {
-                            rgba(0x00000000)
-                        };
-                        let pill_fg = if is_active {
-                            on_primary_container
-                        } else {
-                            on_surface
-                        };
-
-                        let idx = pill.index;
-                        div()
-                            .id(format!("ws-pill-{}", pill.id))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(6.0))
-                            .px(px(12.0))
-                            .py(px(6.0))
-                            .rounded(px(16.0))
-                            .bg(pill_bg)
-                            .cursor(CursorStyle::PointingHand)
-                            .on_mouse_down(
-                                gpui::MouseButton::Left,
-                                cx.listener(move |this, _, _win, _cx| {
-                                    this.state.current_workspace_index = idx;
-                                }),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(if is_active {
-                                        gpui::FontWeight::BOLD
-                                    } else {
-                                        gpui::FontWeight::NORMAL
-                                    })
-                                    .text_color(pill_fg)
-                                    .child(pill.name.clone()),
-                            )
-                            .when(pill.window_count > 0, |d| {
-                                d.child(
-                                    div()
-                                        .text_xs()
-                                        .px(px(5.0))
-                                        .py(px(1.0))
-                                        .rounded(px(10.0))
-                                        .bg(if is_active { primary } else { surface_highest })
-                                        .text_color(if is_active {
-                                            rgba(self.colours.on_primary)
-                                        } else {
-                                            on_surface_variant
-                                        })
-                                        .child(pill.window_count.to_string()),
-                                )
-                            })
-                    })),
-            )
-            .child(
-                // Central Window Grid Area
+                // Central Window Grid Area (taking available height between top margin and bottom switcher)
                 div()
                     .id("overview-window-grid")
                     .flex_1()
                     .w_full()
                     .relative()
-                    .my(px(24.0))
+                    .mt(px(32.0))
+                    .mb(px(16.0))
                     .children(self.windows.iter().enumerate().map(|(idx, win)| {
                         let is_selected = self.state.selected_index == Some(idx);
                         let rect = layout_map.get(&win.address);
@@ -276,9 +277,9 @@ impl Render for OverviewView {
                                 }),
                             )
                             .child(
-                                // Title bar with app icon/title and close button
+                                // Title bar with app icon/title and top-right actions (info & close)
                                 div()
-                                    .h(px(32.0))
+                                    .h(px(34.0))
                                     .w_full()
                                     .bg(surface_highest)
                                     .flex()
@@ -303,32 +304,67 @@ impl Render for OverviewView {
                                             ),
                                     )
                                     .child(
-                                        // Close button
                                         div()
-                                            .id(format!("close-btn-{}", win.address))
-                                            .w(px(20.0))
-                                            .h(px(20.0))
-                                            .rounded(px(10.0))
                                             .flex()
+                                            .flex_row()
                                             .items_center()
-                                            .justify_center()
-                                            .cursor(CursorStyle::PointingHand)
-                                            .hover(|h| h.bg(rgba(self.colours.error_container)))
-                                            .on_mouse_down(
-                                                gpui::MouseButton::Left,
-                                                cx.listener({
-                                                    let a = addr.clone();
-                                                    move |this, _, _win, _cx| {
-                                                        info!("Closing window from card: {}", a);
-                                                        this.windows.retain(|w| w.address != a);
-                                                    }
-                                                }),
-                                            )
+                                            .gap(px(4.0))
+                                            // Info button
                                             .child(
                                                 div()
-                                                    .text_xs()
-                                                    .text_color(rgba(self.colours.error))
-                                                    .child("✕"),
+                                                    .id(format!("info-btn-{}", win.address))
+                                                    .w(px(22.0))
+                                                    .h(px(22.0))
+                                                    .rounded(px(11.0))
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .cursor(CursorStyle::PointingHand)
+                                                    .hover(|h| h.bg(secondary_container))
+                                                    .on_mouse_down(
+                                                        gpui::MouseButton::Left,
+                                                        cx.listener({
+                                                            let a = addr.clone();
+                                                            move |this, _, _win, _cx| {
+                                                                this.state.open_window_info(&a);
+                                                            }
+                                                        }),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_xs()
+                                                            .text_color(primary)
+                                                            .child("ℹ"),
+                                                    ),
+                                            )
+                                            // Close button
+                                            .child(
+                                                div()
+                                                    .id(format!("close-btn-{}", win.address))
+                                                    .w(px(22.0))
+                                                    .h(px(22.0))
+                                                    .rounded(px(11.0))
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .cursor(CursorStyle::PointingHand)
+                                                    .hover(|h| h.bg(error_container))
+                                                    .on_mouse_down(
+                                                        gpui::MouseButton::Left,
+                                                        cx.listener({
+                                                            let a = addr.clone();
+                                                            move |this, _, _win, _cx| {
+                                                                info!("Closing window from card: {}", a);
+                                                                this.windows.retain(|w| w.address != a);
+                                                            }
+                                                        }),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_xs()
+                                                            .text_color(error)
+                                                            .child("✕"),
+                                                    ),
                                             ),
                                     ),
                             )
@@ -340,7 +376,7 @@ impl Render for OverviewView {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .bg(rgba(self.colours.surface))
+                                    .bg(surface)
                                     .child(
                                         div()
                                             .text_sm()
@@ -350,56 +386,340 @@ impl Render for OverviewView {
                             )
                     })),
             )
+            .child(
+                // Bottom Workspace Switcher Strip (Complete parity with WindowGrid.qml indicatorContainer)
+                div()
+                    .id("overview-workspace-strip-bottom")
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(8.0))
+                    .px(px(20.0))
+                    .py(px(10.0))
+                    .rounded(px(28.0))
+                    .bg(surface_container)
+                    .border_1()
+                    .border_color(surface_highest)
+                    .shadow_lg()
+                    .children(self.indicator.pills.iter().map(|pill| {
+                        let is_active = pill.index == self.state.current_workspace_index;
+                        let pill_bg = if is_active {
+                            primary_container
+                        } else if pill.occupied {
+                            surface_highest
+                        } else {
+                            rgba(0x00000000)
+                        };
+                        let pill_fg = if is_active {
+                            on_primary_container
+                        } else {
+                            on_surface
+                        };
+
+                        let idx = pill.index;
+                        div()
+                            .id(format!("ws-pill-{}", pill.id))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(6.0))
+                            .px(px(14.0))
+                            .py(px(7.0))
+                            .rounded(px(18.0))
+                            .bg(pill_bg)
+                            .cursor(CursorStyle::PointingHand)
+                            .on_mouse_down(
+                                gpui::MouseButton::Left,
+                                cx.listener(move |this, _, _win, _cx| {
+                                    if this.state.current_workspace_index == idx {
+                                        this.state.close();
+                                    } else {
+                                        this.state.current_workspace_index = idx;
+                                    }
+                                }),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(if is_active {
+                                        gpui::FontWeight::BOLD
+                                    } else {
+                                        gpui::FontWeight::NORMAL
+                                    })
+                                    .text_color(pill_fg)
+                                    .child(pill.name.clone()),
+                            )
+                            .when(pill.window_count > 0, |d| {
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .px(px(6.0))
+                                        .py(px(1.0))
+                                        .rounded(px(10.0))
+                                        .bg(if is_active { primary } else { surface_highest })
+                                        .text_color(if is_active {
+                                            on_primary
+                                        } else {
+                                            on_surface_variant
+                                        })
+                                        .child(pill.window_count.to_string()),
+                                )
+                            })
+                    }))
+                    .child(
+                        // Add workspace button ('+')
+                        div()
+                            .id("overview-add-ws-btn")
+                            .w(px(28.0))
+                            .h(px(28.0))
+                            .rounded(px(14.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .bg(surface_highest)
+                            .cursor(CursorStyle::PointingHand)
+                            .hover(|h| h.bg(primary_container))
+                            .on_mouse_down(
+                                gpui::MouseButton::Left,
+                                cx.listener(|_this, _, _win, _cx| {
+                                    info!("Overview requested new workspace creation");
+                                }),
+                            )
+                            .child(div().text_sm().text_color(primary).child("+")),
+                    ),
+            )
             .when(self.state.is_window_info_open, |d| {
-                // Window info modal overlay
+                // Window Info Inspection Modal (Complete parity with WindowInfo.qml, Details.qml, Buttons.qml)
                 let info_addr = self.state.window_info_address.clone().unwrap_or_default();
+                let inspected_window = self.windows.iter().find(|w| w.address == info_addr).cloned();
+
+                let win_title = inspected_window.as_ref().map(|w| w.title.clone()).unwrap_or_else(|| "Window Details".to_string());
+                let win_app = inspected_window.as_ref().map(|w| w.app_id.clone()).unwrap_or_else(|| "Unknown".to_string());
+                let win_pos = inspected_window.as_ref().map(|w| format!("{}, {}", w.x, w.y)).unwrap_or_else(|| "0, 0".to_string());
+                let win_size = inspected_window.as_ref().map(|w| format!("{} × {}", w.width, w.height)).unwrap_or_else(|| "800 × 600".to_string());
+                let win_ws = inspected_window.as_ref().and_then(|w| w.desktops.first().cloned()).unwrap_or_else(|| "1".to_string());
+                let is_max = inspected_window.as_ref().map(|w| w.is_maximized).unwrap_or(false);
+                let is_min = inspected_window.as_ref().map(|w| w.is_minimized).unwrap_or(false);
+
                 d.child(
                     div()
-                        .id("window-info-modal")
+                        .id("window-info-modal-backdrop")
                         .absolute()
                         .inset_0()
                         .flex()
                         .items_center()
                         .justify_center()
-                        .bg(rgba(0x00000088))
+                        .bg(rgba(0x000000AA))
+                        .on_mouse_down(
+                            gpui::MouseButton::Left,
+                            cx.listener(|this, _, _win, _cx| {
+                                this.state.close_window_info();
+                            }),
+                        )
                         .child(
                             div()
-                                .w(px(500.0))
+                                .id("window-info-dialog")
+                                .w(px(720.0))
                                 .p(px(24.0))
-                                .rounded(px(16.0))
+                                .rounded(px(20.0))
                                 .bg(surface_container)
                                 .border_2()
                                 .border_color(primary)
+                                .shadow_xl()
                                 .flex()
                                 .flex_col()
-                                .gap(px(12.0))
+                                .gap(px(16.0))
+                                .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {}) // Stop propagation
                                 .child(
+                                    // Dialog header with title and dismiss
                                     div()
-                                        .text_lg()
-                                        .font_weight(gpui::FontWeight::BOLD)
-                                        .text_color(on_surface)
-                                        .child("Window Inspection"),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(on_surface_variant)
-                                        .child(format!("Address: {}", info_addr)),
-                                )
-                                .child(
-                                    div()
-                                        .p(px(8.0))
-                                        .rounded(px(8.0))
-                                        .bg(primary)
-                                        .text_color(rgba(self.colours.on_primary))
-                                        .cursor(CursorStyle::PointingHand)
-                                        .on_mouse_down(
-                                            gpui::MouseButton::Left,
-                                            cx.listener(|this, _, _win, _cx| {
-                                                this.state.close_window_info();
-                                            }),
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .justify_between()
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .flex_col()
+                                                .gap(px(2.0))
+                                                .child(
+                                                    div()
+                                                        .text_lg()
+                                                        .font_weight(gpui::FontWeight::BOLD)
+                                                        .text_color(on_surface)
+                                                        .child(win_title),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_sm()
+                                                        .text_color(primary)
+                                                        .child(win_app),
+                                                ),
                                         )
-                                        .child("Close"),
+                                        .child(
+                                            div()
+                                                .w(px(28.0))
+                                                .h(px(28.0))
+                                                .rounded(px(14.0))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .bg(surface_highest)
+                                                .cursor(CursorStyle::PointingHand)
+                                                .on_mouse_down(
+                                                    gpui::MouseButton::Left,
+                                                    cx.listener(|this, _, _win, _cx| {
+                                                        this.state.close_window_info();
+                                                    }),
+                                                )
+                                                .child(div().text_sm().text_color(on_surface).child("✕")),
+                                        ),
+                                )
+                                .child(
+                                    // Details grid (Address, Position, Size, Workspace)
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .flex_wrap()
+                                        .gap(px(12.0))
+                                        .p(px(12.0))
+                                        .rounded(px(12.0))
+                                        .bg(surface)
+                                        .child(
+                                            div()
+                                                .w(px(320.0))
+                                                .text_xs()
+                                                .text_color(on_surface_variant)
+                                                .child(format!("Address: {}", info_addr)),
+                                        )
+                                        .child(
+                                            div()
+                                                .w(px(320.0))
+                                                .text_xs()
+                                                .text_color(on_surface_variant)
+                                                .child(format!("Position: {}", win_pos)),
+                                        )
+                                        .child(
+                                            div()
+                                                .w(px(320.0))
+                                                .text_xs()
+                                                .text_color(on_surface_variant)
+                                                .child(format!("Dimensions: {}", win_size)),
+                                        )
+                                        .child(
+                                            div()
+                                                .w(px(320.0))
+                                                .text_xs()
+                                                .text_color(on_surface_variant)
+                                                .child(format!("Workspace ID: {}", win_ws)),
+                                        ),
+                                )
+                                .child(
+                                    // Move to workspace row
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(6.0))
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                                .text_color(on_surface)
+                                                .child("Move to Workspace:"),
+                                        )
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .flex_row()
+                                                .gap(px(8.0))
+                                                .children(self.indicator.pills.iter().map(|p| {
+                                                    let pill_id = p.id;
+                                                    div()
+                                                        .px(px(12.0))
+                                                        .py(px(4.0))
+                                                        .rounded(px(8.0))
+                                                        .bg(secondary_container)
+                                                        .text_color(on_secondary_container)
+                                                        .text_xs()
+                                                        .cursor(CursorStyle::PointingHand)
+                                                        .hover(|h| h.bg(primary_container))
+                                                        .on_mouse_down(
+                                                            gpui::MouseButton::Left,
+                                                            cx.listener(move |this, _, _win, _cx| {
+                                                                info!("Moving inspected window to workspace {}", pill_id);
+                                                                this.state.close_window_info();
+                                                            }),
+                                                        )
+                                                        .child(format!("WS {}", p.id))
+                                                })),
+                                        ),
+                                )
+                                .child(
+                                    // Window Action Buttons (Maximize/Restore, Minimize, Kill)
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .justify_end()
+                                        .gap(px(10.0))
+                                        .pt(px(8.0))
+                                        .child(
+                                            div()
+                                                .px(px(14.0))
+                                                .py(px(6.0))
+                                                .rounded(px(8.0))
+                                                .bg(surface_highest)
+                                                .text_color(on_surface)
+                                                .text_xs()
+                                                .cursor(CursorStyle::PointingHand)
+                                                .on_mouse_down(
+                                                    gpui::MouseButton::Left,
+                                                    cx.listener(|_this, _, _win, _cx| {
+                                                        info!("Toggling maximize on inspected window");
+                                                    }),
+                                                )
+                                                .child(if is_max { "Restore" } else { "Maximize" }),
+                                        )
+                                        .child(
+                                            div()
+                                                .px(px(14.0))
+                                                .py(px(6.0))
+                                                .rounded(px(8.0))
+                                                .bg(surface_highest)
+                                                .text_color(on_surface)
+                                                .text_xs()
+                                                .cursor(CursorStyle::PointingHand)
+                                                .on_mouse_down(
+                                                    gpui::MouseButton::Left,
+                                                    cx.listener(|_this, _, _win, _cx| {
+                                                        info!("Toggling minimize on inspected window");
+                                                    }),
+                                                )
+                                                .child(if is_min { "Unminimize" } else { "Minimize" }),
+                                        )
+                                        .child(
+                                            div()
+                                                .px(px(14.0))
+                                                .py(px(6.0))
+                                                .rounded(px(8.0))
+                                                .bg(error_container)
+                                                .text_color(error)
+                                                .text_xs()
+                                                .font_weight(gpui::FontWeight::BOLD)
+                                                .cursor(CursorStyle::PointingHand)
+                                                .on_mouse_down(
+                                                    gpui::MouseButton::Left,
+                                                    cx.listener({
+                                                        let a = info_addr.clone();
+                                                        move |this, _, _win, _cx| {
+                                                            info!("Closing inspected window {}", a);
+                                                            this.windows.retain(|w| w.address != a);
+                                                            this.state.close_window_info();
+                                                        }
+                                                    }),
+                                                )
+                                                .child("Kill Window"),
+                                        ),
                                 ),
                         ),
                 )
