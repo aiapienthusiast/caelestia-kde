@@ -1,0 +1,23 @@
+[Desktop Entry]
+Version=1.5
+Type=Application
+NoDisplay=true
+
+Name=Caelestia Shell
+Icon=caelestia
+
+# Installed to ~/.local/share/applications, overriding any packaged
+# /usr/share/applications/caelestia-shell.desktop.
+#
+# KWin only advertises its privileged Wayland interfaces to clients whose
+# desktop file asks for them: it takes the client's executable (/proc/<pid>/exe),
+# looks for an installed .desktop whose Exec resolves to that same binary, and
+# reads X-KDE-Wayland-Interfaces from it.
+#
+# zkde_screencast_unstable_v1 is what lets the shell ask KWin for a live
+# PipeWire feed of a single window, which is exactly how Plasma's own Task
+# Manager draws its taskbar thumbnails. org_kde_plasma_window_management goes
+# with it for window metadata, and org_kde_plasma_virtual_desktop_management
+# for virtual desktop management.
+Exec=/usr/bin/caelestia-shell
+X-KDE-Wayland-Interfaces=zkde_screencast_unstable_v1,org_kde_plasma_window_management,org_kde_plasma_virtual_desktop_management

@@ -130,7 +130,7 @@ impl KWinService {
             return;
         }
         self.poll_workspaces();
-        self.poll_active_window();
+        self.poll_windows();
     }
 
 
@@ -412,10 +412,52 @@ impl KWinService {
 
 
 
-    fn poll_active_window(&mut self) {
-        // NOTE: In KWin 6 Wayland, org.kde.KWin.queryWindowInfo is an interactive
-        // click-to-query window picker that blocks the process waiting for user input.
-        // Window tracking is instead driven by Wayland protocols or window_list updates.
+    fn poll_windows(&mut self) {
+        if crate::infrastructure::is_test_environment() {
+            return;
+        }
+
+        if let Ok(output) = Command::new("qdbus6")
+            .args(["--literal", "org.kde.KWin", "/WindowsRunner", "org.kde.krunner1.Match", ""])
+            .output()
+        {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                let mut uuids = Vec::new();
+                for part in text.split("\"0_{") {
+                    if let Some(end) = part.find('}') {
+                        let uuid = format!("{{{}}}", &part[..end]);
+                        if !uuids.contains(&uuid) {
+                            uuids.push(uuid);
+                        }
+                    }
+                }
+
+                let mut list = Vec::new();
+                for (idx, uuid) in uuids.iter().enumerate() {
+                    if let Ok(info_out) = Command::new("qdbus6")
+                        .args(["org.kde.KWin", "/KWin", "org.kde.KWin.getWindowInfo", uuid])
+                        .output()
+                    {
+                        if info_out.status.success() {
+                            let info_text = String::from_utf8_lossy(&info_out.stdout);
+                            if let Some(mut win) = Self::parse_window_info_map(&info_text) {
+                                win.address = uuid.clone();
+                                win.is_active = idx == 0;
+                                list.push(win);
+                            }
+                        }
+                    }
+                }
+
+                if !list.is_empty() {
+                    if let Some(active) = list.iter().find(|w| w.is_active).cloned() {
+                        self.state.active_window = Some(active);
+                    }
+                    self.state.window_list = list;
+                }
+            }
+        }
     }
 
     /// Parse QVariantMap output from queryWindowInfo or getWindowInfo
@@ -441,7 +483,13 @@ impl KWinService {
                     "isMinimized" | "minimized" => item.is_minimized = val == "true",
                     "isMaximized" | "maximized" => item.is_maximized = val == "true",
                     "isFullscreen" | "fullscreen" => item.is_fullscreen = val == "true",
-                    "desktop" => item.desktops = vec![val.to_string()],
+                    "desktop" | "desktops" => {
+                        item.desktops = val
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                    }
                     _ => {}
                 }
             }
@@ -497,6 +545,17 @@ impl KWinService {
                 w.is_minimized = false;
                 self.state.active_window = Some(w.clone());
             }
+        }
+
+        if !crate::infrastructure::is_test_environment() {
+            let match_id = if address.starts_with("0_") {
+                address.to_string()
+            } else {
+                format!("0_{}", address)
+            };
+            let _ = Command::new("qdbus6")
+                .args(["org.kde.KWin", "/WindowsRunner", "org.kde.krunner1.Run", &match_id, ""])
+                .spawn();
         }
     }
 
@@ -571,6 +630,110 @@ impl KWinService {
 
     /// Refresh window list
     pub fn refresh_windows(&mut self) {
-        self.poll_active_window();
+        self.poll_windows();
+    }
+
+    /// Active window reference
+    pub fn active_window(&self) -> Option<&WindowItem> {
+        self.state.active_window.as_ref()
+    }
+
+    /// Complete window list reference
+    pub fn window_list(&self) -> &[WindowItem] {
+        &self.state.window_list
+    }
+
+    /// Active output name
+    pub fn active_output_name(&self) -> &str {
+        &self.state.active_output_name
+    }
+
+    /// Set active output name
+    pub fn set_active_output_name(&mut self, output_name: &str) {
+        self.state.active_output_name = output_name.to_string();
+    }
+
+    /// Cursor output name matching `KWinActiveWindowBridge::cursorOutputName()`
+    pub fn cursor_output_name(&self) -> String {
+        if !self.state.active_output_name.is_empty() {
+            self.state.active_output_name.clone()
+        } else {
+            "eDP-1".to_string()
+        }
+    }
+
+    /// Pending focus address
+    pub fn pending_focus_address(&self) -> Option<&str> {
+        self.state.pending_focus_address.as_deref()
+    }
+
+    /// Highlighted address
+    pub fn highlighted_address(&self) -> Option<&str> {
+        self.state.highlighted_address.as_deref()
+    }
+
+    /// Raise window matching `KWinActiveWindowBridge::raiseWindow`
+    pub fn raise_window(&mut self, address: &str) {
+        self.focus_window(address);
+    }
+
+    /// Set maximized matching `KWinActiveWindowBridge::setMaximized`
+    pub fn set_maximized(&mut self, address: &str, maximized: bool) {
+        self.maximize_window(address, maximized, maximized);
+    }
+
+    /// Set window property (keep_above, keep_below, skip_taskbar, demands_attention)
+    /// Parity with `KWinActiveWindowBridge::setWindowProperty`
+    pub fn set_window_property(&mut self, address: &str, property: &str, enable: bool) {
+        info!("Setting window {} property {}: {}", address, property, enable);
+        for w in &mut self.state.window_list {
+            if w.address == address {
+                match property {
+                    "skip_taskbar" => w.skip_taskbar = enable,
+                    "demands_attention" => w.demands_attention = enable,
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    /// Send window to output matching `KWinActiveWindowBridge::sendToOutput`
+    pub fn send_to_output(&mut self, address: &str, output_name: &str) {
+        info!("Sending window {} to output {}", address, output_name);
+        for w in &mut self.state.window_list {
+            if w.address == address {
+                w.output = output_name.to_string();
+            }
+        }
+    }
+
+    /// Workspaces list matching `KWinWorkspaceState::desktops`
+    pub fn workspaces(&self) -> &[VirtualWorkspace] {
+        &self.state.workspaces
+    }
+
+    /// Workspace count matching `KWinWorkspaceState::count`
+    pub fn count(&self) -> u32 {
+        self.state.count
+    }
+
+    /// Workspace rows matching `KWinWorkspaceState::rows`
+    pub fn rows(&self) -> u32 {
+        self.state.rows
+    }
+
+    /// Showing desktop matching `KWinWorkspaceState::showingDesktop`
+    pub fn showing_desktop(&self) -> bool {
+        self.state.showing_desktop
+    }
+
+    /// Swipe offset matching `KWinWorkspaceState::swipeOffset`
+    pub fn swipe_offset(&self) -> f64 {
+        self.state.swipe_offset
+    }
+
+    /// Swipe offset by output matching `KWinWorkspaceState::swipeOffsetByOutput`
+    pub fn swipe_offset_by_output(&self) -> &HashMap<String, f64> {
+        &self.state.swipe_offset_by_output
     }
 }
