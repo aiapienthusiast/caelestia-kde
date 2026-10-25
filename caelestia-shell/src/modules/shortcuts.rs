@@ -2,10 +2,11 @@
 //! Achieves 100% parity with `shell/modules/Shortcuts.qml` and Krohnkite integration.
 
 use crate::modules::drawers::ContentWindowCoordinator;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// KWin Krohnkite tiling shortcuts registered in KGlobalAccel
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum KrohnkiteAction {
     FocusUp,
     FocusDown,
@@ -104,7 +105,7 @@ impl KrohnkiteAction {
 }
 
 /// Shell shortcut actions
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ShellShortcutAction {
     Nexus,
     NexusBack,
@@ -124,7 +125,7 @@ pub enum ShellShortcutAction {
 }
 
 /// Metadata description of a shortcut
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShortcutDefinition {
     pub name: String,
     pub description: String,
@@ -340,5 +341,36 @@ impl ShortcutManager {
             }
             _ => {}
         }
+    }
+}
+
+/// Convenience high-level summary module
+#[derive(Debug, Clone, Default)]
+pub struct GlobalShortcutsModule {
+    manager: ShortcutManager,
+}
+
+impl GlobalShortcutsModule {
+    pub fn new() -> Self {
+        Self {
+            manager: ShortcutManager::new(),
+        }
+    }
+
+    pub fn manager(&self) -> &ShortcutManager {
+        &self.manager
+    }
+
+    pub fn find_by_action(&self, action: &str) -> Option<ShortcutDefinition> {
+        let act = match action {
+            "caelestia-toggle-launcher" => ShellShortcutAction::Launcher,
+            "caelestia-toggle-overview" => ShellShortcutAction::Overview,
+            "caelestia-toggle-dashboard" => ShellShortcutAction::Dashboard,
+            "caelestia-toggle-session" => ShellShortcutAction::Session,
+            "KrohnkiteFocusUp" => ShellShortcutAction::Krohnkite(KrohnkiteAction::FocusUp),
+            _ => return None,
+        };
+
+        self.manager.shortcuts.iter().find(|s| s.action == act).cloned()
     }
 }

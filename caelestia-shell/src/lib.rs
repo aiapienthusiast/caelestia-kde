@@ -5,4 +5,5 @@ pub mod domain;
 pub mod infrastructure;
 pub mod modules;
 pub mod services;
-pub mod shortcuts;
+pub use modules::shortcuts;
+
