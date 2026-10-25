@@ -1,3 +1,4 @@
+pub mod bar;
 pub mod dashboard;
 pub mod drawers;
 pub mod launcher;
