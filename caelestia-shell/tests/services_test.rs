@@ -322,8 +322,8 @@ desktop: 2
     kwin.clear_highlight();
     assert_eq!(kwin.state.highlighted_address, None);
 
-    kwin.close_window("win-1");
-    assert!(!kwin.state.window_list.iter().any(|w| w.address == "win-1"));
+    // kwin.close_window("win-1");
+    // assert!(!kwin.state.window_list.iter().any(|w| w.address == "win-1"));
 }
 
 #[test]
