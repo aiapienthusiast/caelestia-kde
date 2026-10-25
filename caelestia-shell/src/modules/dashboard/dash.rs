@@ -9,16 +9,41 @@ use crate::infrastructure::sysinfo::SystemInfo;
 use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::weather::WeatherData;
 use chrono::Local;
-use gpui::{div, prelude::*, px, rgba, CursorStyle, Div, Styled};
+use gpui::{div, prelude::*, px, rgba, CursorStyle, Div, MouseButton, Styled};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct QuickActionsState {
+    pub wifi_active: bool,
+    pub bluetooth_active: bool,
+    pub night_active: bool,
+    pub notifs_active: bool,
+}
+
+impl Default for QuickActionsState {
+    fn default() -> Self {
+        Self {
+            wifi_active: true,
+            bluetooth_active: true,
+            night_active: false,
+            notifs_active: true,
+        }
+    }
+}
 
 pub struct DashView;
 
 impl DashView {
-    pub fn render(
+    pub fn render<V: 'static>(
         weather: &WeatherData,
         sysinfo: &SystemInfo,
         paths: &CaelestiaPaths,
+        quick_state: QuickActionsState,
         colours: &CaelestiaColours,
+        cx: &mut gpui::Context<V>,
+        on_toggle_wifi: impl Fn(&mut V, &mut gpui::Context<V>) + 'static + Copy,
+        on_toggle_bluetooth: impl Fn(&mut V, &mut gpui::Context<V>) + 'static + Copy,
+        on_toggle_night: impl Fn(&mut V, &mut gpui::Context<V>) + 'static + Copy,
+        on_toggle_notifs: impl Fn(&mut V, &mut gpui::Context<V>) + 'static + Copy,
     ) -> Div {
         let now = Local::now();
         let time_str = now.format("%H:%M").to_string();
@@ -47,7 +72,15 @@ impl DashView {
                     .gap(px(16.0))
                     .w_full()
                     .child(Self::render_weather_card(weather, colours))
-                    .child(Self::render_quick_actions(colours)),
+                    .child(Self::render_quick_actions(
+                        quick_state,
+                        colours,
+                        cx,
+                        on_toggle_wifi,
+                        on_toggle_bluetooth,
+                        on_toggle_night,
+                        on_toggle_notifs,
+                    )),
             )
     }
 
@@ -191,7 +224,15 @@ impl DashView {
             )
     }
 
-    fn render_quick_actions(c: &CaelestiaColours) -> Div {
+    fn render_quick_actions<V: 'static>(
+        state: QuickActionsState,
+        c: &CaelestiaColours,
+        cx: &mut gpui::Context<V>,
+        on_toggle_wifi: impl Fn(&mut V, &mut gpui::Context<V>) + 'static + Copy,
+        on_toggle_bluetooth: impl Fn(&mut V, &mut gpui::Context<V>) + 'static + Copy,
+        on_toggle_night: impl Fn(&mut V, &mut gpui::Context<V>) + 'static + Copy,
+        on_toggle_notifs: impl Fn(&mut V, &mut gpui::Context<V>) + 'static + Copy,
+    ) -> Div {
         div()
             .w(px(260.0))
             .p(px(16.0))
@@ -201,13 +242,20 @@ impl DashView {
             .border_color(rgba(c.outline_variant))
             .flex()
             .gap(px(12.0))
-            .child(Self::quick_tile("wifi", "Wi-Fi", true, c))
-            .child(Self::quick_tile("bluetooth", "Bluetooth", true, c))
-            .child(Self::quick_tile("bedtime", "Night", false, c))
-            .child(Self::quick_tile("notifications", "Notifs", true, c))
+            .child(Self::quick_tile("wifi", "Wi-Fi", state.wifi_active, c, cx, on_toggle_wifi))
+            .child(Self::quick_tile("bluetooth", "Bluetooth", state.bluetooth_active, c, cx, on_toggle_bluetooth))
+            .child(Self::quick_tile("bedtime", "Night", state.night_active, c, cx, on_toggle_night))
+            .child(Self::quick_tile("notifications", "Notifs", state.notifs_active, c, cx, on_toggle_notifs))
     }
 
-    fn quick_tile(icon: &'static str, label: &'static str, active: bool, c: &CaelestiaColours) -> Div {
+    fn quick_tile<V: 'static>(
+        icon: &'static str,
+        label: &'static str,
+        active: bool,
+        c: &CaelestiaColours,
+        cx: &mut gpui::Context<V>,
+        on_click: impl Fn(&mut V, &mut gpui::Context<V>) + 'static + Copy,
+    ) -> Div {
         let bg_color = if active {
             rgba(c.primary)
         } else {
@@ -230,6 +278,12 @@ impl DashView {
             .rounded(px(12.0))
             .bg(bg_color)
             .cursor(CursorStyle::PointingHand)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |view, _, _, cx| {
+                    on_click(view, cx);
+                }),
+            )
             .child(MaterialIcon::new(icon).color(icon_color).icon_size(20.0))
             .child(
                 StyledText::new(label)
@@ -239,3 +293,4 @@ impl DashView {
             )
     }
 }
+

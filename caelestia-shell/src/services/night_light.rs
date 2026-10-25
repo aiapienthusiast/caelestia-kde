@@ -1,0 +1,105 @@
+//! Night Light Service
+//! Parity with `nightcolorbridge.cpp` and `shell/services/HyprSunset.qml`.
+//! Manages KDE KWin Night Light colour temperature and active state via D-Bus.
+
+use std::process::Command;
+use tracing::info;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NightLightState {
+    pub enabled: bool,
+    pub running: bool,
+    pub current_temperature: u32,
+    pub target_temperature: u32,
+}
+
+impl Default for NightLightState {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            running: false,
+            current_temperature: 6500,
+            target_temperature: 4500,
+        }
+    }
+}
+
+pub struct NightLightService {
+    pub state: NightLightState,
+}
+
+impl NightLightService {
+    pub fn new() -> Self {
+        let mut service = Self {
+            state: NightLightState::default(),
+        };
+        service.poll();
+        service
+    }
+
+    /// Refresh Night Light properties from KWin D-Bus
+    pub fn poll(&mut self) {
+        if let Ok(output) = Command::new("qdbus6")
+            .args(["org.kde.KWin", "/org/kde/KWin/NightLight", "org.kde.KWin.NightLight.running"])
+            .output()
+        {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                self.state.running = text.trim() == "true";
+            }
+        }
+
+        if let Ok(output) = Command::new("qdbus6")
+            .args(["org.kde.KWin", "/org/kde/KWin/NightLight", "org.kde.KWin.NightLight.enabled"])
+            .output()
+        {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                self.state.enabled = text.trim() == "true";
+            }
+        }
+
+        if let Ok(output) = Command::new("qdbus6")
+            .args(["org.kde.KWin", "/org/kde/KWin/NightLight", "org.kde.KWin.NightLight.currentTemperature"])
+            .output()
+        {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                if let Ok(temp) = text.trim().parse::<u32>() {
+                    self.state.current_temperature = temp;
+                }
+            }
+        }
+    }
+
+    /// Toggle Night Light active state
+    pub fn toggle(&mut self) {
+        self.state.running = !self.state.running;
+        info!("Toggling Night Light active state to: {}", self.state.running);
+
+        let target_temp = if self.state.running {
+            self.state.target_temperature
+        } else {
+            6500
+        };
+
+        if self.state.running {
+            let _ = Command::new("qdbus6")
+                .args(["org.kde.KWin", "/org/kde/KWin/NightLight", "org.kde.KWin.NightLight.preview", &target_temp.to_string()])
+                .spawn();
+        } else {
+            let _ = Command::new("qdbus6")
+                .args(["org.kde.KWin", "/org/kde/KWin/NightLight", "org.kde.KWin.NightLight.stopPreview"])
+                .spawn();
+        }
+    }
+
+    /// Set manual temperature preview
+    pub fn set_temperature(&mut self, temp: u32) {
+        let clamped = temp.clamp(1000, 10000);
+        self.state.current_temperature = clamped;
+        let _ = Command::new("qdbus6")
+            .args(["org.kde.KWin", "/org/kde/KWin/NightLight", "org.kde.KWin.NightLight.preview", &clamped.to_string()])
+            .spawn();
+    }
+}

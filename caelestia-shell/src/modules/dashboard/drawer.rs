@@ -2,7 +2,7 @@
 //! Parity with `shell/modules/drawers/ContentWindow.qml` and `shell/modules/dashboard/Content.qml`.
 //! Hosts the complete Caelestia Dashboard with KWin frosted blur, tabs, and live services.
 
-use super::dash::DashView;
+use super::dash::{DashView, QuickActionsState};
 use super::media::MediaView;
 use super::performance::PerformanceView;
 use super::tabs::{DashboardTab, DashboardTabs};
@@ -11,7 +11,11 @@ use crate::domain::tokens::*;
 use crate::infrastructure::paths::CaelestiaPaths;
 use crate::infrastructure::sysinfo::SystemInfo;
 use crate::infrastructure::theme::CaelestiaColours;
+use crate::services::bluetooth::BluetoothService;
 use crate::services::mpris::MprisService;
+use crate::services::network::NetworkService;
+use crate::services::night_light::NightLightService;
+use crate::services::notifications::NotificationsService;
 use crate::services::system_monitor::SystemMonitorService;
 use crate::services::weather::WeatherService;
 use gpui::{
@@ -29,10 +33,15 @@ pub struct DashboardDrawer {
     pub monitor: SystemMonitorService,
     pub weather: WeatherService,
     pub mpris: MprisService,
+    pub network: NetworkService,
+    pub bluetooth: BluetoothService,
+    pub night_light: NightLightService,
+    pub notifications: NotificationsService,
     pub is_open: bool,
     open_progress: f32,
     anim_phase: f32,
     last_monitor_tick: Instant,
+    last_quick_sync: Instant,
     last_scheme_check: Instant,
     last_scheme_mtime: Option<SystemTime>,
 }
@@ -46,6 +55,10 @@ impl DashboardDrawer {
         let monitor = SystemMonitorService::new();
         let weather = WeatherService::load();
         let mpris = MprisService::new();
+        let network = NetworkService::new();
+        let bluetooth = BluetoothService::new();
+        let night_light = NightLightService::new();
+        let notifications = NotificationsService::new();
 
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let scheme_path = format!("{}/.local/state/caelestia/scheme.json", home);
@@ -76,10 +89,15 @@ impl DashboardDrawer {
             monitor,
             weather,
             mpris,
+            network,
+            bluetooth,
+            night_light,
+            notifications,
             is_open,
             open_progress: if is_open { 1.0 } else { 0.0 },
             anim_phase: 0.0,
             last_monitor_tick: Instant::now(),
+            last_quick_sync: Instant::now(),
             last_scheme_check: Instant::now(),
             last_scheme_mtime,
         }
@@ -97,6 +115,14 @@ impl DashboardDrawer {
             self.last_monitor_tick = Instant::now();
             self.monitor.refresh();
             self.mpris.poll_playerctl();
+        }
+
+        // Refresh network and bluetooth status every 3 seconds
+        if self.last_quick_sync.elapsed() > Duration::from_millis(3000) {
+            self.last_quick_sync = Instant::now();
+            self.network.poll();
+            self.bluetooth.poll();
+            self.night_light.poll();
         }
 
         // Hot-reload scheme.json
@@ -165,7 +191,36 @@ impl Render for DashboardDrawer {
 
         let content = match current_tab {
             DashboardTab::Dashboard => {
-                DashView::render(&self.weather.data, &self.sysinfo, &self.paths, c)
+                let quick_state = QuickActionsState {
+                    wifi_active: self.network.state.wifi_enabled,
+                    bluetooth_active: self.bluetooth.state.powered,
+                    night_active: self.night_light.state.running,
+                    notifs_active: !self.notifications.state.dnd,
+                };
+                DashView::render(
+                    &self.weather.data,
+                    &self.sysinfo,
+                    &self.paths,
+                    quick_state,
+                    c,
+                    cx,
+                    |dash: &mut DashboardDrawer, cx| {
+                        dash.network.toggle_wifi();
+                        cx.notify();
+                    },
+                    |dash: &mut DashboardDrawer, cx| {
+                        dash.bluetooth.toggle_power();
+                        cx.notify();
+                    },
+                    |dash: &mut DashboardDrawer, cx| {
+                        dash.night_light.toggle();
+                        cx.notify();
+                    },
+                    |dash: &mut DashboardDrawer, cx| {
+                        dash.notifications.toggle_dnd();
+                        cx.notify();
+                    },
+                )
             }
             DashboardTab::Media => MediaView::render(&self.mpris, self.anim_phase, c, cx),
             DashboardTab::Performance => PerformanceView::render(&self.monitor, c),

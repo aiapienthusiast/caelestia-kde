@@ -1,4 +1,11 @@
+pub mod audio;
+pub mod bluetooth;
+pub mod brightness;
+pub mod kwin;
 pub mod mpris;
+pub mod network;
+pub mod night_light;
+pub mod notifications;
 pub mod session;
 pub mod system_monitor;
 pub mod weather;
