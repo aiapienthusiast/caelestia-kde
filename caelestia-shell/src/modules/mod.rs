@@ -2,5 +2,6 @@ pub mod dashboard;
 pub mod drawers;
 pub mod launcher;
 pub mod nexus;
+pub mod notifications;
 pub mod osd;
 pub mod session;
