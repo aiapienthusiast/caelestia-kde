@@ -4,6 +4,7 @@
 use super::wrapper::PopoutWrapper;
 use crate::components::controls::list_row::ListRow;
 use crate::components::controls::toggle_row::ToggleRow;
+use crate::components::widgets::extra_indicator::ExtraIndicatorView;
 use crate::domain::tokens::*;
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{div, prelude::*, px, Div, Styled};
@@ -16,6 +17,21 @@ impl NotificationsPopout {
             .flex()
             .flex_col()
             .gap(px(SPACING_SMALL))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::BOLD)
+                            .text_color(gpui::rgba(c.on_surface))
+                            .child("Active Alerts"),
+                    )
+                    .child(ExtraIndicatorView::new(3)),
+            )
             .child(ToggleRow::render(
                 "Do Not Disturb",
                 Some("Silence banner alerts"),

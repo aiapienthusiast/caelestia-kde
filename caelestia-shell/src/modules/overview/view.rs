@@ -13,6 +13,7 @@ use super::config::OverviewConfig;
 use super::indicator::WorkspaceIndicatorModel;
 use super::layout::{calculate_layout, WindowRect};
 use super::state::OverviewState;
+use crate::components::images::window_preview::{WindowPreviewView, WindowStreamState};
 use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::kwin::WindowItem;
 use gpui::{
@@ -368,20 +369,16 @@ impl Render for OverviewView {
                                     ),
                             )
                             .child(
-                                // Window thumbnail / preview placeholder body
+                                // Live Window screencast stream preview / fallback
                                 div()
                                     .flex_1()
                                     .w_full()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
+                                    .overflow_hidden()
                                     .bg(surface)
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(on_surface_variant)
-                                            .child(win.app_id.clone()),
-                                    ),
+                                    .child(WindowPreviewView::new(
+                                        WindowStreamState::new(&win.address)
+                                            .with_fallback_icon(&win.app_id),
+                                    )),
                             )
                     })),
             )
