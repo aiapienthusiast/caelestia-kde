@@ -1,14 +1,14 @@
 //! OsIcon Widget
 //! Parity with `shell/modules/bar/components/OsIcon.qml`.
 
-use crate::components::styled_text::StyledTextExt;
+use crate::components::logo::Logo;
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{div, prelude::*, px, rgba, CursorStyle, Div, Styled};
 
 pub struct OsIconWidget;
 
 impl OsIconWidget {
-    /// Renders the start menu / OS logo pill button.
+    /// Renders the start menu / OS logo pill button with Caelestia Logo.
     pub fn render(c: &CaelestiaColours) -> Div {
         div()
             .w(px(32.0))
@@ -20,6 +20,10 @@ impl OsIconWidget {
             .items_center()
             .justify_center()
             .cursor(CursorStyle::PointingHand)
-            .child(StyledTextExt::icon_size(div().child("auto_awesome"), 16.0))
+            .child(
+                Logo::new()
+                    .with_size(20.0, 14.0)
+                    .with_colors(rgba(c.on_primary), rgba(c.on_primary)),
+            )
     }
 }
