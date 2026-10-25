@@ -109,7 +109,7 @@ impl Render for UtilitiesView {
                     .flex()
                     .flex_col()
                     .gap(px(16.0))
-                    .overflow_y_scroll()
+                    .overflow_hidden()
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {}) // Stop propagation
                     .child(
                         // Drawer header

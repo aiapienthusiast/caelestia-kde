@@ -6,5 +6,7 @@ pub mod nexus;
 pub mod notifications;
 pub mod osd;
 pub mod overview;
+pub mod screenshot;
 pub mod session;
+pub mod sidebar;
 pub mod utilities;
