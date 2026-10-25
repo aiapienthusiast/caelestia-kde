@@ -406,7 +406,13 @@ impl KWinService {
     /// Matches `KWinActiveWindowBridge::windowsForWorkspace(targetId, includeOnAllWorkspaces)`
     pub fn windows_for_workspace(&self, desktop_id: i32, include_on_all_workspaces: bool) -> Vec<WindowItem> {
         let target_str = desktop_id.to_string();
+        let target_str_alt = (desktop_id + 1).to_string();
         let target_uuid = self.uuid_for_index(desktop_id as usize).unwrap_or_default();
+        let target_uuid_alt = if desktop_id > 0 {
+            self.uuid_for_index((desktop_id - 1) as usize).unwrap_or_default()
+        } else {
+            String::new()
+        };
 
         self.state
             .window_list
@@ -415,7 +421,10 @@ impl KWinService {
                 if include_on_all_workspaces && (w.desktops.is_empty() || w.desktops.contains(&"-1".to_string())) {
                     return true;
                 }
-                w.desktops.contains(&target_str) || (!target_uuid.is_empty() && w.desktops.contains(&target_uuid))
+                w.desktops.contains(&target_str)
+                    || w.desktops.contains(&target_str_alt)
+                    || (!target_uuid.is_empty() && w.desktops.contains(&target_uuid))
+                    || (!target_uuid_alt.is_empty() && w.desktops.contains(&target_uuid_alt))
             })
             .cloned()
             .collect()

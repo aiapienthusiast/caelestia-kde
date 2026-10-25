@@ -5,4 +5,5 @@ pub mod launcher;
 pub mod nexus;
 pub mod notifications;
 pub mod osd;
+pub mod overview;
 pub mod session;
