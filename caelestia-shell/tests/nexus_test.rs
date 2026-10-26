@@ -210,3 +210,22 @@ fn test_nexus_appearance_function_calls_and_toggles() {
         assert_eq!(config.rounding_scale(), sc);
     }
 }
+
+#[test]
+fn test_all_nexus_pages_instantiation() {
+    use caelestia_shell::infrastructure::theme::CaelestiaColours;
+    use caelestia_shell::modules::nexus::pages::*;
+
+    let c = CaelestiaColours::default();
+    let _ = AboutPage::render(&c);
+    let _ = DesktopPage::render(&c);
+    let _ = PanelsPage::render(&c);
+    let _ = NetworkPage::render(&c);
+    let _ = BluetoothPage::render(&c);
+    let _ = DisplayPage::render(&c);
+    let _ = AudioPage::render(&c);
+    let _ = PowerPage::render(&c);
+    let _ = AppsPage::render(&c);
+    let _ = ServicesPage::render(&c);
+}
+

@@ -9,7 +9,9 @@
 
 pub mod capture;
 pub mod config;
+pub mod gallery;
 pub mod idle_inhibit;
+pub mod modals;
 pub mod quick_share;
 pub mod state;
 pub mod toggles;
@@ -17,8 +19,11 @@ pub mod view;
 
 pub use capture::{CaptureCardModel, CaptureItem, CaptureMode};
 pub use config::{QuickToggleItem, UtilitiesConfig};
+pub use gallery::{CaptureGalleryModel, GalleryItemDef};
 pub use idle_inhibit::{IdleInhibitState, IdleInhibitor};
+pub use modals::{ModalActionType, ModalDialogModel};
 pub use quick_share::{NearbyDevice, QuickShareModel, QuickShareTransfer};
 pub use state::UtilitiesState;
 pub use toggles::QuickTogglesModel;
 pub use view::UtilitiesView;
+

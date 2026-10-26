@@ -1,6 +1,7 @@
 //! Nexus Control Center & Settings Drawer.
 //! Parity with `shell/modules/nexus/`.
 
+pub mod common;
 pub mod drawer;
 pub mod nav_pane;
 pub mod pages;

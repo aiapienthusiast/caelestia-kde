@@ -1,3 +1,4 @@
+pub mod api;
 pub mod audio;
 pub mod bluetooth;
 pub mod brightness;
@@ -35,4 +36,5 @@ pub mod vpn;
 pub mod wallpaper_service;
 pub mod weather;
 
+pub use api::CaelestiaApi;
 pub use global_shortcut::{GlobalShortcutDispatcher, RegisteredShortcut, StolenShortcut};

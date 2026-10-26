@@ -188,6 +188,13 @@ impl Render for NexusDrawer {
             0 => AppearancePage::render(&self.config, c, cx),
             1 => DesktopPage::render(c),
             2 => PanelsPage::render(c),
+            3 => NetworkPage::render(c),
+            4 => BluetoothPage::render(c),
+            5 => DisplayPage::render(c),
+            6 => AudioPage::render(c),
+            7 => PowerPage::render(c),
+            8 => AppsPage::render(c),
+            9 => ServicesPage::render(c),
             10 => AboutPage::render(c),
             _ => AppearancePage::render(&self.config, c, cx),
         };
