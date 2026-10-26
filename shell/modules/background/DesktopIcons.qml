@@ -976,6 +976,17 @@ Item {
         DesktopLayout.addWidgetRequested(screenData.name, gridItem.x + gridItem.width / 2, gridItem.y + gridItem.height / 2);
     }
 
+    /// Opens the settings of one widget, anchored to its card so the panel lands on
+    /// the widget rather than in the middle of the screen.
+    function openWidgetSettings(key: string): void {
+        if (!isWidgetKey(key))
+            return;
+        const tile = tiles[key];
+        const x = gridItem.x + (tile ? tile.x + tile.width : gridItem.width / 2);
+        const y = gridItem.y + (tile ? tile.y : gridItem.height / 2);
+        DesktopLayout.widgetSettingsRequested(screenData.name, x, y, nameOf(key));
+    }
+
     function removeWidgets(keys: var): void {
         const widgets = Object.assign({}, DesktopLayout.widgets);
         const positions = Object.assign({}, DesktopLayout.positions);
@@ -1008,6 +1019,14 @@ Item {
                 closeGroup();
             else
                 WidgetEditor.close();
+        } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            // The way in without the mouse: pick a widget in the editor and open its
+            // settings, the same panel the gear opens.
+            const picked = selectedKeys().filter(isWidgetKey);
+            if (picked.length === 1)
+                openWidgetSettings(picked[0]);
+            else
+                return false;
         } else if (ctrl && event.key === Qt.Key_A) {
             setSelection(Engine.orderedKeys(contextPositions(), rows).filter(isWidgetKey));
         } else if (ctrl && event.key === Qt.Key_C) {
@@ -1943,6 +1962,7 @@ wl-paste --no-newline --type text/uri-list`]
                 onDoubleClicked: mouse => root.tileDoubleClicked(key, mouse)
                 onContextMenuRequested: (x, y) => root.tileContextMenu(key, x, y)
                 onDragRequested: root.beginDrag(key)
+                onSettingsRequested: root.openWidgetSettings(key)
 
                 Behavior on x {
                     Anim {}

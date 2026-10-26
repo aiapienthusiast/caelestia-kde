@@ -30,7 +30,15 @@ Item {
             h: Math.max(1, Math.min(raw.h, controller.rows))
         };
     }
-    readonly property bool frameless: !isGroup && (info.frameless === true || config.frameless === true)
+    readonly property bool frameless: !isGroup && (info.frameless === true || config.frameless === true || config.background === false)
+    // The card's look, which any widget can override. An unset key falls back to the
+    // theme's value, so the desktop keeps one look until someone changes one widget.
+    readonly property real defaultBackgroundOpacity: controller.widgetCatalog?.defaultBackgroundOpacity ?? 0.4
+    readonly property real backgroundOpacity: typeof config.backgroundOpacity === "number" ? Math.max(0, Math.min(1, config.backgroundOpacity)) : root.defaultBackgroundOpacity
+    readonly property real backgroundRadius: typeof config.backgroundRadius === "number" ? Math.max(0, config.backgroundRadius) : (controller.widgetCatalog?.defaultBackgroundRadius ?? Tokens.rounding.extraLarge)
+    // A widget may step out of the way when it has nothing to show (no track playing).
+    // Editing still shows it, or it could never be brought back.
+    readonly property bool hiddenByContent: !widgetEditMode && content?.wantsHidden === true
     // Locked widgets cannot be dragged or resized from the desktop.
     readonly property bool locked: !isGroup && widget?.locked === true
     // Keeps the outline on every widget while the option is on, so that one that
@@ -74,6 +82,7 @@ Item {
     signal doubleClicked(var mouse)
     signal contextMenuRequested(real x, real y)
     signal dragRequested(real x, real y)
+    signal settingsRequested
 
     function setConfig(patch: var): void {
         if (!isGroup)
@@ -98,11 +107,18 @@ Item {
         return true;
     }
 
-    opacity: (dimmed ? 0.4 : 1) * appear
+    opacity: (dimmed ? 0.4 : 1) * appear * (hiddenByContent ? 0 : 1)
     scale: (0.9 + 0.1 * appear) * (mergeTarget ? 1.02 : 1)
+    enabled: !hiddenByContent
     Component.onCompleted: appear = 1
 
     Behavior on appear {
+        Anim {
+            type: Anim.DefaultEffects
+        }
+    }
+
+    Behavior on opacity {
         Anim {
             type: Anim.DefaultEffects
         }
@@ -152,8 +168,8 @@ Item {
         anchors.rightMargin: root.frameless ? 0 : root.sideGap
         anchors.topMargin: root.frameless ? 0 : root.topGap
         anchors.bottomMargin: root.frameless ? 0 : root.labelHeight
-        radius: root.frameless ? Tokens.rounding.medium : Tokens.rounding.extraLarge
-        color: root.frameless ? "transparent" : (GlobalConfig.appearance.pitchBlack ? Qt.alpha("#000000", 0.7) : Qt.alpha(Colours.palette.m3surfaceContainer, 0.4))
+        radius: root.frameless ? Tokens.rounding.medium : root.backgroundRadius
+        color: root.frameless ? "transparent" : Qt.alpha(GlobalConfig.appearance.pitchBlack ? "#000000" : Colours.palette.m3surfaceContainer, root.backgroundOpacity)
         border.width: root.selected || root.mergeTarget || root.focusVisible ? 2 : (root.frameless ? 0 : 1)
         border.color: root.selected || root.mergeTarget || root.focusVisible ? Qt.darker(Colours.palette.m3primary, 1.45) : Qt.alpha(Colours.palette.m3onSurface, 0.12)
 
@@ -277,6 +293,36 @@ Item {
                     font: Tokens.font.label.small
                     color: Colours.palette.m3onSurfaceVariant
                 }
+            }
+        }
+
+        // Edit mode: a way into this widget's settings without leaving the mode. It sits
+        // inside the corner grip's reach, or the press would start a resize instead.
+        StyledRect {
+            id: settingsButton
+
+            visible: root.widgetEditMode && !root.isGroup
+            anchors.top: card.top
+            anchors.right: card.right
+            anchors.margins: root.gripCorner + Tokens.padding.extraSmall
+            implicitWidth: Math.round(Tokens.padding.extraLargeIncreased * 1.15)
+            implicitHeight: implicitWidth
+            radius: Tokens.rounding.full
+            color: Qt.alpha(Colours.palette.m3surfaceContainerHighest, 0.92)
+            border.width: 1
+            border.color: Qt.alpha(Colours.palette.m3outline, 0.3)
+            z: 3
+
+            MaterialIcon {
+                anchors.centerIn: parent
+                text: "tune"
+                color: Colours.palette.m3onSurface
+                fontStyle: Tokens.font.icon.small
+            }
+
+            StateLayer {
+                radius: parent.radius
+                onClicked: root.settingsRequested()
             }
         }
     }

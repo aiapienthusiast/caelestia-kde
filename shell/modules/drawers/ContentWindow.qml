@@ -761,6 +761,11 @@ StyledWindow {
                 }
             }
 
+            function onWidgetSettingsRequested(screenName: string, x: real, y: real, id: string): void {
+                if (root.screen.name === screenName)
+                    widgetSettings.openAt(x, y, id);
+            }
+
             target: DesktopLayout
         }
         Item {
@@ -793,6 +798,12 @@ StyledWindow {
         }
         WidgetGallery {
             id: widgetGallery
+
+            controller: DesktopLayout.controllerFor(root.screen.name)
+            z: 10000
+        }
+        WidgetSettings {
+            id: widgetSettings
 
             controller: DesktopLayout.controllerFor(root.screen.name)
             z: 10000
