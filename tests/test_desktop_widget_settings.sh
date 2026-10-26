@@ -68,6 +68,10 @@ test_a_reset_replaces_the_config_instead_of_merging_it() {
     assert_contains "$body" 'config: {}' "a reset must drop every key that was ever written"
     assert_not_contains "$body" 'w.config' "a merge would keep exactly the keys a reset is meant to remove"
     assert_contains "$body" 'setWidgets(next)' "the reset must still be saved like any other change"
+    # A widget whose config a reset empties must fall back to what its type ships with,
+    # or resetting Folder View would leave it pointing at no folder at all.
+    assert_file_contains "$WIDGETS/FolderWidget.qml" 'frame?.info?.config?.path' "the folder must fall back to its type's default, not to nothing"
+    assert_file_contains "$CATALOG" 'config: { path: Paths.home + "/Downloads" }' "that default must be the one the catalogue names"
 }
 
 test_the_form_starts_afresh_for_each_opening() {
