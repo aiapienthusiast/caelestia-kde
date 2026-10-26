@@ -39,7 +39,7 @@ StyledWindow {
     // active workspace changes — hasFullscreenOn() filters by workspace, but
     // a plain function call only re-runs when its direct property deps change.
     readonly property bool actualFullscreen: (Kwin.activeWsId, Kwin.hasFullscreenOn(screen?.name ?? ""))
-    readonly property bool transientOverlayOpen: panels.popouts.isDetached || panels.popouts.isContextPopout || desktopContextMenu.expanded || desktopIconContextMenu.expanded || dropMenu.expanded || viewOptions.open || widgetGallery.open || visibilities.overview || Visibilities.launcherOpen || visibilities.dashboard || visibilities.session || visibilities.utilities
+    readonly property bool transientOverlayOpen: panels.popouts.isDetached || panels.popouts.isContextPopout || desktopContextMenu.expanded || desktopIconContextMenu.expanded || dropMenu.expanded || viewOptions.open || widgetGallery.open || widgetSettings.open || visibilities.overview || Visibilities.launcherOpen || visibilities.dashboard || visibilities.session || visibilities.utilities
     readonly property bool hasOpenOverlay: focusGrabState.active || transientOverlayOpen || visibilities.sidebar
     readonly property bool hasFullscreen: actualFullscreen && !hasOpenOverlay
     // The launcher is one panel across outputs: a screen that does not show it

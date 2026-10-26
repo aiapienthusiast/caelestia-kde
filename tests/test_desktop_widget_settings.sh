@@ -117,6 +117,15 @@ test_the_panel_opens_away_from_the_widget_it_edits() {
     assert_file_contains "$LAYOUT" 'signal widgetSettingsRequested(string screenName, var rect, string id)' "the request carries that rectangle across"
 }
 
+test_the_panel_is_in_the_window_s_input_mask() {
+    # A layer window only accepts clicks inside its input region. Every popup the
+    # window draws has to say it is open, or its clicks fall through to the desktop.
+    local overlay
+    overlay="$(grep -o 'readonly property bool transientOverlayOpen:.*' "$WINDOW" | head -1)"
+    assert_contains "$overlay" 'widgetGallery.open' "the gallery is the model every popup follows"
+    assert_contains "$overlay" 'widgetSettings.open' "the settings panel must make the window take input where it is drawn"
+}
+
 test_the_panel_is_only_as_tall_as_its_fields() {
     assert_file_contains "$PANEL" 'height: body.implicitHeight + Tokens.padding.large * 2' "a two-field widget must not get a screen-tall panel"
     assert_file_contains "$PANEL" 'Layout.preferredHeight: Math.min(root.formHeight, root.maxFormHeight)' "a long form must be capped and scroll instead"
