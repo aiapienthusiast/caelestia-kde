@@ -209,4 +209,14 @@ test_the_gallery_hint_points_at_the_settings() {
     assert_contains "$(cat "$GALLERY")" "gear in edit mode" "the gallery must say where the settings are"
 }
 
+test_a_card_edge_is_always_visible() {
+    # A frameless card has no fill to read against, so its edge is the only thing
+    # that says where the widget ends. It must be drawn, and drawn stronger.
+    assert_file_contains "$BIG" 'border.width: root.selected || root.mergeTarget || root.focusVisible ? (root.widgetEditMode ? 3 : 2) : 1' "every card must keep an edge, frameless or not"
+    assert_file_contains "$BIG" 'Qt.alpha(Colours.palette.m3onSurface, root.frameless ? 0.42 : 0.22)' "a card with no fill needs a stronger edge"
+    # Selection brightens the edge: the card being edited must not be the faintest.
+    assert_file_not_contains "$BIG" 'Qt.darker(Colours.palette.m3primary, 1.45)' "selection must not dim the edge"
+    assert_file_contains "$BIG" '? Colours.palette.m3primary : Qt.alpha(Colours.palette.m3onSurface' "a selected card's edge must stay at full strength"
+}
+
 run_tests

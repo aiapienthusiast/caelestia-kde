@@ -333,8 +333,14 @@ Item {
             anchors.fill: card
             radius: card.radius
             color: "transparent"
-            border.width: root.selected || root.mergeTarget || root.focusVisible ? 2 : (root.frameless ? 0 : 1)
-            border.color: root.selected || root.mergeTarget || root.focusVisible ? Qt.darker(Colours.palette.m3primary, 1.45) : Qt.alpha(Colours.palette.m3onSurface, 0.22)
+            // A card with no background still gets its edge: the widget has to say
+            // where it ends, or it dissolves into the wallpaper behind it.
+            border.width: root.selected || root.mergeTarget || root.focusVisible ? (root.widgetEditMode ? 3 : 2) : 1
+            // Selection brightens the edge instead of darkening it -- the card you
+            // are working on must not be the faintest one on the desktop -- and a
+            // frameless card's edge is drawn stronger, since it has no fill to
+            // read against.
+            border.color: root.selected || root.mergeTarget || root.focusVisible ? Colours.palette.m3primary : Qt.alpha(Colours.palette.m3onSurface, root.frameless ? 0.42 : 0.22)
             z: 1
         }
     }
