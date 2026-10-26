@@ -96,7 +96,9 @@ impl StyledTextExt for Div {
         self.text_size(px(size))
     }
     fn icon_size(self, size: f32) -> Self {
-        self.text_size(px(size))
+        self.font_family("Material Symbols Rounded")
+            .text_size(px(size))
+            .line_height(px(size))
     }
 }
 

@@ -287,3 +287,4 @@ fn test_kwin_effects_metadata_parsing() {
 
     let _ = fs::remove_dir_all(&temp_dir);
 }
+

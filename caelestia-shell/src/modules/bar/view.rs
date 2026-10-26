@@ -11,7 +11,7 @@ use super::components::{
 };
 use super::config::BarConfig;
 use super::popouts::{BarPopouts, BarPopoutsState, PopoutType};
-use crate::components::styled_text::StyledTextExt;
+use crate::components::icon::{IconSize, MaterialIcon};
 use crate::components::widgets::visualizer_bars::VisualizerBars;
 use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::audio::AudioService;
@@ -140,7 +140,11 @@ impl Render for BarView {
                             .items_center()
                             .justify_center()
                             .cursor(CursorStyle::PointingHand)
-                            .child(StyledTextExt::icon_size(div().child("auto_awesome"), 16.0)),
+                            .child(MaterialIcon::with_size(
+                                "auto_awesome",
+                                IconSize::Custom(16.0),
+                                c.on_primary,
+                            )),
                     )
                     // Workspaces Pills
                     .child(
@@ -204,7 +208,11 @@ impl Render for BarView {
                             .child(
                                 div()
                                     .text_color(rgba(c.on_surface_variant))
-                                    .child(StyledTextExt::icon_size(div().child("window"), 14.0)),
+                                    .child(MaterialIcon::with_size(
+                                        "window",
+                                        IconSize::Custom(14.0),
+                                        c.on_surface,
+                                    )),
                             )
                             .child(
                                 div()
@@ -260,11 +268,11 @@ impl Render for BarView {
                             .rounded_full()
                             .bg(rgba(c.surface_container_low))
                             .cursor(CursorStyle::PointingHand)
-                            .child(
-                                div()
-                                    .text_color(rgba(c.primary))
-                                    .child(StyledTextExt::icon_size(div().child("music_note"), 14.0)),
-                            )
+                            .child(MaterialIcon::with_size(
+                                "music_note",
+                                IconSize::Custom(14.0),
+                                c.primary,
+                            ))
                             .child(
                                 div()
                                     .text_color(rgba(c.on_surface))
@@ -298,30 +306,21 @@ impl Render for BarView {
                             .rounded_full()
                             .bg(rgba(c.surface_container_low))
                             .cursor(CursorStyle::PointingHand)
-                            .child(
-                                div()
-                                    .text_color(rgba(c.on_surface))
-                                    .child(StyledTextExt::icon_size(
-                                        div().child(self.status.network_icon),
-                                        16.0,
-                                    )),
-                            )
-                            .child(
-                                div()
-                                    .text_color(rgba(c.on_surface))
-                                    .child(StyledTextExt::icon_size(
-                                        div().child(self.status.bluetooth_icon),
-                                        16.0,
-                                    )),
-                            )
-                            .child(
-                                div()
-                                    .text_color(rgba(c.on_surface))
-                                    .child(StyledTextExt::icon_size(
-                                        div().child(self.status.volume_icon),
-                                        16.0,
-                                    )),
-                            )
+                            .child(MaterialIcon::with_size(
+                                self.status.network_icon,
+                                IconSize::Custom(16.0),
+                                c.on_surface,
+                            ))
+                            .child(MaterialIcon::with_size(
+                                self.status.bluetooth_icon,
+                                IconSize::Custom(16.0),
+                                c.on_surface,
+                            ))
+                            .child(MaterialIcon::with_size(
+                                self.status.volume_icon,
+                                IconSize::Custom(16.0),
+                                c.on_surface,
+                            ))
                             .child(
                                 div()
                                     .text_color(rgba(c.on_surface))
@@ -372,7 +371,11 @@ impl Render for BarView {
                             .items_center()
                             .justify_center()
                             .cursor(CursorStyle::PointingHand)
-                            .child(StyledTextExt::icon_size(div().child("power_settings_new"), 16.0))
+                            .child(MaterialIcon::with_size(
+                                "power_settings_new",
+                                IconSize::Custom(16.0),
+                                c.on_error_container,
+                            ))
                             .on_mouse_down(
                                 gpui::MouseButton::Left,
                                 cx.listener(|this, _, _, _cx| {
