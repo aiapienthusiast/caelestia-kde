@@ -47,6 +47,24 @@ Item {
     // Edit mode outlines every card for the same reason.
     readonly property bool outlined: !isGroup && (DesktopLayout.widgetOutlines || widgetEditMode)
 
+    // The card's edge, and the editor's frame around it, are drawn by WidgetEdges on
+    // top of every background layer: a plugin may paint over the widgets (the wallpaper
+    // depth one redraws the wallpaper's foreground above them), and an edge buried under
+    // it leaves a card with no way to say where it ends.
+    readonly property rect edgeRect: Qt.rect(root.x + card.x, root.y + card.y, card.width, card.height)
+    readonly property real edgeRadius: card.radius
+    // A card with no background still gets its edge: the widget has to say where it
+    // ends, or it dissolves into the wallpaper behind it.
+    readonly property int edgeWidth: root.selected || root.mergeTarget || root.focusVisible ? (root.widgetEditMode ? 3 : 2) : 1
+    // Selection brightens the edge instead of darkening it -- the card you are working
+    // on must not be the faintest one on the desktop -- and a frameless card's edge is
+    // drawn stronger, since it has no fill to read against.
+    readonly property color edgeColor: root.selected || root.mergeTarget || root.focusVisible ? Colours.palette.m3primary : Qt.alpha(Colours.palette.m3onSurface, root.frameless ? 0.42 : 0.22)
+    readonly property bool edgeShown: root.opacity > 0.01 && card.width > 0 && card.height > 0
+    // The editor's frame, on every widget while the outlines option is on: it locates
+    // widgets that are empty or hidden by their own condition.
+    readonly property bool frameShown: root.outlined && !root.selected && !root.mergeTarget && !root.focusVisible
+
     property bool selected: false
     property bool focusVisible: false
     property bool dimmed: false
@@ -323,39 +341,6 @@ Item {
                 onClicked: root.settingsRequested()
             }
         }
-
-        // The card's edge, drawn last so nothing inside the card can hide it: the
-        // frosted wallpaper and the widget's own content both reach these pixels, and
-        // the border is what says where the card ends and the desktop begins.
-        StyledRect {
-            id: cardEdge
-
-            anchors.fill: card
-            radius: card.radius
-            color: "transparent"
-            // A card with no background still gets its edge: the widget has to say
-            // where it ends, or it dissolves into the wallpaper behind it.
-            border.width: root.selected || root.mergeTarget || root.focusVisible ? (root.widgetEditMode ? 3 : 2) : 1
-            // Selection brightens the edge instead of darkening it -- the card you
-            // are working on must not be the faintest one on the desktop -- and a
-            // frameless card's edge is drawn stronger, since it has no fill to
-            // read against.
-            border.color: root.selected || root.mergeTarget || root.focusVisible ? Colours.palette.m3primary : Qt.alpha(Colours.palette.m3onSurface, root.frameless ? 0.42 : 0.22)
-            z: 1
-        }
-    }
-
-    // Outline for every widget while the outlines option is on: locates widgets
-    // that are empty or hidden by their own condition.
-    StyledRect {
-        id: outline
-
-        anchors.fill: card
-        visible: root.outlined && !root.selected && !root.mergeTarget && !root.focusVisible
-        color: "transparent"
-        radius: card.radius
-        border.width: 2
-        border.color: Colours.palette.m3primary
     }
 
     // Centred in the gap down to the next row's card (its top gap included), so

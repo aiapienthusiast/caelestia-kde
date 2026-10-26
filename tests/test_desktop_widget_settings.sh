@@ -84,17 +84,20 @@ test_the_form_starts_afresh_for_each_opening() {
     assert_file_contains "$PANEL" 'onTypeChanged: root.refresh()' "a type that arrives after the panel opened must still build the form"
 }
 
-test_the_card_edge_is_drawn_over_what_the_card_holds() {
-    # The frosted wallpaper and the widget's own content both reach the card's pixels,
-    # so the edge lives in its own overlay drawn last.
-    local edge settings cardblock
-    edge="$(grep -n 'id: cardEdge' "$BIG" | cut -d: -f1)"
-    settings="$(grep -n 'id: settingsButton' "$BIG" | cut -d: -f1)"
-    assert_ne "" "$edge" "the card must have one edge overlay"
-    [ -n "$edge" ] && [ -n "$settings" ] && assert_eq "after" "$([ "$edge" -gt "$settings" ] && echo after || echo before)" "the edge must be drawn after everything the card holds"
-    assert_file_contains "$BIG" 'anchors.fill: card' "the edge overlay must follow the card exactly"
-    cardblock="$(awk '/id: card$/{f=1} f{print} f&&/MouseArea \{/{exit}' "$BIG")"
-    assert_not_contains "$cardblock" "border.width" "the card itself must not draw an edge its contents can cover"
+test_the_card_edge_is_drawn_above_what_plugins_paint() {
+    # The wallpaper depth plugin redraws the wallpaper's foreground above the widgets,
+    # so an edge drawn inside a card vanishes under it. The edges live in their own
+    # layer, above every background widget.
+    local edges="$DESKTOP/WidgetEdges.qml"
+    assert_file_exists "$edges"
+    assert_file_contains "$BIG" 'readonly property rect edgeRect' "a card must report where its edge goes"
+    assert_file_contains "$BIG" 'readonly property bool frameShown' "the editor's frame is drawn the same way"
+    assert_file_not_contains "$BIG" 'id: cardEdge' "the edge must not be buried inside the card"
+    assert_file_not_contains "$BIG" 'id: outline' "the frame must not be buried inside the card either"
+    assert_file_contains "$edges" 'model: root.cards' "one edge per card"
+    assert_file_contains "$edges" 'border.color: slot.modelData.edgeColor' "the edge takes the card's own colour"
+    assert_file_contains "$DESKTOP/Background.qml" 'icons: desktopIcons' "the edge layer needs the cards it draws"
+    assert_file_contains "$DESKTOP/Background.qml" 'z: 4096' "the edges must sit above the plugin background widgets"
 }
 
 test_the_panel_never_swallows_a_click_meant_for_something_else() {
@@ -212,7 +215,7 @@ test_the_gallery_hint_points_at_the_settings() {
 test_a_card_edge_is_always_visible() {
     # A frameless card has no fill to read against, so its edge is the only thing
     # that says where the widget ends. It must be drawn, and drawn stronger.
-    assert_file_contains "$BIG" 'border.width: root.selected || root.mergeTarget || root.focusVisible ? (root.widgetEditMode ? 3 : 2) : 1' "every card must keep an edge, frameless or not"
+    assert_file_contains "$BIG" 'readonly property int edgeWidth: root.selected || root.mergeTarget || root.focusVisible ? (root.widgetEditMode ? 3 : 2) : 1' "every card must keep an edge, frameless or not"
     assert_file_contains "$BIG" 'Qt.alpha(Colours.palette.m3onSurface, root.frameless ? 0.42 : 0.22)' "a card with no fill needs a stronger edge"
     # Selection brightens the edge: the card being edited must not be the faintest.
     assert_file_not_contains "$BIG" 'Qt.darker(Colours.palette.m3primary, 1.45)' "selection must not dim the edge"

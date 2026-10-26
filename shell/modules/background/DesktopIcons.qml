@@ -21,6 +21,9 @@ Item {
     // Wallpaper layer, sampled for the frosted cards of large items.
     property Item wallpaper: null
     readonly property point gridOrigin: Qt.point(gridItem.x, gridItem.y)
+    // The same origin in window coordinates: the layer that draws the cards' edges sits
+    // above whatever a plugin paints over them, so it cannot measure from the grid itself.
+    readonly property point widgetOrigin: Qt.point(root.x + gridOrigin.x, root.y + gridOrigin.y)
     // The wallpaper blurred once for all frosted cards, null when unused.
     readonly property Item glass: glassLoader.item
 
