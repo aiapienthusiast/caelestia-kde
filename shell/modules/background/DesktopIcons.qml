@@ -976,15 +976,14 @@ Item {
         DesktopLayout.addWidgetRequested(screenData.name, gridItem.x + gridItem.width / 2, gridItem.y + gridItem.height / 2);
     }
 
-    /// Opens the settings of one widget, anchored to its card so the panel lands on
-    /// the widget rather than in the middle of the screen.
+    /// Opens the settings of one widget, handing over the card's rectangle so the panel
+    /// can open beside it rather than on top of it.
     function openWidgetSettings(key: string): void {
         if (!isWidgetKey(key))
             return;
         const tile = tiles[key];
-        const x = gridItem.x + (tile ? tile.x + tile.width : gridItem.width / 2);
-        const y = gridItem.y + (tile ? tile.y : gridItem.height / 2);
-        DesktopLayout.widgetSettingsRequested(screenData.name, x, y, nameOf(key));
+        const rect = tile ? { x: gridItem.x + tile.x, y: gridItem.y + tile.y, width: tile.width, height: tile.height } : { x: gridItem.x, y: gridItem.y, width: 0, height: 0 };
+        DesktopLayout.widgetSettingsRequested(screenData.name, rect, nameOf(key));
     }
 
     function removeWidgets(keys: var): void {

@@ -105,9 +105,12 @@ test_the_panel_never_swallows_a_click_meant_for_something_else() {
 test_the_panel_opens_away_from_the_widget_it_edits() {
     local place
     place="$(awk '/readonly property point place: \{/{f=1} f{print} f&&/^    \}$/{exit}' "$PANEL")"
-    assert_contains "$place" 'root.at.x - w - gap' "it must be able to open to the left of the anchor"
-    assert_contains "$place" 'root.at.y - h - gap' "it must be able to open above the anchor"
-    assert_contains "$place" 'Math.min(root.width - w - Tokens.padding.large, x)' "it must stay on screen"
+    assert_contains "$place" 'a.x + a.width + gap' "it must be able to open to the right of the card"
+    assert_contains "$place" 'a.x - w - gap' "it must be able to open to the left of the card"
+    assert_contains "$place" 'a.y + a.height + gap' "it must be able to open under the card"
+    assert_contains "$place" 'Math.min(root.width - w - edge, x)' "it must stay on screen"
+    assert_contains "$(function_body "$ICONS" openWidgetSettings)" 'width: tile.width' "the screen must hand over the card's rectangle, not a point"
+    assert_file_contains "$LAYOUT" 'signal widgetSettingsRequested(string screenName, var rect, string id)' "the request carries that rectangle across"
 }
 
 test_the_panel_is_only_as_tall_as_its_fields() {
@@ -175,7 +178,7 @@ test_settings_are_reachable_from_the_card_and_the_menu() {
     assert_contains "$(function_body "$ICONS" openWidgetSettings)" 'DesktopLayout.widgetSettingsRequested(' "the screen must not open the panel itself"
     assert_contains "$(function_body "$ICONS" editModeKey)" 'openWidgetSettings(picked[0])' "a picked widget must open its settings from the keyboard too"
     assert_file_contains "$MENU" 'onClicked: root.controller?.openWidgetSettings(root.firstKey)' "the widget's menu must offer the same panel"
-    assert_file_contains "$WINDOW" 'widgetSettings.openAt(x, y, id)' "one panel per screen must follow the request"
+    assert_file_contains "$WINDOW" 'widgetSettings.openAt(rect, id)' "one panel per screen must follow the request"
 }
 
 test_the_panel_goes_when_what_it_edits_goes() {

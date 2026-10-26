@@ -46,7 +46,7 @@ Singleton {
     signal pasteRequested(string screenName, real x, real y)
     signal viewOptionsRequested(string screenName, real x, real y)
     signal addWidgetRequested(string screenName, real x, real y)
-    signal widgetSettingsRequested(string screenName, real x, real y, string id)
+    signal widgetSettingsRequested(string screenName, var rect, string id)
     signal arrangeRequested(string screenName, string sortKey)
     signal openIconContextMenu(string screenName, real x, real y, var keys, string inGroup)
     signal openDropMenu(string screenName, real x, real y, var urls, string target, var cell)

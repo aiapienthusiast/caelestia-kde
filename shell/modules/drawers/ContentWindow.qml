@@ -761,9 +761,9 @@ StyledWindow {
                 }
             }
 
-            function onWidgetSettingsRequested(screenName: string, x: real, y: real, id: string): void {
+            function onWidgetSettingsRequested(screenName: string, rect: var, id: string): void {
                 if (root.screen.name === screenName)
-                    widgetSettings.openAt(x, y, id);
+                    widgetSettings.openAt(rect, id);
             }
 
             target: DesktopLayout

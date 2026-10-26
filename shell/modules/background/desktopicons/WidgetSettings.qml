@@ -17,7 +17,9 @@ Item {
 
     property var controller: null
     property bool open: false
-    property point at
+    // The card being edited, in window coordinates. The panel places itself beside it,
+    // so it never sits on the widget or the gear that opened it.
+    property var anchorRect: ({ x: 0, y: 0, width: 0, height: 0 })
     property string widgetId: ""
 
     readonly property var widget: widgetId !== "" ? (DesktopLayout.widgets[widgetId] ?? null) : null
@@ -29,8 +31,8 @@ Item {
     readonly property real formHeight: form.item ? form.item.implicitHeight : 0
     readonly property real maxFormHeight: Math.max(120, root.height * 0.55)
 
-    function openAt(x: real, y: real, id: string): void {
-        at = Qt.point(x, y);
+    function openAt(rect: var, id: string): void {
+        anchorRect = rect;
         widgetId = id;
         open = true;
         root.refresh();
@@ -57,20 +59,21 @@ Item {
     anchors.fill: parent
     visible: panel.opacity > 0
 
-    /// Where the panel goes: away from the widget it edits, on whichever side has room,
-    /// so it never covers the card or the gear that opened it. The anchor is the card's
-    /// edge, not its centre.
+    /// Beside the card when the desktop has room, otherwise under or over it, and always
+    /// clamped to the screen. The card keeps its own space, so its gear stays clickable.
     readonly property point place: {
         const gap = Tokens.padding.medium;
         const w = panel.width;
         const h = panel.height;
-        const right = root.at.x + gap;
-        const left = root.at.x - w - gap;
-        const below = root.at.y + gap;
-        const above = root.at.y - h - gap;
-        const x = right + w > root.width - Tokens.padding.large && left >= Tokens.padding.large ? left : right;
-        const y = below + h > root.height - Tokens.padding.large && above >= Tokens.padding.large ? above : below;
-        return Qt.point(Math.max(Tokens.padding.large, Math.min(root.width - w - Tokens.padding.large, x)), Math.max(Tokens.padding.large, Math.min(root.height - h - Tokens.padding.large, y)));
+        const a = root.anchorRect;
+        const edge = Tokens.padding.large;
+        const besideRight = a.x + a.width + gap;
+        const besideLeft = a.x - w - gap;
+        const under = a.y + a.height + gap;
+        const over = a.y - h - gap;
+        const x = besideRight + w <= root.width - edge ? besideRight : besideLeft >= edge ? besideLeft : a.x + a.width - w;
+        const y = under + h <= root.height - edge ? under : over >= edge ? over : a.y;
+        return Qt.point(Math.max(edge, Math.min(root.width - w - edge, x)), Math.max(edge, Math.min(root.height - h - edge, y)));
     }
 
     onWidgetChanged: {
