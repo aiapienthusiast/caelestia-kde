@@ -4,13 +4,23 @@
 use crate::components::controls::switch::StyledSwitch;
 use crate::components::styled_text::TypographyScale;
 use crate::domain::tokens::*;
+use crate::infrastructure::config::ShellConfig;
 use crate::infrastructure::theme::CaelestiaColours;
-use gpui::{div, prelude::*, px, rgba, Div, FontWeight, SharedString, Styled};
+use crate::modules::nexus::action::NexusAction;
+use crate::modules::nexus::window::NexusWindow;
+use gpui::{
+    div, prelude::*, px, rgba, CursorStyle, Div, FontWeight, MouseButton,
+    SharedString, Styled,
+};
 
 pub struct DesktopPage;
 
 impl DesktopPage {
-    pub fn render(c: &CaelestiaColours) -> Div {
+    pub fn render(
+        _config: &ShellConfig,
+        c: &CaelestiaColours,
+        cx: &mut gpui::Context<NexusWindow>,
+    ) -> Div {
         div()
             .flex_1()
             .h_full()
@@ -26,25 +36,76 @@ impl DesktopPage {
                     .text_color(rgba(c.on_surface))
                     .child("Desktop & Window Tiling"),
             )
-            .child(Self::render_row(
+            .child(Self::render_toggle_row(
+                "Krohnkite Window Tiling",
+                "Dynamic spiral and bsp tiling for KWin Wayland",
+                true,
+                NexusAction::ToggleKrohnkiteTiling(false),
+                c,
+                cx,
+            ))
+            .child(Self::render_toggle_row(
+                "Desktop Icons & Addons",
+                "Show desktop files, widgets, and quick launcher icons",
+                true,
+                NexusAction::ToggleDesktopIcons(false),
+                c,
+                cx,
+            ))
+            .child(Self::render_toggle_row(
+                "Enhanced Context Menu",
+                "Caelestia styled right-click actions on desktop background",
+                true,
+                NexusAction::ToggleContextMenu(false),
+                c,
+                cx,
+            ))
+            .child(Self::render_toggle_row(
+                "Virtual Workspaces Indicator",
+                "Per-monitor active workspace strip",
+                true,
+                NexusAction::ToggleWorkspacesIndicator(false),
+                c,
+                cx,
+            ))
+    }
+
+    /// Stateless preview for tests or headless rendering
+    pub fn render_preview(c: &CaelestiaColours) -> Div {
+        div()
+            .flex_1()
+            .h_full()
+            .flex()
+            .flex_col()
+            .p(px(PADDING_LARGE))
+            .gap(px(SPACING_LARGE))
+            .overflow_hidden()
+            .child(
+                div()
+                    .text_size(px(TypographyScale::HeadlineMedium.font_size()))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(rgba(c.on_surface))
+                    .child("Desktop & Window Tiling"),
+            )
+            .child(Self::render_static_row(
                 "Krohnkite Window Tiling",
                 "Dynamic spiral and bsp tiling for KWin Wayland",
                 true,
                 c,
             ))
-            .child(Self::render_row(
+            .child(Self::render_static_row(
                 "Desktop Icons & Addons",
                 "Show desktop files, widgets, and quick launcher icons",
                 true,
                 c,
             ))
-            .child(Self::render_row(
+            .child(Self::render_static_row(
                 "Enhanced Context Menu",
                 "Caelestia styled right-click actions on desktop background",
                 true,
                 c,
             ))
-            .child(Self::render_row(
+            .child(Self::render_static_row(
                 "Virtual Workspaces Indicator",
                 "Per-monitor active workspace strip",
                 true,
@@ -52,7 +113,7 @@ impl DesktopPage {
             ))
     }
 
-    fn render_row(
+    fn render_static_row(
         title: impl Into<SharedString>,
         subtitle: impl Into<SharedString>,
         checked: bool,
@@ -87,5 +148,51 @@ impl DesktopPage {
                     ),
             )
             .child(StyledSwitch::render(checked, false, false, false, c))
+    }
+
+    fn render_toggle_row(
+        title: impl Into<SharedString>,
+        subtitle: impl Into<SharedString>,
+        checked: bool,
+        action: NexusAction,
+        c: &CaelestiaColours,
+        cx: &mut gpui::Context<NexusWindow>,
+    ) -> Div {
+        div()
+            .w_full()
+            .h(px(64.0))
+            .rounded(px(ROUNDING_MEDIUM))
+            .bg(rgba(c.surface_container))
+            .px(px(PADDING_LARGE))
+            .flex()
+            .items_center()
+            .justify_between()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.0))
+                    .child(
+                        div()
+                            .text_size(px(FONT_SIZE_NORMAL))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(rgba(c.on_surface))
+                            .child(title.into()),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(FONT_SIZE_SMALL))
+                            .text_color(rgba(c.on_surface_variant))
+                            .child(subtitle.into()),
+                    ),
+            )
+            .child(
+                div()
+                    .cursor(CursorStyle::PointingHand)
+                    .on_mouse_down(MouseButton::Left, cx.listener(move |nexus, _, _, cx| {
+                        nexus.dispatch(action.clone(), cx);
+                    }))
+                    .child(StyledSwitch::render(checked, false, false, false, c)),
+            )
     }
 }

@@ -11,14 +11,15 @@ pub use modules::shortcuts;
 
 use gpui::{
     layer_shell::*, point, px, size, App, AppContext, Bounds,
-    WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
+    TitlebarOptions, WindowBackgroundAppearance, WindowBounds, WindowDecorations,
+    WindowKind, WindowOptions,
 };
 use infrastructure::theme::CaelestiaColours;
 use modules::background::BackgroundView;
 use modules::bar::BarView;
 use modules::dashboard::DashboardDrawer;
 use modules::launcher::LauncherView;
-use modules::nexus::NexusDrawer;
+use modules::nexus::NexusWindow;
 use modules::notifications::NotificationsView;
 use modules::osd::{OsdConfig, OsdState, OsdView};
 use modules::overview::OverviewView;
@@ -162,29 +163,26 @@ fn main() {
                 Err(err) => tracing::error!("Failed to open Dashboard window: {:?}", err),
             }
         } else if is_nexus {
-            info!("Launching Nexus Control Center & Settings Drawer...");
+            info!("Launching Nexus Control Center & Settings Standard Window...");
             let nexus_options = WindowOptions {
-                titlebar: None,
+                titlebar: Some(TitlebarOptions {
+                    title: Some("Caelestia Settings".into()),
+                    appears_transparent: false,
+                    traffic_light_position: None,
+                }),
                 window_bounds: Some(WindowBounds::Windowed(Bounds {
-                    origin: point(px(0.), px(0.)),
-                    size: size(px(1920.), px(1080.)),
+                    origin: point(px(120.), px(80.)),
+                    size: size(px(1080.), px(720.)),
                 })),
                 app_id: Some("caelestia-nexus".to_string()),
-                window_background: WindowBackgroundAppearance::Transparent,
-                kind: WindowKind::LayerShell(LayerShellOptions {
-                    namespace: "caelestia-drawers".to_string(),
-                    layer: Layer::Overlay,
-                    anchor: Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
-                    margin: Some((px(0.), px(0.), px(0.), px(0.))),
-                    exclusive_zone: None,
-                    keyboard_interactivity: KeyboardInteractivity::OnDemand,
-                    ..Default::default()
-                }),
+                window_background: WindowBackgroundAppearance::Blurred,
+                window_decorations: Some(WindowDecorations::Server),
+                kind: WindowKind::Normal,
                 ..Default::default()
             };
 
-            match cx.open_window(nexus_options, |_, cx| cx.new(NexusDrawer::new)) {
-                Ok(handle) => info!("Nexus window handle opened successfully: {:?}", handle),
+            match cx.open_window(nexus_options, |_, cx| cx.new(NexusWindow::new)) {
+                Ok(handle) => info!("Nexus standard window opened successfully: {:?}", handle),
                 Err(err) => tracing::error!("Failed to open Nexus window: {:?}", err),
             }
         } else if is_launcher {

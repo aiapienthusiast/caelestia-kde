@@ -217,15 +217,77 @@ fn test_all_nexus_pages_instantiation() {
     use caelestia_shell::modules::nexus::pages::*;
 
     let c = CaelestiaColours::default();
-    let _ = AboutPage::render(&c);
-    let _ = DesktopPage::render(&c);
-    let _ = PanelsPage::render(&c);
-    let _ = NetworkPage::render(&c);
-    let _ = BluetoothPage::render(&c);
-    let _ = DisplayPage::render(&c);
-    let _ = AudioPage::render(&c);
-    let _ = PowerPage::render(&c);
-    let _ = AppsPage::render(&c);
-    let _ = ServicesPage::render(&c);
+    let _ = AboutPage::render_preview(&c);
+    let _ = DesktopPage::render_preview(&c);
+    let _ = PanelsPage::render_preview(&c);
+    let _ = NetworkPage::render_preview(&c);
+    let _ = BluetoothPage::render_preview(&c);
+    let _ = DisplayPage::render_preview(&c);
+    let _ = AudioPage::render_preview(&c);
+    let _ = PowerPage::render_preview(&c);
+    let _ = AppsPage::render_preview(&c);
+    let _ = ServicesPage::render_preview(&c);
+}
+
+#[test]
+fn test_nexus_standard_window_configuration() {
+    use caelestia_shell::modules::nexus::NexusWindow;
+    use gpui::{
+        point, px, size, Bounds, TitlebarOptions, WindowBackgroundAppearance, WindowBounds,
+        WindowDecorations, WindowKind, WindowOptions,
+    };
+
+    assert!(std::mem::size_of::<NexusWindow>() > 0);
+
+    let options = WindowOptions {
+        titlebar: Some(TitlebarOptions {
+            title: Some("Caelestia Settings".into()),
+            appears_transparent: false,
+            traffic_light_position: None,
+        }),
+        window_bounds: Some(WindowBounds::Windowed(Bounds {
+            origin: point(px(120.), px(80.)),
+            size: size(px(1080.), px(720.)),
+        })),
+        app_id: Some("caelestia-nexus".to_string()),
+        window_background: WindowBackgroundAppearance::Blurred,
+        window_decorations: Some(WindowDecorations::Server),
+        kind: WindowKind::Normal,
+        ..Default::default()
+    };
+
+    assert_eq!(options.kind, WindowKind::Normal);
+    assert_eq!(options.app_id.as_deref(), Some("caelestia-nexus"));
+    assert_eq!(options.window_decorations, Some(WindowDecorations::Server));
+    assert_eq!(
+        options.titlebar.as_ref().unwrap().title.as_deref(),
+        Some("Caelestia Settings")
+    );
+}
+
+#[test]
+fn test_nexus_action_and_performance_dispatch() {
+    use caelestia_shell::modules::nexus::action::NexusAction;
+
+    let action = NexusAction::TogglePitchBlack;
+    assert_eq!(action, NexusAction::TogglePitchBlack);
+
+    let action_opacity = NexusAction::SetBaseOpacity(0.85);
+    assert_eq!(action_opacity, NexusAction::SetBaseOpacity(0.85));
+
+    let action_category = NexusAction::SelectCategory(3);
+    assert_eq!(action_category, NexusAction::SelectCategory(3));
+
+    let action_wifi = NexusAction::ToggleWifi(true);
+    assert_eq!(action_wifi, NexusAction::ToggleWifi(true));
+
+    let action_bt = NexusAction::ConnectBtDevice("Headphones".to_string());
+    assert_eq!(action_bt, NexusAction::ConnectBtDevice("Headphones".to_string()));
+
+    let action_service = NexusAction::ToggleGamemode(true);
+    assert_eq!(action_service, NexusAction::ToggleGamemode(true));
+
+    let action_close = NexusAction::CloseWindow;
+    assert_eq!(action_close, NexusAction::CloseWindow);
 }
 

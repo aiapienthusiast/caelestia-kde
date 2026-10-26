@@ -104,7 +104,119 @@ impl NetworkSettingsPageModel {
 pub struct NetworkPage;
 
 impl NetworkPage {
-    pub fn render(c: &crate::infrastructure::theme::CaelestiaColours) -> gpui::Div {
+    pub fn render(
+        _config: &crate::infrastructure::config::ShellConfig,
+        c: &crate::infrastructure::theme::CaelestiaColours,
+        cx: &mut gpui::Context<crate::modules::nexus::window::NexusWindow>,
+    ) -> gpui::Div {
+        use crate::modules::nexus::action::NexusAction;
+        use gpui::{div, prelude::*, px, rgba, CursorStyle, FontWeight, MouseButton};
+
+        div()
+            .flex_1()
+            .h_full()
+            .flex()
+            .flex_col()
+            .p(px(24.0))
+            .gap(px(16.0))
+            .overflow_hidden()
+            .child(
+                div()
+                    .text_2xl()
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(rgba(c.on_surface))
+                    .child("Network & Internet"),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .p(px(16.0))
+                    .rounded_xl()
+                    .bg(rgba(c.surface_container_high))
+                    .child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .items_center()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .child(div().font_weight(FontWeight::SEMIBOLD).text_color(rgba(c.on_surface)).child("Wi-Fi"))
+                                    .child(div().text_sm().text_color(rgba(c.on_surface_variant)).child("Connected to Home-5G (95% Signal)")),
+                            )
+                            .child(
+                                div()
+                                    .cursor(CursorStyle::PointingHand)
+                                    .on_mouse_down(MouseButton::Left, cx.listener(move |nexus, _, _, cx| {
+                                        nexus.dispatch(NexusAction::ToggleWifi(false), cx);
+                                    }))
+                                    .child(crate::components::controls::switch::StyledSwitch::render(true, false, false, false, c)),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .p(px(16.0))
+                    .rounded_xl()
+                    .bg(rgba(c.surface_container_high))
+                    .child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .items_center()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .child(div().font_weight(FontWeight::SEMIBOLD).text_color(rgba(c.on_surface)).child("Wi-Fi Hotspot"))
+                                    .child(div().text_sm().text_color(rgba(c.on_surface_variant)).child("Share your connection with other devices")),
+                            )
+                            .child(
+                                div()
+                                    .cursor(CursorStyle::PointingHand)
+                                    .on_mouse_down(MouseButton::Left, cx.listener(move |nexus, _, _, cx| {
+                                        nexus.dispatch(NexusAction::ToggleHotspot(true), cx);
+                                    }))
+                                    .child(crate::components::controls::switch::StyledSwitch::render(false, false, false, false, c)),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .p(px(16.0))
+                    .rounded_xl()
+                    .bg(rgba(c.surface_container_high))
+                    .child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .items_center()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .child(div().font_weight(FontWeight::SEMIBOLD).text_color(rgba(c.on_surface)).child("VPN (WireGuard / OpenVPN)"))
+                                    .child(div().text_sm().text_color(rgba(c.on_surface_variant)).child("Work-Wireguard configured")),
+                            )
+                            .child(
+                                div()
+                                    .cursor(CursorStyle::PointingHand)
+                                    .on_mouse_down(MouseButton::Left, cx.listener(move |nexus, _, _, cx| {
+                                        nexus.dispatch(NexusAction::ToggleVpn(true), cx);
+                                    }))
+                                    .child(crate::components::controls::switch::StyledSwitch::render(false, false, false, false, c)),
+                            ),
+                    ),
+            )
+    }
+
+    pub fn render_preview(c: &crate::infrastructure::theme::CaelestiaColours) -> gpui::Div {
         use gpui::{div, prelude::*, px, rgba, FontWeight};
 
         div()

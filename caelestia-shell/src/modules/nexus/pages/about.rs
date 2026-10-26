@@ -3,13 +3,23 @@
 
 use crate::components::styled_text::TypographyScale;
 use crate::domain::tokens::*;
+use crate::infrastructure::config::ShellConfig;
 use crate::infrastructure::theme::CaelestiaColours;
+use crate::modules::nexus::window::NexusWindow;
 use gpui::{div, prelude::*, px, rgba, Div, FontWeight, SharedString, Styled};
 
 pub struct AboutPage;
 
 impl AboutPage {
-    pub fn render(c: &CaelestiaColours) -> Div {
+    pub fn render(
+        _config: &ShellConfig,
+        c: &CaelestiaColours,
+        _cx: &mut gpui::Context<NexusWindow>,
+    ) -> Div {
+        Self::render_preview(c)
+    }
+
+    pub fn render_preview(c: &CaelestiaColours) -> Div {
         div()
             .flex_1()
             .h_full()

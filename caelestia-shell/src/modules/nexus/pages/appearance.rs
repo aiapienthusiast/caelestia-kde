@@ -9,7 +9,7 @@ use crate::components::styled_text::TypographyScale;
 use crate::domain::tokens::*;
 use crate::infrastructure::config::ShellConfig;
 use crate::infrastructure::theme::CaelestiaColours;
-use crate::modules::nexus::drawer::NexusDrawer;
+use crate::modules::nexus::window::NexusWindow;
 use gpui::{
     div, prelude::*, px, rgba, CursorStyle, Div, FontWeight, MouseButton,
     MouseDownEvent, SharedString, Styled, Window,
@@ -22,7 +22,7 @@ impl AppearancePage {
     pub fn render(
         config: &ShellConfig,
         c: &CaelestiaColours,
-        cx: &mut gpui::Context<NexusDrawer>,
+        cx: &mut gpui::Context<NexusWindow>,
     ) -> Div {
         div()
             .flex_1()

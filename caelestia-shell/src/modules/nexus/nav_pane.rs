@@ -1,8 +1,8 @@
 //! NavPane component for Nexus Control Center.
 //! Parity with `shell/modules/nexus/NavPane.qml` and `NavLocations.qml`.
 
-use super::drawer::NexusDrawer;
 use super::state::{NexusCategory, NexusState};
+use super::window::NexusWindow;
 use crate::components::icon::{IconSize, MaterialIcon};
 use crate::components::state_layer::StateLayer;
 use crate::components::styled_text::TypographyScale;
@@ -17,7 +17,7 @@ impl NavPane {
     pub fn render(
         state: &NexusState,
         c: &CaelestiaColours,
-        cx: &mut gpui::Context<NexusDrawer>,
+        cx: &mut gpui::Context<NexusWindow>,
     ) -> Div {
         let filtered = state.filtered_categories();
 
@@ -74,7 +74,7 @@ impl NavPane {
         cat: &'static NexusCategory,
         state: &NexusState,
         c: &CaelestiaColours,
-        cx: &mut gpui::Context<NexusDrawer>,
+        cx: &mut gpui::Context<NexusWindow>,
     ) -> Div {
         let is_selected = idx == state.selected_index;
         let is_hovered = state.hovered_category == Some(idx);
