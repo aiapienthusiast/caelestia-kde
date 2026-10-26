@@ -109,7 +109,10 @@ Item {
         x: root.place.x
         y: root.place.y
         width: Math.min(340, root.width - Tokens.padding.large * 2)
-        height: body.implicitHeight + Tokens.padding.large * 2
+        // Measured from what the panel actually holds, not from a layout's implicit
+        // size: the form arrives a tick after the panel, and a stale height clipped the
+        // last row before the layout caught up.
+        height: Math.min(Tokens.padding.large * 2 + header.implicitHeight + Tokens.spacing.medium + Math.min(root.formHeight, root.maxFormHeight), root.height - Tokens.padding.large * 2)
         radius: Tokens.rounding.large
         level: 2
         opacity: root.open ? 1 : 0
@@ -146,6 +149,8 @@ Item {
                 spacing: Tokens.spacing.medium
 
                 RowLayout {
+                    id: header
+
                     Layout.fillWidth: true
                     spacing: Tokens.spacing.small
 

@@ -127,8 +127,9 @@ test_the_panel_is_in_the_window_s_input_mask() {
 }
 
 test_the_panel_is_only_as_tall_as_its_fields() {
-    assert_file_contains "$PANEL" 'height: body.implicitHeight + Tokens.padding.large * 2' "a two-field widget must not get a screen-tall panel"
+    assert_file_contains "$PANEL" 'header.implicitHeight + Tokens.spacing.medium + Math.min(root.formHeight, root.maxFormHeight)' "the height must come from what the panel holds, not from a layout that lags"
     assert_file_contains "$PANEL" 'Layout.preferredHeight: Math.min(root.formHeight, root.maxFormHeight)' "a long form must be capped and scroll instead"
+    assert_file_contains "$PANEL" 'root.height - Tokens.padding.large * 2' "it must never be taller than the screen"
 }
 
 test_the_card_takes_its_look_from_the_config() {
