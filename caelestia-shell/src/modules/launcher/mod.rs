@@ -8,6 +8,7 @@ pub mod categories;
 pub mod entry;
 pub mod executor;
 pub mod items;
+pub mod orion;
 pub mod searcher;
 pub mod view;
 pub mod views;
@@ -19,6 +20,7 @@ pub use items::{
     ActionLauncherItem, CalcResultItem, ClipboardResultItem, EmojiResultItem, LauncherSearchResult,
     SchemeResultItem, VariantResultItem, WindowResultItem,
 };
+pub use orion::{OrionSearchResult, OrionSearchService};
 pub use searcher::{ActionCommand, AppSearcher, SearchMode};
 pub use view::LauncherView;
 pub use views::{

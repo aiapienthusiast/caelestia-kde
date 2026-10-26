@@ -151,6 +151,7 @@ fn test_whatsnew_and_windowinfo_rendering() {
         author: "Caelestia".to_string(),
         description: "Desktop pet".to_string(),
         enabled: true,
+        ..Default::default()
     });
     assert_eq!(manager.installed_plugins.len(), 1);
     assert!(manager.set_enabled("cat", false));

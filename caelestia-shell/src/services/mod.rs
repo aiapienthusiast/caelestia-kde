@@ -1,7 +1,9 @@
 pub mod api;
 pub mod audio;
+pub mod autostart;
 pub mod bluetooth;
 pub mod brightness;
+pub mod calendar_events;
 pub mod cava;
 pub mod clipboard;
 pub mod cutils;
@@ -14,6 +16,7 @@ pub mod global_shortcut;
 pub mod idle_inhibitor;
 pub mod krohnkite;
 pub mod kwin;
+pub mod kwin_effects;
 pub mod lyrics;
 pub mod mpris;
 pub mod network;
@@ -37,4 +40,7 @@ pub mod wallpaper_service;
 pub mod weather;
 
 pub use api::CaelestiaApi;
+pub use autostart::{AutostartEntry, AutostartService};
+pub use calendar_events::{CalendarEvent, CalendarEventsService};
 pub use global_shortcut::{GlobalShortcutDispatcher, RegisteredShortcut, StolenShortcut};
+pub use kwin_effects::{KWinEffectInfo, KWinEffectsManager};
