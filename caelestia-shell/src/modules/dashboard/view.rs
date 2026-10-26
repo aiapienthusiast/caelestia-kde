@@ -230,6 +230,75 @@ impl Render for DashboardView {
             DashboardTab::Weather => {
                 WeatherTabView::render(&self.weather.data, c).into_any_element()
             }
+            DashboardTab::Notes => {
+                div()
+                    .flex()
+                    .flex_col()
+                    .p(px(24.0))
+                    .gap(px(16.0))
+                    .child(
+                        div()
+                            .text_xl()
+                            .font_weight(gpui::FontWeight::BOLD)
+                            .text_color(rgba(c.on_surface))
+                            .child("Notes & Scratchpad"),
+                    )
+                    .child(
+                        div()
+                            .p(px(16.0))
+                            .rounded_xl()
+                            .bg(rgba(c.surface_container_high))
+                            .text_color(rgba(c.on_surface_variant))
+                            .child("Quick thoughts, markdown scratchpad, and clipboard notes."),
+                    )
+                    .into_any_element()
+            }
+            DashboardTab::Terminal => {
+                div()
+                    .flex()
+                    .flex_col()
+                    .p(px(24.0))
+                    .gap(px(16.0))
+                    .child(
+                        div()
+                            .text_xl()
+                            .font_weight(gpui::FontWeight::BOLD)
+                            .text_color(rgba(c.on_surface))
+                            .child("Embedded Terminal"),
+                    )
+                    .child(
+                        div()
+                            .p(px(16.0))
+                            .rounded_xl()
+                            .bg(rgba(c.surface_container_highest))
+                            .text_color(rgba(c.primary))
+                            .child("Caelestia Interactive Shell Bridge ($)"),
+                    )
+                    .into_any_element()
+            }
+            DashboardTab::Wallhaven => {
+                div()
+                    .flex()
+                    .flex_col()
+                    .p(px(24.0))
+                    .gap(px(16.0))
+                    .child(
+                        div()
+                            .text_xl()
+                            .font_weight(gpui::FontWeight::BOLD)
+                            .text_color(rgba(c.on_surface))
+                            .child("Wallhaven Wallpaper Explorer"),
+                    )
+                    .child(
+                        div()
+                            .p(px(16.0))
+                            .rounded_xl()
+                            .bg(rgba(c.surface_container_high))
+                            .text_color(rgba(c.on_surface_variant))
+                            .child("Browse high-resolution desktop wallpapers directly from Wallhaven API."),
+                    )
+                    .into_any_element()
+            }
         };
 
         div()

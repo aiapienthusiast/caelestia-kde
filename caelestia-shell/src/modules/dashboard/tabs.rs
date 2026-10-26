@@ -12,14 +12,20 @@ pub enum DashboardTab {
     Media = 1,
     Performance = 2,
     Weather = 3,
+    Notes = 4,
+    Terminal = 5,
+    Wallhaven = 6,
 }
 
 impl DashboardTab {
-    pub const ALL: [DashboardTab; 4] = [
+    pub const ALL: [DashboardTab; 7] = [
         DashboardTab::Dashboard,
         DashboardTab::Media,
         DashboardTab::Performance,
         DashboardTab::Weather,
+        DashboardTab::Notes,
+        DashboardTab::Terminal,
+        DashboardTab::Wallhaven,
     ];
 
     pub fn label(&self) -> &'static str {
@@ -28,6 +34,9 @@ impl DashboardTab {
             DashboardTab::Media => "Media",
             DashboardTab::Performance => "Performance",
             DashboardTab::Weather => "Weather",
+            DashboardTab::Notes => "Notes",
+            DashboardTab::Terminal => "Terminal",
+            DashboardTab::Wallhaven => "Wallhaven",
         }
     }
 
@@ -37,6 +46,9 @@ impl DashboardTab {
             DashboardTab::Media => "queue_music",
             DashboardTab::Performance => "speed",
             DashboardTab::Weather => "cloud",
+            DashboardTab::Notes => "edit_note",
+            DashboardTab::Terminal => "terminal",
+            DashboardTab::Wallhaven => "wallpaper",
         }
     }
 }

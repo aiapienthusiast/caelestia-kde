@@ -1,7 +1,7 @@
 //! BluetoothStatus Indicator
 //! Parity with `shell/modules/bar/components/status/BluetoothStatus.qml`.
 
-use crate::components::styled_text::StyledTextExt;
+use crate::components::icon::{IconSize, MaterialIcon};
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{div, prelude::*, rgba, Div, Styled};
 
@@ -14,7 +14,7 @@ impl BluetoothStatusWidget {
             .flex_row()
             .items_center()
             .gap_1()
-            .child(StyledTextExt::icon_size(div().child(icon.to_string()), 16.0).text_color(rgba(c.on_surface)));
+            .child(MaterialIcon::with_size(icon, IconSize::Small, c.on_surface));
 
         if connected_count > 1 {
             row = row.child(

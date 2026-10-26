@@ -1,7 +1,7 @@
 //! PerfMemory Meter
 //! Parity with `shell/modules/bar/components/performance/PerfMemory.qml`.
 
-use crate::components::styled_text::StyledTextExt;
+use crate::components::icon::{IconSize, MaterialIcon};
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{div, prelude::*, rgba, Div, Styled};
 
@@ -14,7 +14,7 @@ impl PerfMemory {
             .flex_row()
             .items_center()
             .gap_1()
-            .child(StyledTextExt::icon_size(div().child("storage"), 12.0).text_color(rgba(c.secondary)))
+            .child(MaterialIcon::with_size("storage", IconSize::Small, c.secondary))
             .child(
                 div()
                     .text_xs()

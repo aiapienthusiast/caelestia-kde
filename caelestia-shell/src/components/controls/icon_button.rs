@@ -7,9 +7,39 @@ use crate::components::state_layer::StateLayer;
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{prelude::*, px, Div, SharedString};
 
-pub struct IconButton;
+pub struct IconButton {
+    glyph: SharedString,
+    colours: Option<CaelestiaColours>,
+    size_px: Option<f32>,
+    disabled: bool,
+}
 
 impl IconButton {
+    /// Convenience constructor for an icon button with default styling
+    pub fn new(glyph: impl Into<SharedString>) -> Self {
+        Self {
+            glyph: glyph.into(),
+            colours: None,
+            size_px: None,
+            disabled: false,
+        }
+    }
+
+    pub fn with_colours(mut self, c: CaelestiaColours) -> Self {
+        self.colours = Some(c);
+        self
+    }
+
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    pub fn size_px(mut self, size: f32) -> Self {
+        self.size_px = Some(size);
+        self
+    }
+
     /// Renders an M3 IconButton with full visual and behavioral parity.
     pub fn render(
         glyph: impl Into<SharedString>,
@@ -73,5 +103,31 @@ impl IconButton {
                 on_color,
             ))
             .child(MaterialIcon::with_size(glyph, IconSize::Medium, on_color))
+    }
+}
+
+impl IntoElement for IconButton {
+    type Element = Div;
+
+    fn into_element(self) -> Self::Element {
+        let dim = self.size_px.unwrap_or(36.0);
+        let on_color = self.colours.as_ref().map(|c| c.on_surface).unwrap_or(0xffffffff);
+        let hover_bg = self.colours.as_ref().map(|c| c.surface_container_high).unwrap_or(0xffffff15);
+
+        let mut d = gpui::div()
+            .flex()
+            .items_center()
+            .justify_center()
+            .w(px(dim))
+            .h(px(dim))
+            .rounded(px(dim / 2.0));
+
+        if self.disabled {
+            d = d.opacity(0.38).cursor_not_allowed();
+        } else {
+            d = d.cursor_pointer().hover(move |s| s.bg(gpui::rgba(hover_bg)));
+        }
+
+        d.child(MaterialIcon::with_size(self.glyph, IconSize::Medium, on_color))
     }
 }

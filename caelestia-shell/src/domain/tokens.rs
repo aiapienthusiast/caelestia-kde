@@ -48,6 +48,20 @@ pub const FONT_SIZE_MONO_SMALL: f32 = 12.0;
 pub const FONT_SIZE_MONO_MEDIUM: f32 = 14.0;
 pub const FONT_SIZE_MONO_LARGE: f32 = 16.0;
 
+// Material 3 Typography Scale aliases
+pub const FONT_SIZE_BODY_SMALL: f32 = 12.0;
+pub const FONT_SIZE_BODY_MEDIUM: f32 = 14.0;
+pub const FONT_SIZE_BODY_LARGE: f32 = 16.0;
+pub const FONT_SIZE_LABEL_SMALL: f32 = 11.0;
+pub const FONT_SIZE_LABEL_MEDIUM: f32 = 12.0;
+pub const FONT_SIZE_LABEL_LARGE: f32 = 14.0;
+pub const FONT_SIZE_TITLE_SMALL: f32 = 14.0;
+pub const FONT_SIZE_TITLE_MEDIUM: f32 = 16.0;
+pub const FONT_SIZE_TITLE_LARGE: f32 = 22.0;
+pub const FONT_SIZE_HEADLINE_SMALL: f32 = 24.0;
+pub const FONT_SIZE_HEADLINE_MEDIUM: f32 = 28.0;
+pub const FONT_SIZE_HEADLINE_LARGE: f32 = 32.0;
+
 // Icon sizes
 pub const ICON_SIZE_SMALL: f32 = 16.0;
 pub const ICON_SIZE_MEDIUM: f32 = 22.0;

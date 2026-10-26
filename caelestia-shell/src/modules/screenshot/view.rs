@@ -5,6 +5,7 @@
 use super::actions::SnipAction;
 use super::config::ScreenshotConfig;
 use super::state::{ScreenshotState, SelectionPhase};
+use crate::components::icon::{IconSize, MaterialIcon};
 use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::kwin::WindowItem;
 use gpui::{
@@ -78,7 +79,6 @@ impl Render for ScreenshotOverlayView {
         let primary = rgba(self.colours.primary);
         let on_primary = rgba(self.colours.on_primary);
         let on_surface = rgba(self.colours.on_surface);
-        let on_surface_variant = rgba(self.colours.on_surface_variant);
         let selection_fill = rgba(0xFFFFFF33);
 
         let bounds = self.state.current_bounds();
@@ -199,6 +199,10 @@ impl Render for ScreenshotOverlayView {
                             // Copy button
                             .child(
                                 div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(4.0))
                                     .px(px(10.0))
                                     .py(px(4.0))
                                     .rounded(px(14.0))
@@ -214,11 +218,20 @@ impl Render for ScreenshotOverlayView {
                                             this.state.execute_action(&this.config);
                                         }),
                                     )
-                                    .child("📋 Copy"),
+                                    .child(MaterialIcon::with_size(
+                                        "content_copy",
+                                        IconSize::Small,
+                                        self.colours.on_primary,
+                                    ))
+                                    .child("Copy"),
                             )
                             // Edit in Swappy
                             .child(
                                 div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(4.0))
                                     .px(px(10.0))
                                     .py(px(4.0))
                                     .rounded(px(14.0))
@@ -233,11 +246,20 @@ impl Render for ScreenshotOverlayView {
                                             this.state.execute_action(&this.config);
                                         }),
                                     )
-                                    .child("✏️ Edit"),
+                                    .child(MaterialIcon::with_size(
+                                        "edit",
+                                        IconSize::Small,
+                                        self.colours.on_surface,
+                                    ))
+                                    .child("Edit"),
                             )
                             // OCR Text recognition
                             .child(
                                 div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(4.0))
                                     .px(px(10.0))
                                     .py(px(4.0))
                                     .rounded(px(14.0))
@@ -252,7 +274,12 @@ impl Render for ScreenshotOverlayView {
                                             this.state.execute_action(&this.config);
                                         }),
                                     )
-                                    .child("🔤 OCR"),
+                                    .child(MaterialIcon::with_size(
+                                        "text_fields",
+                                        IconSize::Small,
+                                        self.colours.on_surface,
+                                    ))
+                                    .child("OCR"),
                             )
                             // Cancel
                             .child(
@@ -264,8 +291,6 @@ impl Render for ScreenshotOverlayView {
                                     .items_center()
                                     .justify_center()
                                     .bg(surface_highest)
-                                    .text_color(on_surface_variant)
-                                    .text_xs()
                                     .cursor(CursorStyle::PointingHand)
                                     .on_mouse_down(
                                         gpui::MouseButton::Left,
@@ -273,7 +298,11 @@ impl Render for ScreenshotOverlayView {
                                             this.state.dismiss();
                                         }),
                                     )
-                                    .child("✕"),
+                                    .child(MaterialIcon::with_size(
+                                        "close",
+                                        IconSize::Small,
+                                        self.colours.on_surface_variant,
+                                    )),
                             ),
                     )
                 })

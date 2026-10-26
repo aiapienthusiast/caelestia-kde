@@ -76,7 +76,7 @@ impl SessionView {
         &self,
         index: usize,
         title: &'static str,
-        _icon_name: &'static str,
+        icon_name: &'static str,
         kind: SessionActionKind,
         cx: &mut gpui::Context<Self>,
     ) -> impl IntoElement {
@@ -128,20 +128,13 @@ impl SessionView {
                 cx.notify();
             }))
             .child(
-                MaterialIcon::new(match kind {
-                    SessionActionKind::Logout => "logout",
-                    SessionActionKind::Shutdown => "power_settings_new",
-                    SessionActionKind::Hibernate => "bedtime",
-                    SessionActionKind::Reboot => "restart_alt",
-                    _ => "more_horiz",
-                })
-                .text_size(px(ICON_SIZE_MEDIUM * 1.2))
-                .child("")
-                .color(if is_focused {
-                    self.colours.on_secondary_container
-                } else {
-                    self.colours.on_surface
-                }),
+                MaterialIcon::new(icon_name)
+                    .text_size(px(ICON_SIZE_MEDIUM * 1.2))
+                    .color(if is_focused {
+                        self.colours.on_secondary_container
+                    } else {
+                        self.colours.on_surface
+                    }),
             )
             .child(
                 StyledText::new(title)

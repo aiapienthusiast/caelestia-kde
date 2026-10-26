@@ -1,7 +1,7 @@
 //! Performance Widget
 //! Parity with `shell/modules/bar/components/PerformanceWidget.qml`.
 
-use crate::components::styled_text::StyledTextExt;
+use crate::components::icon::{IconSize, MaterialIcon};
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{div, prelude::*, rgba, CursorStyle, Div, Styled};
 
@@ -20,11 +20,7 @@ impl PerformanceWidget {
             .rounded_full()
             .bg(rgba(c.surface_container_low))
             .cursor(CursorStyle::PointingHand)
-            .child(
-                div()
-                    .text_color(rgba(c.primary))
-                    .child(StyledTextExt::icon_size(div().child("speed"), 14.0)),
-            )
+            .child(MaterialIcon::with_size("speed", IconSize::Small, c.primary))
             .child(
                 div()
                     .text_color(rgba(c.on_surface))

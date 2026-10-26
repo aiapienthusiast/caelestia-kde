@@ -16,7 +16,7 @@ impl ListRow {
     pub fn render(
         headline: impl Into<SharedString>,
         subtitle: Option<impl Into<SharedString>>,
-        leading_icon: Option<&'static str>,
+        leading_icon: Option<&str>,
         trailing: Option<Div>,
         is_hovered: bool,
         is_pressed: bool,

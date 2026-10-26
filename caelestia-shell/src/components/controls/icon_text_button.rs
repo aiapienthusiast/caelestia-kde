@@ -9,9 +9,34 @@ use crate::domain::tokens::*;
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{div, prelude::*, px, rgba, Div, SharedString};
 
-pub struct IconTextButton;
+pub struct IconTextButton {
+    icon: SharedString,
+    text: SharedString,
+    colours: Option<CaelestiaColours>,
+    disabled: bool,
+}
 
 impl IconTextButton {
+    /// Convenience constructor for an icon text button with default styling
+    pub fn new(icon: impl Into<SharedString>, text: impl Into<SharedString>) -> Self {
+        Self {
+            icon: icon.into(),
+            text: text.into(),
+            colours: None,
+            disabled: false,
+        }
+    }
+
+    pub fn with_colours(mut self, c: CaelestiaColours) -> Self {
+        self.colours = Some(c);
+        self
+    }
+
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     /// Renders an M3 IconTextButton with full visual and behavioral parity.
     pub fn render(
         icon: impl Into<SharedString>,
@@ -89,6 +114,41 @@ impl IconTextButton {
                             .text_color(rgba(on_color))
                             .child(text.into()),
                     ),
+            )
+    }
+}
+
+impl IntoElement for IconTextButton {
+    type Element = Div;
+
+    fn into_element(self) -> Self::Element {
+        let on_color = self.colours.as_ref().map(|c| c.on_surface).unwrap_or(0xffffffff);
+        let bg_color = self.colours.as_ref().map(|c| c.surface_container_low).unwrap_or(0x202020ff);
+        let hover_bg = self.colours.as_ref().map(|c| c.surface_container_high).unwrap_or(0xffffff15);
+
+        let mut d = div()
+            .flex()
+            .items_center()
+            .gap(px(SPACING_SMALL))
+            .h(px(36.0))
+            .px(px(PADDING_MEDIUM))
+            .py(px(PADDING_SMALL))
+            .rounded(px(18.0))
+            .bg(rgba(bg_color));
+
+        if self.disabled {
+            d = d.opacity(0.38).cursor_not_allowed();
+        } else {
+            d = d.cursor_pointer().hover(move |s| s.bg(rgba(hover_bg)));
+        }
+
+        d.child(MaterialIcon::with_size(self.icon, IconSize::Small, on_color))
+            .child(
+                div()
+                    .text_size(px(TypographyScale::LabelLarge.font_size()))
+                    .font_weight(TypographyScale::LabelLarge.default_weight())
+                    .text_color(rgba(on_color))
+                    .child(self.text),
             )
     }
 }

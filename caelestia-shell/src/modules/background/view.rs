@@ -2,6 +2,7 @@
 //! Complete parity with `shell/modules/background/Background.qml`, `DesktopClock.qml`,
 //! `DesktopContextMenu.qml`, and `Wallpaper.qml`.
 
+use crate::components::icon::{IconSize, MaterialIcon};
 use super::config::DesktopClockLayout;
 use super::state::BackgroundState;
 use crate::infrastructure::theme::CaelestiaColours;
@@ -180,11 +181,13 @@ impl BackgroundView {
                 .shadow_lg()
                 .children(items.into_iter().map(|item| {
                     let label = item.label();
+                    let icon_name = item.icon();
                     let action = item;
                     div()
                         .flex()
                         .flex_row()
                         .items_center()
+                        .gap(px(8.0))
                         .px(px(12.0))
                         .py(px(8.0))
                         .rounded(px(8.0))
@@ -192,6 +195,11 @@ impl BackgroundView {
                         .hover(|d| d.bg(rgba(0xffffff15)))
                         .text_size(px(13.0))
                         .text_color(on_surface)
+                        .child(MaterialIcon::with_size(
+                            icon_name,
+                            IconSize::Small,
+                            self.colours.on_surface_variant,
+                        ))
                         .child(label)
                         .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _win, cx| {
                             this.state.execute_context_menu_action(action);

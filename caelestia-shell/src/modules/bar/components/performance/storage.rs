@@ -1,7 +1,7 @@
 //! PerfStorage Meter
 //! Parity with `shell/modules/bar/components/performance/PerfStorage.qml`.
 
-use crate::components::styled_text::StyledTextExt;
+use crate::components::icon::{IconSize, MaterialIcon};
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{div, prelude::*, rgba, Div, Styled};
 
@@ -14,7 +14,7 @@ impl PerfStorage {
             .flex_row()
             .items_center()
             .gap_1()
-            .child(StyledTextExt::icon_size(div().child("hard_drive"), 12.0).text_color(rgba(c.secondary)))
+            .child(MaterialIcon::with_size("hard_drive", IconSize::Small, c.secondary))
             .child(
                 div()
                     .text_xs()

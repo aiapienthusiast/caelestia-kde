@@ -1,7 +1,7 @@
 //! Window Information Action Buttons
 //! Parity with `shell/modules/windowinfo/Buttons.qml`.
 
-use crate::components::styled_text::StyledTextExt;
+use crate::components::icon::{IconSize, MaterialIcon};
 use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::kwin::WindowItem;
 use gpui::{div, prelude::*, rgba, CursorStyle, Div, Styled};
@@ -36,7 +36,7 @@ impl WindowInfoButtons {
                             .rounded_md()
                             .bg(rgba(c.surface_container_high))
                             .cursor(CursorStyle::PointingHand)
-                            .child(StyledTextExt::icon_size(div().child("close"), 14.0).text_color(rgba(c.error)))
+                            .child(MaterialIcon::with_size("close", IconSize::Small, c.error))
                             .child(
                                 div()
                                     .text_xs()
@@ -54,7 +54,7 @@ impl WindowInfoButtons {
                             .rounded_md()
                             .bg(rgba(c.surface_container_high))
                             .cursor(CursorStyle::PointingHand)
-                            .child(StyledTextExt::icon_size(div().child("fullscreen"), 14.0).text_color(rgba(c.primary)))
+                            .child(MaterialIcon::with_size("fullscreen", IconSize::Small, c.primary))
                             .child(
                                 div()
                                     .text_xs()

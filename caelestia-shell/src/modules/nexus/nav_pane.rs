@@ -43,7 +43,7 @@ impl NavPane {
                     .flex()
                     .items_center()
                     .gap(px(SPACING_SMALL))
-                    .child(MaterialIcon::with_size("🔍", IconSize::Small, c.on_surface_variant))
+                    .child(MaterialIcon::with_size("search", IconSize::Small, c.on_surface_variant))
                     .child(
                         div()
                             .text_size(px(FONT_SIZE_NORMAL))
@@ -106,19 +106,19 @@ impl NavPane {
             c.on_surface_variant
         };
 
-        let icon_char = match cat.key {
-            "appearance" => "🎨",
-            "desktop" => "🖥️",
-            "panels" => "📑",
-            "network" => "📶",
-            "bluetooth" => "ᛒ",
-            "display" => "🖵",
-            "audio" => "🔊",
-            "power" => "🔋",
-            "apps" => "📱",
-            "services" => "✨",
-            "about" => "ℹ️",
-            _ => "⚙️",
+        let icon_name = match cat.key {
+            "appearance" => "palette",
+            "desktop" => "desktop_windows",
+            "panels" => "dock_to_bottom",
+            "network" => "wifi",
+            "bluetooth" => "bluetooth",
+            "display" => "monitor",
+            "audio" => "volume_up",
+            "power" => "battery_charging_full",
+            "apps" => "apps",
+            "services" => "tune",
+            "about" => "info",
+            _ => "settings",
         };
 
         div()
@@ -146,14 +146,11 @@ impl NavPane {
                 radius,
                 c.primary,
             ))
-            .child(
-                div()
-                    .text_size(px(20.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(icon_char),
-            )
+            .child(MaterialIcon::with_size(
+                icon_name,
+                IconSize::Medium,
+                label_color,
+            ))
             .child(
                 div()
                     .flex()

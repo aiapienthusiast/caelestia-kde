@@ -186,6 +186,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow.workspace = true
 chrono = "0.4"
 sysinfo = "0.31"
+sha2.workspace = true
+percent-encoding.workspace = true
+regex.workspace = true
 
 [profile.release]
 opt-level = 3

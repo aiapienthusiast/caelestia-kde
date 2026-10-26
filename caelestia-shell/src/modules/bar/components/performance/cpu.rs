@@ -1,7 +1,7 @@
 //! PerfCpu Meter
 //! Parity with `shell/modules/bar/components/performance/PerfCpu.qml`.
 
-use crate::components::styled_text::StyledTextExt;
+use crate::components::icon::{IconSize, MaterialIcon};
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{div, prelude::*, rgba, Div, Styled};
 
@@ -14,7 +14,7 @@ impl PerfCpu {
             .flex_row()
             .items_center()
             .gap_1()
-            .child(StyledTextExt::icon_size(div().child("memory"), 12.0).text_color(rgba(c.primary)))
+            .child(MaterialIcon::with_size("memory", IconSize::Small, c.primary))
             .child(
                 div()
                     .text_xs()

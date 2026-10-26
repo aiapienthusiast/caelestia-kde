@@ -2,7 +2,7 @@
 //! Parity with `shell/modules/whatsnew/WhatsNewWindow.qml`.
 
 use super::entries::WhatsNewEntry;
-use crate::components::styled_text::StyledTextExt;
+use crate::components::icon::{IconSize, MaterialIcon};
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{div, prelude::*, px, rgba, CursorStyle, Div, Styled};
 
@@ -43,7 +43,11 @@ impl WhatsNewView {
                     .child(
                         div()
                             .cursor(CursorStyle::PointingHand)
-                            .child(StyledTextExt::icon_size(div().child("close"), 18.0).text_color(rgba(c.on_surface_variant))),
+                            .child(MaterialIcon::with_size(
+                                "close",
+                                IconSize::Small,
+                                c.on_surface_variant,
+                            )),
                     ),
             )
             .child(
@@ -61,7 +65,11 @@ impl WhatsNewView {
                                 .flex_row()
                                 .items_center()
                                 .gap_2()
-                                .child(StyledTextExt::icon_size(div().child(item.icon.clone()), 24.0).text_color(rgba(c.primary)))
+                                .child(MaterialIcon::with_size(
+                                    &item.icon,
+                                    IconSize::Large,
+                                    c.primary,
+                                ))
                                 .child(
                                     div()
                                         .text_base()

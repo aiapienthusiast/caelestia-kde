@@ -274,6 +274,12 @@ fn test_all_bar_components_render() {
         hours: 12,
         minutes: 34,
         seconds: 0,
+        hour_str: "12".to_string(),
+        minute_str: "34".to_string(),
+        second_str: "00".to_string(),
+        am_pm_str: "pm".to_string(),
+        day_of_week: "Sun".to_string(),
+        day_of_month: "25".to_string(),
     };
     let _ = ClockWidget::render(&clock_snap, &c);
 

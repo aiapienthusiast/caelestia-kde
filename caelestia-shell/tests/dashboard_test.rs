@@ -129,16 +129,22 @@ fn test_mpris_service_metadata_and_progress() {
 
 #[test]
 fn test_dashboard_tabs_integrity() {
-    assert_eq!(DashboardTab::ALL.len(), 4);
+    assert_eq!(DashboardTab::ALL.len(), 7);
     assert_eq!(DashboardTab::Dashboard.label(), "Dashboard");
     assert_eq!(DashboardTab::Media.label(), "Media");
     assert_eq!(DashboardTab::Performance.label(), "Performance");
     assert_eq!(DashboardTab::Weather.label(), "Weather");
+    assert_eq!(DashboardTab::Notes.label(), "Notes");
+    assert_eq!(DashboardTab::Terminal.label(), "Terminal");
+    assert_eq!(DashboardTab::Wallhaven.label(), "Wallhaven");
 
     assert_eq!(DashboardTab::Dashboard.icon(), "dashboard");
     assert_eq!(DashboardTab::Media.icon(), "queue_music");
     assert_eq!(DashboardTab::Performance.icon(), "speed");
     assert_eq!(DashboardTab::Weather.icon(), "cloud");
+    assert_eq!(DashboardTab::Notes.icon(), "edit_note");
+    assert_eq!(DashboardTab::Terminal.icon(), "terminal");
+    assert_eq!(DashboardTab::Wallhaven.icon(), "wallpaper");
 }
 
 #[test]
@@ -151,7 +157,10 @@ fn test_dashboard_tab_cycling() {
             DashboardTab::Dashboard => DashboardTab::Media,
             DashboardTab::Media => DashboardTab::Performance,
             DashboardTab::Performance => DashboardTab::Weather,
-            DashboardTab::Weather => DashboardTab::Dashboard,
+            DashboardTab::Weather => DashboardTab::Notes,
+            DashboardTab::Notes => DashboardTab::Terminal,
+            DashboardTab::Terminal => DashboardTab::Wallhaven,
+            DashboardTab::Wallhaven => DashboardTab::Dashboard,
         });
     }
 
@@ -159,10 +168,13 @@ fn test_dashboard_tab_cycling() {
     for (i, tab) in tabs.iter().enumerate() {
         let prev_idx = if i == 0 { tabs.len() - 1 } else { i - 1 };
         assert_eq!(tabs[prev_idx], match tab {
-            DashboardTab::Dashboard => DashboardTab::Weather,
+            DashboardTab::Dashboard => DashboardTab::Wallhaven,
             DashboardTab::Media => DashboardTab::Dashboard,
             DashboardTab::Performance => DashboardTab::Media,
             DashboardTab::Weather => DashboardTab::Performance,
+            DashboardTab::Notes => DashboardTab::Weather,
+            DashboardTab::Terminal => DashboardTab::Notes,
+            DashboardTab::Wallhaven => DashboardTab::Terminal,
         });
     }
 }

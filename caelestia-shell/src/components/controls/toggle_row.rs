@@ -13,7 +13,7 @@ impl ToggleRow {
     pub fn render(
         title: impl Into<SharedString>,
         description: Option<impl Into<SharedString>>,
-        leading_icon: Option<&'static str>,
+        leading_icon: Option<&str>,
         is_checked: bool,
         is_hovered: bool,
         is_pressed: bool,

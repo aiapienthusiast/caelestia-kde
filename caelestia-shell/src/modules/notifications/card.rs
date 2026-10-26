@@ -5,7 +5,7 @@
 //! expandable body text, and interactive dismiss controls.
 
 use super::toast::ToastItem;
-use crate::components::styled_text::StyledTextExt;
+use crate::components::icon::{IconSize, MaterialIcon};
 use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::notifications::Urgency;
 use gpui::{
@@ -76,11 +76,14 @@ impl Render for NotificationCard {
                                     .h(px(24.0))
                                     .rounded_full()
                                     .bg(rgba(c.primary_container))
-                                    .text_color(rgba(c.on_primary_container))
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .child(StyledTextExt::icon_size(div().child("notifications"), 14.0)),
+                                    .child(MaterialIcon::with_size(
+                                        "notifications",
+                                        IconSize::Small,
+                                        c.on_primary_container,
+                                    )),
                             )
                             .child(
                                 div()
@@ -92,9 +95,12 @@ impl Render for NotificationCard {
                     )
                     .child(
                         div()
-                            .text_color(rgba(c.on_surface_variant))
                             .cursor(CursorStyle::PointingHand)
-                            .child(StyledTextExt::icon_size(div().child("close"), 16.0)),
+                            .child(MaterialIcon::with_size(
+                                "close",
+                                IconSize::Small,
+                                c.on_surface_variant,
+                            )),
                     ),
             )
             // Summary / Title

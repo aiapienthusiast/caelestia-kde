@@ -1,12 +1,13 @@
 //! Status Icons Bar Cluster & Model
 //! Complete parity with `shell/modules/bar/components/StatusIcons.qml`.
 
-use crate::components::styled_text::StyledTextExt;
+use crate::components::icon::{IconSize, MaterialIcon};
+use super::status::BatteryStatusWidget;
 use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::audio::AudioService;
 use crate::services::bluetooth::BluetoothService;
 use crate::services::network::{NetworkKind, NetworkService};
-use gpui::{div, prelude::*, rgba, Div, Styled};
+use gpui::{div, prelude::*, Div};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -99,17 +100,25 @@ impl StatusIconsWidget {
             .flex_row()
             .items_center()
             .gap_2()
-            .child(
-                StyledTextExt::icon_size(div().child(snapshot.volume_icon), 16.0)
-                    .text_color(rgba(c.on_surface)),
-            )
-            .child(
-                StyledTextExt::icon_size(div().child(snapshot.network_icon), 16.0)
-                    .text_color(rgba(c.on_surface)),
-            )
-            .child(
-                StyledTextExt::icon_size(div().child(snapshot.bluetooth_icon), 16.0)
-                    .text_color(rgba(c.on_surface)),
-            )
+            .child(MaterialIcon::with_size(
+                snapshot.volume_icon,
+                IconSize::Small,
+                c.on_surface,
+            ))
+            .child(MaterialIcon::with_size(
+                snapshot.network_icon,
+                IconSize::Small,
+                c.on_surface,
+            ))
+            .child(MaterialIcon::with_size(
+                snapshot.bluetooth_icon,
+                IconSize::Small,
+                c.on_surface,
+            ))
+            .child(BatteryStatusWidget::render(
+                snapshot.battery_pct as u8,
+                snapshot.battery_charging,
+                c,
+            ))
     }
 }
