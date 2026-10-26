@@ -56,68 +56,81 @@ impl DashboardTab {
 pub struct DashboardTabs;
 
 impl DashboardTabs {
+    pub const DEFAULT_TABS: [DashboardTab; 5] = [
+        DashboardTab::Dashboard,
+        DashboardTab::Media,
+        DashboardTab::Performance,
+        DashboardTab::Weather,
+        DashboardTab::Notes,
+    ];
+
     pub fn render<V: 'static>(
         current_tab: DashboardTab,
         colours: &CaelestiaColours,
         cx: &mut gpui::Context<V>,
         on_select: impl Fn(&mut V, DashboardTab, &mut gpui::Context<V>) + 'static + Copy,
     ) -> Div {
-        let mut row = div()
+        div()
             .flex()
-            .items_center()
-            .justify_center()
-            .gap(px(8.0))
-            .p(px(8.0))
-            .rounded_full()
-            .bg(rgba(colours.surface_container));
-
-        for tab in DashboardTab::ALL {
-            let is_selected = tab == current_tab;
-            let bg_color = if is_selected {
-                rgba(colours.primary)
-            } else {
-                rgba(0x00000000)
-            };
-            let text_color = if is_selected {
-                colours.on_primary
-            } else {
-                colours.on_surface_variant
-            };
-
-            row = row.child(
+            .flex_col()
+            .w_full()
+            .border_b_1()
+            .border_color(rgba(colours.outline_variant))
+            .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(8.0))
-                    .px(px(16.0))
-                    .py(px(8.0))
-                    .rounded_full()
-                    .bg(bg_color)
-                    .cursor(CursorStyle::PointingHand)
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |view, _, _, cx| {
-                            on_select(view, tab, cx);
-                        }),
-                    )
-                    .child(
-                        MaterialIcon::new(tab.icon())
-                            .text_color(rgba(text_color))
-                            .text_size(px(18.0)),
-                    )
-                    .child(
-                        StyledText::new(tab.label())
-                            .text_color(rgba(text_color))
-                            .text_size(px(14.0))
-                            .font_weight(if is_selected {
-                                gpui::FontWeight::SEMIBOLD
-                            } else {
-                                gpui::FontWeight::NORMAL
-                            }),
-                    ),
-            );
-        }
+                    .justify_around()
+                    .w_full()
+                    .pt(px(8.0))
+                    .children(Self::DEFAULT_TABS.iter().map(|&tab| {
+                        let is_selected = tab == current_tab;
+                        let text_color = if is_selected {
+                            colours.primary
+                        } else {
+                            colours.on_surface_variant
+                        };
 
-        row
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .gap(px(4.0))
+                            .px(px(20.0))
+                            .cursor(CursorStyle::PointingHand)
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |view, _, _, cx| {
+                                    on_select(view, tab, cx);
+                                }),
+                            )
+                            .child(
+                                MaterialIcon::new(tab.icon())
+                                    .text_color(rgba(text_color))
+                                    .text_size(px(20.0)),
+                            )
+                            .child(
+                                StyledText::new(tab.label())
+                                    .text_color(rgba(text_color))
+                                    .text_size(px(14.0))
+                                    .font_weight(if is_selected {
+                                        gpui::FontWeight::SEMIBOLD
+                                    } else {
+                                        gpui::FontWeight::NORMAL
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .h(px(3.0))
+                                    .w(px(56.0))
+                                    .rounded_full()
+                                    .bg(if is_selected {
+                                        rgba(colours.primary)
+                                    } else {
+                                        rgba(0x00000000)
+                                    }),
+                            )
+                    })),
+            )
     }
 }

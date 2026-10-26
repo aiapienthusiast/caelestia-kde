@@ -2,7 +2,7 @@
 //! Parity with `shell/modules/drawers/ContentWindow.qml` and `shell/modules/dashboard/Content.qml`.
 //! Hosts the complete Caelestia Dashboard with KWin frosted blur, tabs, and live services.
 
-use super::dash::{DashView, QuickActionsState};
+use super::dash::DashView;
 use super::media::MediaView;
 use super::performance::PerformanceView;
 use super::tabs::{DashboardTab, DashboardTabs};
@@ -36,6 +36,7 @@ pub struct DashboardView {
     pub bluetooth: BluetoothService,
     pub night_light: NightLightService,
     pub notifications: NotificationsService,
+    pub calendar_date: chrono::NaiveDate,
     pub is_open: bool,
     open_progress: f32,
     anim_phase: f32,
@@ -58,6 +59,7 @@ impl DashboardView {
         let bluetooth = BluetoothService::new();
         let night_light = NightLightService::new();
         let notifications = NotificationsService::new();
+        let calendar_date = chrono::Local::now().date_naive();
 
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let scheme_path = format!("{}/.local/state/caelestia/scheme.json", home);
@@ -92,6 +94,7 @@ impl DashboardView {
             bluetooth,
             night_light,
             notifications,
+            calendar_date,
             is_open,
             open_progress: if is_open { 1.0 } else { 0.0 },
             anim_phase: 0.0,
@@ -100,6 +103,24 @@ impl DashboardView {
             last_scheme_check: Instant::now(),
             last_scheme_mtime,
         }
+    }
+
+    pub fn shift_calendar_month(&mut self, delta: i32, cx: &mut gpui::Context<Self>) {
+        if delta > 0 {
+            if let Some(next) = self.calendar_date.checked_add_months(chrono::Months::new(delta as u32)) {
+                self.calendar_date = next;
+            }
+        } else if delta < 0 {
+            if let Some(prev) = self.calendar_date.checked_sub_months(chrono::Months::new((-delta) as u32)) {
+                self.calendar_date = prev;
+            }
+        }
+        cx.notify();
+    }
+
+    pub fn reset_calendar_today(&mut self, cx: &mut gpui::Context<Self>) {
+        self.calendar_date = chrono::Local::now().date_naive();
+        cx.notify();
     }
 
     fn tick_animation(&mut self) {
@@ -189,33 +210,34 @@ impl Render for DashboardView {
 
         let content = match current_tab {
             DashboardTab::Dashboard => {
-                let quick_state = QuickActionsState {
-                    wifi_active: self.network.state.wifi_enabled,
-                    bluetooth_active: self.bluetooth.state.powered,
-                    night_active: self.night_light.state.running,
-                    notifs_active: !self.notifications.state.dnd,
-                };
                 DashView::render(
                     &self.weather.data,
                     &self.sysinfo,
                     &self.paths,
-                    quick_state,
+                    &self.monitor,
+                    &self.mpris,
+                    self.calendar_date,
                     c,
                     cx,
+                    |dash: &mut DashboardView, delta, cx| {
+                        dash.shift_calendar_month(delta, cx);
+                    },
                     |dash: &mut DashboardView, cx| {
-                        dash.network.toggle_wifi();
+                        dash.reset_calendar_today(cx);
+                    },
+                    |dash: &mut DashboardView, cx| {
+                        dash.mpris.poll_playerctl();
+                        MprisService::play_pause();
                         cx.notify();
                     },
                     |dash: &mut DashboardView, cx| {
-                        dash.bluetooth.toggle_power();
+                        dash.mpris.poll_playerctl();
+                        MprisService::previous();
                         cx.notify();
                     },
                     |dash: &mut DashboardView, cx| {
-                        dash.night_light.toggle();
-                        cx.notify();
-                    },
-                    |dash: &mut DashboardView, cx| {
-                        dash.notifications.toggle_dnd();
+                        dash.mpris.poll_playerctl();
+                        MprisService::next();
                         cx.notify();
                     },
                 )
@@ -311,8 +333,8 @@ impl Render for DashboardView {
             // Top-anchored dropdown drawer panel
             .child(
                 div()
-                    .w(px(854.0))
-                    .h(px(540.0))
+                    .w(px(936.0))
+                    .h(px(570.0))
                     .bg(rgba(c.surface_container_lowest))
                     .rounded_b_3xl()
                     .border_b_1()
@@ -336,7 +358,7 @@ impl Render for DashboardView {
                         div()
                             .flex_1()
                             .w_full()
-                            .p(px(20.0))
+                            .p(px(16.0))
                             .overflow_hidden()
                             .child(content),
                     ),
