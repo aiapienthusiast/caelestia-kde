@@ -71,9 +71,18 @@ test_a_reset_replaces_the_config_instead_of_merging_it() {
 }
 
 test_the_form_starts_afresh_for_each_opening() {
-    assert_contains "$(function_body "$PANEL" openAt)" 'form.active = false' "the previous form must not be reused"
-    assert_contains "$(function_body "$PANEL" openAt)" 'Qt.callLater' "the rebuild must wait for the new widget id"
-    assert_contains "$(function_body "$PANEL" close)" 'form.active = false' "closing must drop the form so the next opening starts clean"
+    assert_contains "$(function_body "$PANEL" openAt)" 'root.refresh()' "opening must go through the one rebuild path"
+    assert_contains "$(function_body "$PANEL" close)" 'root.refresh()' "closing must drop the form so the next opening starts clean"
+    local body
+    body="$(function_body "$PANEL" refresh)"
+    assert_contains "$body" 'form.active = false' "the previous form must not be reused"
+    assert_contains "$body" 'Qt.callLater' "the rebuild must wait for the new widget id"
+    assert_file_contains "$PANEL" 'onTypeChanged: root.refresh()' "a type that arrives after the panel opened must still build the form"
+}
+
+test_the_panel_is_only_as_tall_as_its_fields() {
+    assert_file_contains "$PANEL" 'height: body.implicitHeight + Tokens.padding.large * 2' "a two-field widget must not get a screen-tall panel"
+    assert_file_contains "$PANEL" 'Layout.preferredHeight: Math.min(root.formHeight, root.maxFormHeight)' "a long form must be capped and scroll instead"
 }
 
 test_the_card_takes_its_look_from_the_config() {

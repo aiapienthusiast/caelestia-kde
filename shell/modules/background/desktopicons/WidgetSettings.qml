@@ -33,17 +33,25 @@ Item {
         at = Qt.point(x, y);
         widgetId = id;
         open = true;
-        // A second opening for another widget must not show the fields the previous
-        // one left behind: destroy the form and build it again.
-        form.active = false;
-        Qt.callLater(() => {
-            form.active = root.open && root.type !== "";
-        });
+        root.refresh();
     }
 
     function close(): void {
         open = false;
+        root.refresh();
+    }
+
+    /// Builds the form afresh, so the fields never carry the previous widget's values.
+    /// Called on every change that can bring a different widget into the panel -- and
+    /// on the type arriving late, which is what happens when the panel is opened
+    /// before the layout file has been read.
+    function refresh(): void {
         form.active = false;
+        if (!root.open || root.type === "")
+            return;
+        Qt.callLater(() => {
+            form.active = root.open && root.type !== "";
+        });
     }
 
     anchors.fill: parent
@@ -55,6 +63,11 @@ Item {
         if (open && widget === null)
             close();
     }
+
+    // Every change that can put a different widget in the panel rebuilds the form.
+    // `type` matters as much as the id: it is empty until the layout file has been
+    // read, so a panel opened in that window would otherwise stay blank.
+    onTypeChanged: root.refresh()
 
     // Leaving the editor leaves the panel behind it, or it would float over the
     // desktop with nothing to edit.
