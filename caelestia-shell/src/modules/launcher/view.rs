@@ -1,16 +1,25 @@
 //! Launcher View Component
 //! Parity with `shell/modules/launcher/Content.qml`, `ContentList.qml`, and `AppBrowserGrid.qml`.
-//!
-//! Renders category sidebar on the left, app grid on the right, and the bottom notched search bar.
+//! Composed of reusable components from `crate::components::*`:
+//! - `SearchBar` (`crate::components::controls::search_bar::SearchBar`)
+//! - `IconButton` (`crate::components::controls::icon_button::IconButton`)
+//! - `MaterialIcon` (`crate::components::icon::{IconSize, MaterialIcon}`)
+//! - `StyledText` (`crate::components::styled_text::{StyledText, StyledTextExt}`)
+//! - `styled_rect` (`crate::components::styled_rect::{styled_rect, StyledRectExt}`)
 
-use super::categories::Categories;
+use super::categories::{Categories, CategoryDef};
 use super::entry::DesktopEntry;
 use super::executor::AppExecutor;
 use super::searcher::AppSearcher;
+use crate::components::controls::button_base::{ButtonStyle, ButtonType};
+use crate::components::controls::icon_button::IconButton;
+use crate::components::controls::search_bar::SearchBar;
 use crate::components::icon::{IconSize, MaterialIcon};
+use crate::components::styled_rect::{styled_rect, StyledRectExt};
+use crate::components::styled_text::{StyledText, StyledTextExt};
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{
-    div, img, prelude::*, px, rgba, svg, CursorStyle, FocusHandle, FontWeight, IntoElement,
+    div, img, prelude::*, px, rgba, svg, CursorStyle, Div, FocusHandle, FontWeight, IntoElement,
     KeyDownEvent, MouseButton, Render, Styled, Window,
 };
 use std::path::{Path, PathBuf};
@@ -185,34 +194,170 @@ impl LauncherView {
     }
 
     /// Keyboard navigation
-    pub fn handle_key_down(&mut self, event: &KeyDownEvent) {
+    pub fn handle_key_down(&mut self, event: &KeyDownEvent, cx: &mut gpui::Context<Self>) {
         match event.keystroke.key.as_str() {
             "down" => {
                 if self.focused_index + 1 < self.filtered_entries.len() {
                     self.focused_index += 1;
+                    cx.notify();
                 }
             }
             "up" => {
                 if self.focused_index > 0 {
                     self.focused_index -= 1;
+                    cx.notify();
                 }
             }
             "enter" => {
                 let _ = self.launch_focused();
+                cx.quit();
             }
             "escape" => {
                 self.is_open = false;
+                cx.quit();
             }
             "backspace" => {
                 self.search_query.pop();
                 self.refresh_results();
+                cx.notify();
             }
             key if key.len() == 1 => {
                 self.search_query.push_str(key);
                 self.refresh_results();
+                cx.notify();
             }
             _ => {}
         }
+    }
+
+    /// Renders category sidebar button matching `items/CategoryButton.qml`
+    fn render_category_button(
+        cat: &CategoryDef,
+        is_active: bool,
+        c: &CaelestiaColours,
+        cx: &mut gpui::Context<Self>,
+    ) -> Div {
+        let cat_id = cat.id.to_string();
+        styled_rect()
+            .w_full()
+            .h(px(40.0))
+            .px(px(12.0))
+            .corner_radius(12.0)
+            .cursor(CursorStyle::PointingHand)
+            .flex()
+            .items_center()
+            .gap(px(12.0))
+            .bg(if is_active {
+                rgba(c.surface_container_high)
+            } else {
+                rgba(0x00000000)
+            })
+            .child(
+                MaterialIcon::with_size(
+                    cat.icon,
+                    IconSize::Small,
+                    if is_active { c.primary } else { c.on_surface_variant },
+                ),
+            )
+            .child(
+                StyledText::new(cat.name)
+                    .color(if is_active { c.on_surface } else { c.on_surface_variant })
+                    .font_size(13.0)
+                    .font_weight(if is_active { FontWeight::SEMIBOLD } else { FontWeight::NORMAL }),
+            )
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _, _, _cx| {
+                    this.select_category(&cat_id);
+                }),
+            )
+    }
+
+    /// Renders single app grid tile matching `items/AppTile.qml`
+    fn render_app_tile(
+        entry: &DesktopEntry,
+        is_focused: bool,
+        is_fav: bool,
+        c: &CaelestiaColours,
+        cx: &mut gpui::Context<Self>,
+    ) -> Div {
+        let entry_id = entry.id.clone();
+        let resolved_icon = resolve_app_icon(&entry.icon, &entry.id);
+
+        styled_rect()
+            .w(px(84.0))
+            .h(px(96.0))
+            .corner_radius(14.0)
+            .p(px(6.0))
+            .cursor(CursorStyle::PointingHand)
+            .bg(if is_focused {
+                rgba(c.surface_container_highest)
+            } else {
+                rgba(0x00000000)
+            })
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_between()
+            // Favorite badge at top-right
+            .when(is_fav, |d| {
+                d.child(
+                    div()
+                        .absolute()
+                        .top(px(4.0))
+                        .right(px(6.0))
+                        .child(MaterialIcon::with_size(
+                            "favorite",
+                            IconSize::Custom(12.0),
+                            c.primary,
+                        )),
+                )
+            })
+            // Large App Icon
+            .child(
+                div()
+                    .w(px(48.0))
+                    .h(px(48.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(match resolved_icon {
+                        ResolvedAppIcon::Png(ref path) => {
+                            img(path.as_path()).w(px(44.0)).h(px(44.0)).into_any_element()
+                        }
+                        ResolvedAppIcon::Svg(ref path) => {
+                            svg()
+                                .external_path(path.to_string_lossy().to_string())
+                                .w(px(44.0))
+                                .h(px(44.0))
+                                .into_any_element()
+                        }
+                        ResolvedAppIcon::Glyph(glyph) => {
+                            MaterialIcon::with_size(glyph, IconSize::Large, c.primary)
+                                .into_any_element()
+                        }
+                    }),
+            )
+            // App Name Label using StyledText
+            .child(
+                StyledText::new(&entry.name)
+                    .color(c.on_surface)
+                    .font_size(12.0)
+                    .text_center()
+                    .line_height(px(13.0))
+                    .max_w_full()
+                    .overflow_hidden()
+                    .truncate(),
+            )
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _, _, _cx| {
+                    if let Some(pos) = this.filtered_entries.iter().position(|e| e.id == entry_id) {
+                        this.focused_index = pos;
+                        let _ = this.launch_focused();
+                    }
+                }),
+            )
     }
 }
 
@@ -225,8 +370,8 @@ impl Render for LauncherView {
         div()
             .id("launcher-backdrop")
             .track_focus(&self.focus_handle)
-            .on_key_down(cx.listener(|this, event, _window, _cx| {
-                this.handle_key_down(event);
+            .on_key_down(cx.listener(|this, event, _window, cx| {
+                this.handle_key_down(event, cx);
             }))
             .w_full()
             .h_full()
@@ -242,18 +387,17 @@ impl Render for LauncherView {
                 }),
             )
             .child(
-                // Floating Launcher Card Dialog
-                div()
+                // Floating Launcher Card Dialog using styled_rect()
+                styled_rect()
                     .id("launcher-card")
                     .on_mouse_down(MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
                     })
                     .w(px(640.0))
                     .h(px(460.0))
-                    .rounded(px(24.0))
-                    .bg(rgba(c.surface_container_low))
-                    .border_1()
-                    .border_color(rgba(c.outline_variant))
+                    .corner_radius(24.0)
+                    .surface_bg(c.surface_container_low)
+                    .outline_border(c.outline_variant, 1.0)
                     .p(px(16.0))
                     .flex()
                     .flex_col()
@@ -268,7 +412,7 @@ impl Render for LauncherView {
                             .gap(px(16.0))
                             .overflow_hidden()
                             .mb(px(12.0))
-                            // Left Category Sidebar
+                            // Left Category Sidebar using CategoryButtons
                             .child(
                                 div()
                                     .id("categories-sidebar")
@@ -278,58 +422,12 @@ impl Render for LauncherView {
                                     .flex_col()
                                     .gap(px(3.0))
                                     .overflow_y_scroll()
-                                    .children(
-                                        visible_categories.iter().map(|cat| {
-                                            let is_active = self.selected_category == cat.id;
-                                            let cat_id = cat.id.to_string();
-                                            div()
-                                                .w_full()
-                                                .h(px(38.0))
-                                                .px(px(12.0))
-                                                .rounded(px(12.0))
-                                                .cursor(CursorStyle::PointingHand)
-                                                .flex()
-                                                .items_center()
-                                                .gap(px(12.0))
-                                                .bg(if is_active {
-                                                    rgba(c.surface_container_high)
-                                                } else {
-                                                    rgba(0x00000000)
-                                                })
-                                                .child(
-                                                    MaterialIcon::with_size(
-                                                        cat.icon,
-                                                        IconSize::Small,
-                                                        if is_active { c.primary } else { c.on_surface_variant },
-                                                    ),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_sm()
-                                                        .font_weight(if is_active {
-                                                            FontWeight::MEDIUM
-                                                        } else {
-                                                            FontWeight::NORMAL
-                                                        })
-                                                        .text_color(rgba(if is_active {
-                                                            c.on_surface
-                                                        } else {
-                                                            c.on_surface_variant
-                                                        }))
-                                                        .overflow_hidden()
-                                                        .truncate()
-                                                        .child(cat.name),
-                                                )
-                                                .on_mouse_down(
-                                                    MouseButton::Left,
-                                                    cx.listener(move |this, _, _, _cx| {
-                                                        this.select_category(&cat_id);
-                                                    }),
-                                                )
-                                        }),
-                                    ),
+                                    .children(visible_categories.iter().map(|cat| {
+                                        let is_active = self.selected_category == cat.id;
+                                        Self::render_category_button(cat, is_active, c, cx)
+                                    })),
                             )
-                            // Right Applications Grid Area
+                            // Right Applications Grid Area using AppTiles
                             .child(
                                 div()
                                     .id("apps-grid-container")
@@ -349,10 +447,9 @@ impl Render for LauncherView {
                                             .gap(px(8.0))
                                             .child(MaterialIcon::with_size("apps", IconSize::Large, c.outline))
                                             .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(rgba(c.outline))
-                                                    .child("No apps in this category"),
+                                                StyledText::new("No apps in this category")
+                                                    .color(c.outline)
+                                                    .font_size(13.0),
                                             )
                                     } else {
                                         div()
@@ -362,188 +459,148 @@ impl Render for LauncherView {
                                             .flex_wrap()
                                             .gap(px(10.0))
                                             .p(px(2.0))
-                                            .children(
-                                                self.filtered_entries.iter().enumerate().map(|(idx, entry)| {
-                                                    let is_focused = idx == self.focused_index;
-                                                    let is_fav = self.favourite_ids.iter().any(|fav| {
-                                                        fav == &entry.id || fav == &entry.name
-                                                    }) || self.selected_category == "favorites";
-                                                    let resolved_icon = resolve_app_icon(&entry.icon, &entry.id);
-                                                    let entry_id = entry.id.clone();
-
-                                                    div()
-                                                        .w(px(84.0))
-                                                        .h(px(96.0))
-                                                        .relative()
-                                                        .rounded(px(14.0))
-                                                        .p(px(6.0))
-                                                        .cursor(CursorStyle::PointingHand)
-                                                        .bg(if is_focused {
-                                                            rgba(c.surface_container_highest)
-                                                        } else {
-                                                            rgba(0x00000000)
-                                                        })
-                                                        .flex()
-                                                        .flex_col()
-                                                        .items_center()
-                                                        .justify_between()
-                                                        // Favorite badge at top-right
-                                                        .when(is_fav, |d| {
-                                                            d.child(
-                                                                div()
-                                                                    .absolute()
-                                                                    .top(px(4.0))
-                                                                    .right(px(6.0))
-                                                                    .child(MaterialIcon::with_size(
-                                                                        "favorite",
-                                                                        IconSize::Custom(12.0),
-                                                                        c.primary,
-                                                                    )),
-                                                            )
-                                                        })
-                                                        // Large App Icon
-                                                        .child(
-                                                            div()
-                                                                .w(px(48.0))
-                                                                .h(px(48.0))
-                                                                .flex()
-                                                                .items_center()
-                                                                .justify_center()
-                                                                .child(match resolved_icon {
-                                                                    ResolvedAppIcon::Png(ref path) => {
-                                                                        img(path.as_path()).w(px(44.0)).h(px(44.0)).into_any_element()
-                                                                    }
-                                                                    ResolvedAppIcon::Svg(ref path) => {
-                                                                        svg()
-                                                                            .external_path(path.to_string_lossy().to_string())
-                                                                            .w(px(44.0))
-                                                                            .h(px(44.0))
-                                                                            .into_any_element()
-                                                                    }
-                                                                    ResolvedAppIcon::Glyph(glyph) => {
-                                                                        MaterialIcon::with_size(glyph, IconSize::Large, c.primary)
-                                                                            .into_any_element()
-                                                                    }
-                                                                }),
-                                                        )
-                                                        // App Name Label
-                                                        .child(
-                                                            div()
-                                                                .text_xs()
-                                                                .text_color(rgba(c.on_surface))
-                                                                .text_center()
-                                                                .line_height(px(13.0))
-                                                                .max_w_full()
-                                                                .overflow_hidden()
-                                                                .truncate()
-                                                                .child(entry.name.clone()),
-                                                        )
-                                                        .on_mouse_down(
-                                                            MouseButton::Left,
-                                                            cx.listener(move |this, _, _, _cx| {
-                                                                if let Some(pos) = this
-                                                                    .filtered_entries
-                                                                    .iter()
-                                                                    .position(|e| e.id == entry_id)
-                                                                {
-                                                                    this.focused_index = pos;
-                                                                    let _ = this.launch_focused();
-                                                                }
-                                                            }),
-                                                        )
-                                                }),
-                                            )
+                                            .children(self.filtered_entries.iter().enumerate().map(|(idx, entry)| {
+                                                let is_focused = idx == self.focused_index;
+                                                let is_fav = self.favourite_ids.iter().any(|fav| {
+                                                    fav == &entry.id || fav == &entry.name
+                                                }) || self.selected_category == "favorites";
+                                                Self::render_app_tile(entry, is_focused, is_fav, c, cx)
+                                            }))
                                     }),
                             ),
                     )
-                    // 2. Bottom Section: Outlined Notched Search Bar Row
+                    // 2. Bottom Section: SearchBar and Action Controls Row
                     .child(
                         div()
                             .w_full()
-                            .h(px(44.0))
                             .flex()
                             .flex_row()
                             .items_center()
                             .gap(px(10.0))
-                            // Search Icon Button
-                            .child(
-                                div()
-                                    .w(px(40.0))
-                                    .h(px(40.0))
-                                    .rounded_full()
-                                    .bg(rgba(c.surface_container_highest))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(MaterialIcon::with_size(
-                                        "search",
-                                        IconSize::Custom(20.0),
-                                        c.on_surface_variant,
-                                    )),
-                            )
-                            // Outlined Text Box with Notched Cutout Label
+                            // Material 3 SearchBar component from controls/search_bar.rs
                             .child(
                                 div()
                                     .flex_1()
-                                    .h(px(42.0))
-                                    .relative()
-                                    .rounded(px(14.0))
-                                    .border_1()
-                                    .border_color(rgba(if self.search_query.is_empty() {
-                                        c.outline_variant
-                                    } else {
-                                        c.primary
-                                    }))
-                                    .px(px(12.0))
-                                    .flex()
-                                    .items_center()
-                                    // Floating Notch Label
-                                    .child(
-                                        div()
-                                            .absolute()
-                                            .top(px(-9.0))
-                                            .left(px(10.0))
-                                            .px(px(4.0))
-                                            .bg(rgba(c.surface_container_low))
-                                            .text_xs()
-                                            .text_color(rgba(if self.search_query.is_empty() {
-                                                c.on_surface_variant
-                                            } else {
-                                                c.primary
-                                            }))
-                                            .child("Type \">\" for commands"),
-                                    )
-                                    // Current Query
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(rgba(c.on_surface))
-                                            .child(if self.search_query.is_empty() {
-                                                "".to_string()
-                                            } else {
-                                                self.search_query.clone()
-                                            }),
-                                    ),
-                            )
-                            // Hamburger Menu Button
-                            .child(
-                                div()
-                                    .w(px(40.0))
-                                    .h(px(40.0))
-                                    .rounded_full()
-                                    .bg(rgba(c.surface_container_highest))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor(CursorStyle::PointingHand)
-                                    .child(MaterialIcon::with_size(
-                                        "menu",
-                                        IconSize::Custom(20.0),
-                                        c.on_surface_variant,
+                                    .child(SearchBar::render(
+                                        &self.search_query,
+                                        "Search apps, calculations, commands...",
+                                        !self.search_query.is_empty(),
+                                        false,
+                                        false,
+                                        c,
                                     )),
+                            )
+                            // Power Menu Trigger using IconButton component from controls/icon_button.rs
+                            .child(
+                                IconButton::render(
+                                    if self.show_power_menu { "close" } else { "power_settings_new" },
+                                    &ButtonStyle {
+                                        button_type: if self.show_power_menu {
+                                            ButtonType::Filled
+                                        } else {
+                                            ButtonType::Tonal
+                                        },
+                                        is_round: true,
+                                        ..Default::default()
+                                    },
+                                    c,
+                                    Some(42.0),
+                                )
+                                .cursor(CursorStyle::PointingHand)
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(|this, _, _, _| {
+                                        this.show_power_menu = !this.show_power_menu;
+                                    }),
+                                ),
                             ),
-                    ),
+                    )
+                    // Optional Power Action Sheet Overlay using IconButton components
+                    .when(self.show_power_menu, |card| {
+                        card.child(
+                            styled_rect()
+                                .mt(px(8.0))
+                                .w_full()
+                                .p(px(10.0))
+                                .corner_radius(16.0)
+                                .surface_bg(c.surface_container_high)
+                                .flex()
+                                .items_center()
+                                .justify_around()
+                                .child(
+                                    IconButton::render(
+                                        "lock",
+                                        &ButtonStyle {
+                                            button_type: ButtonType::Tonal,
+                                            is_round: true,
+                                            ..Default::default()
+                                        },
+                                        c,
+                                        Some(36.0),
+                                    )
+                                    .cursor(CursorStyle::PointingHand)
+                                    .on_mouse_down(MouseButton::Left, |_, _, _| {
+                                        let _ = std::process::Command::new("loginctl")
+                                            .arg("lock-session")
+                                            .spawn();
+                                    }),
+                                )
+                                .child(
+                                    IconButton::render(
+                                        "bedtime",
+                                        &ButtonStyle {
+                                            button_type: ButtonType::Tonal,
+                                            is_round: true,
+                                            ..Default::default()
+                                        },
+                                        c,
+                                        Some(36.0),
+                                    )
+                                    .cursor(CursorStyle::PointingHand)
+                                    .on_mouse_down(MouseButton::Left, |_, _, _| {
+                                        let _ = std::process::Command::new("systemctl")
+                                            .arg("suspend")
+                                            .spawn();
+                                    }),
+                                )
+                                .child(
+                                    IconButton::render(
+                                        "restart_alt",
+                                        &ButtonStyle {
+                                            button_type: ButtonType::Tonal,
+                                            is_round: true,
+                                            ..Default::default()
+                                        },
+                                        c,
+                                        Some(36.0),
+                                    )
+                                    .cursor(CursorStyle::PointingHand)
+                                    .on_mouse_down(MouseButton::Left, |_, _, _| {
+                                        let _ = std::process::Command::new("systemctl")
+                                            .arg("reboot")
+                                            .spawn();
+                                    }),
+                                )
+                                .child(
+                                    IconButton::render(
+                                        "power_settings_new",
+                                        &ButtonStyle {
+                                            button_type: ButtonType::Filled,
+                                            is_round: true,
+                                            ..Default::default()
+                                        },
+                                        c,
+                                        Some(36.0),
+                                    )
+                                    .cursor(CursorStyle::PointingHand)
+                                    .on_mouse_down(MouseButton::Left, |_, _, _| {
+                                        let _ = std::process::Command::new("systemctl")
+                                            .arg("poweroff")
+                                            .spawn();
+                                    }),
+                                ),
+                        )
+                    }),
             )
     }
 }
-

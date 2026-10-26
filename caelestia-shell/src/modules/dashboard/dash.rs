@@ -1,22 +1,28 @@
 //! Primary Dash Tab
 //! Parity with `shell/modules/dashboard/Dash.qml`.
-//! Contains 6 cards matching upstream:
-//! 1. SmallWeather (top left)
-//! 2. User & System (top middle)
+//! Composed cleanly of reusable components from `crate::components::*`:
+//! 1. Weather Card (top left)
+//! 2. User & System Card (top middle) using `Logo`
 //! 3. DateTime vertical clock (bottom left)
-//! 4. CalendarMonth 42-day grid (bottom middle)
-//! 5. Resources 3-ring circular gauges for CPU/RAM/Disk (bottom right of left column)
-//! 6. Media & Bongo Cat (right column spanning full height)
+//! 4. CalendarMonth Card (bottom middle) using `CalendarMonth` & `CalendarMonthState`
+//! 5. Resources Card (bottom right of left column) using `CircularProgress`
+//! 6. Media & Bongo Cat Card (right column) using `CoverArtView`, `CircularProgress`, and `IconButton`
 
+use crate::components::calendar::calendar_month::{CalendarMonth, CalendarMonthState};
+use crate::components::controls::button_base::{ButtonStyle, ButtonType};
+use crate::components::controls::circular_progress::CircularProgress;
+use crate::components::controls::icon_button::IconButton;
 use crate::components::icon::MaterialIcon;
+use crate::components::logo::Logo;
 use crate::components::styled_text::{StyledText, StyledTextExt};
+use crate::components::widgets::cover_art::{CoverArtState, CoverArtView};
 use crate::infrastructure::paths::CaelestiaPaths;
 use crate::infrastructure::sysinfo::SystemInfo;
 use crate::infrastructure::theme::CaelestiaColours;
 use crate::services::mpris::{MprisService, PlaybackStatus};
 use crate::services::system_monitor::SystemMonitorService;
 use crate::services::weather::WeatherData;
-use chrono::{Datelike, Days, Local, NaiveDate};
+use chrono::{Local, NaiveDate};
 use gpui::{div, img, prelude::*, px, rgba, CursorStyle, Div, MouseButton, Styled};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -158,7 +164,7 @@ impl DashView {
             )
     }
 
-    /// 2. User & System Card matching `User.qml`
+    /// 2. User & System Card matching `User.qml` using `components::logo::Logo`
     fn render_user_card(
         _sysinfo: &SystemInfo,
         uptime: &str,
@@ -185,19 +191,15 @@ impl DashView {
                     .items_center()
                     .gap(px(12.0))
                     .child(
-                        // Gem logo badge
+                        // Caelestia Logo badge using components::logo::Logo
                         div()
-                            .size(px(36.0))
-                            .rounded(px(12.0))
+                            .size(px(40.0))
+                            .rounded(px(14.0))
                             .bg(rgba(c.primary_container))
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(
-                                MaterialIcon::new("auto_awesome")
-                                    .color(c.on_primary_container)
-                                    .text_size(px(18.0)),
-                            ),
+                            .child(Logo::new().with_size(24.0, 24.0)),
                     )
                     .child(
                         // Avatar container
@@ -334,7 +336,7 @@ impl DashView {
             )
     }
 
-    /// 4. Calendar Month Card matching `Calendar.qml` and `CalendarMonth.qml`
+    /// 4. Calendar Month Card matching `Calendar.qml` using `components::calendar::calendar_month::CalendarMonth`
     fn render_calendar_card<V: 'static>(
         view_date: NaiveDate,
         c: &CaelestiaColours,
@@ -342,26 +344,15 @@ impl DashView {
         on_shift_month: impl Fn(&mut V, i32, &mut gpui::Context<V>) + 'static + Copy,
         on_today: impl Fn(&mut V, &mut gpui::Context<V>) + 'static + Copy,
     ) -> Div {
-        let curr_year = view_date.year();
-        let curr_month = view_date.month();
-        let today = Local::now().date_naive();
+        let cal_state = CalendarMonthState::new(view_date)
+            .with_start_on_sunday(true)
+            .with_selectable(true);
 
-        let first_of_month =
-            NaiveDate::from_ymd_opt(curr_year, curr_month, 1).unwrap_or(view_date);
-        let first_weekday_idx = first_of_month.weekday().num_days_from_sunday();
-        let start_date = first_of_month
-            .checked_sub_days(Days::new(first_weekday_idx as u64))
-            .unwrap_or(first_of_month);
-
-        let mut days_cells = Vec::with_capacity(42);
-        for i in 0..42 {
-            let cur = start_date.checked_add_days(Days::new(i)).unwrap_or(start_date);
-            let in_month = cur.month() == curr_month;
-            let is_today = cur == today;
-            days_cells.push((cur.day(), in_month, is_today));
-        }
-
-        let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        let calendar_component = CalendarMonth::new(cal_state)
+            .with_colours(c.clone())
+            .on_prev(cx.listener(move |view, _, _, cx| on_shift_month(view, -1, cx)))
+            .on_next(cx.listener(move |view, _, _, cx| on_shift_month(view, 1, cx)))
+            .on_today(cx.listener(move |view, _, _, cx| on_today(view, cx)));
 
         div()
             .flex_1()
@@ -369,153 +360,20 @@ impl DashView {
             .p(px(16.0))
             .rounded(px(24.0))
             .bg(rgba(c.surface_container))
-            .flex()
-            .flex_col()
-            .justify_between()
-            .child(
-                // Month Navigation Header Row
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .w_full()
-                    .child(
-                        div()
-                            .p(px(4.0))
-                            .cursor(CursorStyle::PointingHand)
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(move |view, _, _, cx| on_shift_month(view, -1, cx)),
-                            )
-                            .child(
-                                MaterialIcon::new("chevron_left")
-                                    .color(c.primary)
-                                    .text_size(px(18.0)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .cursor(CursorStyle::PointingHand)
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(move |view, _, _, cx| on_today(view, cx)),
-                            )
-                            .child(
-                                StyledText::new(&view_date.format("%B %Y").to_string())
-                                    .color(c.primary)
-                                    .font_size(16.0)
-                                    .font_weight(gpui::FontWeight::BOLD),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .p(px(4.0))
-                            .cursor(CursorStyle::PointingHand)
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(move |view, _, _, cx| on_shift_month(view, 1, cx)),
-                            )
-                            .child(
-                                MaterialIcon::new("chevron_right")
-                                    .color(c.primary)
-                                    .text_size(px(18.0)),
-                            ),
-                    ),
-            )
-            .child(
-                // Weekday Header Row
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .w_full()
-                    .children(weekdays.iter().map(|&name| {
-                        div()
-                            .flex_1()
-                            .flex()
-                            .justify_center()
-                            .child(
-                                StyledText::new(name)
-                                    .color(c.primary)
-                                    .font_size(12.0)
-                                    .font_weight(gpui::FontWeight::SEMIBOLD),
-                            )
-                    })),
-            )
-            .child(
-                // 42-day Grid (6 rows of 7 days)
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.0))
-                    .w_full()
-                    .children((0..6).map(|row| {
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .w_full()
-                            .children((0..7).map(|col| {
-                                let (day_num, in_month, is_today) = days_cells[row * 7 + col];
-                                let cell_content = if is_today {
-                                    div()
-                                        .size(px(26.0))
-                                        .rounded(px(10.0))
-                                        .bg(rgba(c.secondary_container))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(
-                                            StyledText::new(&day_num.to_string())
-                                                .color(c.on_secondary_container)
-                                                .font_size(13.0)
-                                                .font_weight(gpui::FontWeight::BOLD),
-                                        )
-                                } else if in_month {
-                                    div()
-                                        .size(px(26.0))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(
-                                            StyledText::new(&day_num.to_string())
-                                                .color(c.on_surface_variant)
-                                                .font_size(13.0),
-                                        )
-                                } else {
-                                    div()
-                                        .size(px(26.0))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(
-                                            StyledText::new(&day_num.to_string())
-                                                .color(c.outline)
-                                                .font_size(13.0)
-                                                .opacity(0.4),
-                                        )
-                                };
-                                div()
-                                    .flex_1()
-                                    .flex()
-                                    .justify_center()
-                                    .child(cell_content)
-                            }))
-                    })),
-            )
+            .child(calendar_component)
     }
 
-    /// 5. Resources Card matching `Resources.qml`
+    /// 5. Resources Card matching `Resources.qml` using `components::controls::circular_progress::CircularProgress`
     fn render_resources_card(monitor: &SystemMonitorService, c: &CaelestiaColours) -> Div {
-        let cpu_pct = monitor.state.cpu_usage.round() as u32;
+        let cpu_val = (monitor.state.cpu_usage / 100.0).clamp(0.0, 1.0);
         let ram_used = monitor.ram_used_gib();
         let ram_total = monitor.ram_total_gib();
-        let ram_pct = if ram_total > 0.0 {
-            ((ram_used / ram_total) * 100.0).round() as u32
+        let ram_val = if ram_total > 0.0 {
+            (ram_used / ram_total).clamp(0.0, 1.0) as f32
         } else {
-            0
+            0.0
         };
-        let disk_pct = monitor.disk_percent().round() as u32;
+        let disk_val = (monitor.disk_percent() / 100.0).clamp(0.0, 1.0) as f32;
 
         div()
             .w(px(95.0))
@@ -527,44 +385,42 @@ impl DashView {
             .flex_col()
             .items_center()
             .justify_around()
-            .child(Self::render_circular_gauge("memory", cpu_pct, c.primary, c))
-            .child(Self::render_circular_gauge(
-                "memory_alt",
-                ram_pct,
-                c.secondary,
-                c,
-            ))
-            .child(Self::render_circular_gauge(
-                "hard_disk",
-                disk_pct,
-                c.primary,
-                c,
-            ))
-    }
-
-    fn render_circular_gauge(
-        icon: &'static str,
-        pct: u32,
-        fg_color: u32,
-        c: &CaelestiaColours,
-    ) -> Div {
-        div()
-            .size(px(62.0))
-            .rounded_full()
-            .bg(rgba(c.surface_container_low))
-            .border_3()
-            .border_color(rgba(if pct > 0 { fg_color } else { c.surface_container_highest }))
-            .flex()
-            .items_center()
-            .justify_center()
             .child(
-                MaterialIcon::new(icon)
-                    .color(fg_color)
-                    .text_size(px(22.0)),
+                CircularProgress::new(cpu_val)
+                    .with_size(64.0)
+                    .with_stroke_width(5.0)
+                    .with_colors(c.primary, c.surface_container_highest)
+                    .with_child(
+                        MaterialIcon::new("memory")
+                            .color(c.primary)
+                            .text_size(px(22.0)),
+                    ),
+            )
+            .child(
+                CircularProgress::new(ram_val)
+                    .with_size(64.0)
+                    .with_stroke_width(5.0)
+                    .with_colors(c.secondary, c.surface_container_highest)
+                    .with_child(
+                        MaterialIcon::new("memory_alt")
+                            .color(c.secondary)
+                            .text_size(px(22.0)),
+                    ),
+            )
+            .child(
+                CircularProgress::new(disk_val)
+                    .with_size(64.0)
+                    .with_stroke_width(5.0)
+                    .with_colors(c.primary, c.surface_container_highest)
+                    .with_child(
+                        MaterialIcon::new("hard_disk")
+                            .color(c.primary)
+                            .text_size(px(22.0)),
+                    ),
             )
     }
 
-    /// 6. Media & Bongo Cat Card matching `dash/Media.qml`
+    /// 6. Media & Bongo Cat Card matching `dash/Media.qml` using `CoverArtView`, `CircularProgress`, and `IconButton`
     fn render_media_card<V: 'static>(
         mpris: &MprisService,
         c: &CaelestiaColours,
@@ -579,9 +435,62 @@ impl DashView {
         } else {
             &mpris.current_track.title
         };
+        let artist = if mpris.current_track.artist.is_empty() {
+            "Unknown artist"
+        } else {
+            &mpris.current_track.artist
+        };
 
         let bongocat_path = "/home/ladybug-me/caelestia-kde/shell/assets/bongocat.gif";
         let has_bongo = std::path::Path::new(bongocat_path).exists();
+
+        let progress = if mpris.current_track.duration_secs > 0.0 {
+            (mpris.current_track.position_secs / mpris.current_track.duration_secs).clamp(0.0, 1.0) as f32
+        } else {
+            0.0
+        };
+
+        let cover_state = CoverArtState::new()
+            .with_art(mpris.current_track.art_url.clone())
+            .with_playing(is_playing)
+            .with_size(104.0);
+
+        let tonal_style = ButtonStyle {
+            button_type: ButtonType::Tonal,
+            is_round: true,
+            ..Default::default()
+        };
+        let filled_style = ButtonStyle {
+            button_type: ButtonType::Filled,
+            is_round: true,
+            ..Default::default()
+        };
+
+        let prev_btn = IconButton::render("skip_previous", &tonal_style, c, Some(32.0))
+            .cursor(CursorStyle::PointingHand)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |view, _, _, cx| on_prev(view, cx)),
+            );
+
+        let play_btn = IconButton::render(
+            if is_playing { "pause" } else { "play_arrow" },
+            &filled_style,
+            c,
+            Some(40.0),
+        )
+        .cursor(CursorStyle::PointingHand)
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(move |view, _, _, cx| on_play_pause(view, cx)),
+        );
+
+        let next_btn = IconButton::render("skip_next", &tonal_style, c, Some(32.0))
+            .cursor(CursorStyle::PointingHand)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |view, _, _, cx| on_next(view, cx)),
+            );
 
         div()
             .w(px(200.0))
@@ -594,105 +503,50 @@ impl DashView {
             .items_center()
             .justify_between()
             .child(
-                // Top Section: Cover Art + Title + Controls
+                // Top Section: CircularProgress with CoverArt + Title + Controls
                 div()
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap(px(12.0))
+                    .gap(px(10.0))
                     .w_full()
                     .child(
-                        // Cover Art Circular Placeholder
+                        // CircularProgress wrapping CoverArtView
+                        CircularProgress::new(progress)
+                            .with_size(120.0)
+                            .with_stroke_width(4.0)
+                            .with_colors(c.primary, c.surface_container_highest)
+                            .with_child(CoverArtView::new(cover_state)),
+                    )
+                    .child(
+                        // Track Title & Artist
                         div()
-                            .size(px(104.0))
-                            .rounded_full()
-                            .bg(rgba(c.surface_container_high))
-                            .border_2()
-                            .border_color(rgba(c.outline_variant))
                             .flex()
+                            .flex_col()
                             .items_center()
-                            .justify_center()
+                            .gap(px(2.0))
                             .child(
-                                MaterialIcon::new("photo_size_select_actual")
-                                    .color(c.outline)
-                                    .text_size(px(36.0)),
+                                StyledText::new(title)
+                                    .color(c.primary)
+                                    .font_size(14.0)
+                                    .font_weight(gpui::FontWeight::BOLD),
+                            )
+                            .child(
+                                StyledText::new(artist)
+                                    .color(c.secondary)
+                                    .font_size(12.0),
                             ),
                     )
                     .child(
-                        // Track Title
-                        StyledText::new(title)
-                            .color(c.primary)
-                            .font_size(14.0)
-                            .font_weight(gpui::FontWeight::BOLD),
-                    )
-                    .child(
-                        // Player Controls Row
+                        // Player Controls Row using IconButtons
                         div()
                             .flex()
                             .items_center()
                             .justify_center()
-                            .gap(px(10.0))
-                            .child(
-                                div()
-                                    .size(px(32.0))
-                                    .rounded_full()
-                                    .bg(rgba(c.surface_container_high))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor(CursorStyle::PointingHand)
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(move |view, _, _, cx| on_prev(view, cx)),
-                                    )
-                                    .child(
-                                        MaterialIcon::new("skip_previous")
-                                            .color(c.on_surface_variant)
-                                            .text_size(px(18.0)),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .size(px(40.0))
-                                    .rounded_full()
-                                    .bg(rgba(c.surface_container_highest))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor(CursorStyle::PointingHand)
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(move |view, _, _, cx| on_play_pause(view, cx)),
-                                    )
-                                    .child(
-                                        MaterialIcon::new(if is_playing {
-                                            "pause"
-                                        } else {
-                                            "play_arrow"
-                                        })
-                                        .color(c.primary)
-                                        .text_size(px(22.0)),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .size(px(32.0))
-                                    .rounded_full()
-                                    .bg(rgba(c.surface_container_high))
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .cursor(CursorStyle::PointingHand)
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(move |view, _, _, cx| on_next(view, cx)),
-                                    )
-                                    .child(
-                                        MaterialIcon::new("skip_next")
-                                            .color(c.on_surface_variant)
-                                            .text_size(px(18.0)),
-                                    ),
-                            ),
+                            .gap(px(8.0))
+                            .child(prev_btn)
+                            .child(play_btn)
+                            .child(next_btn),
                     ),
             )
             .child(

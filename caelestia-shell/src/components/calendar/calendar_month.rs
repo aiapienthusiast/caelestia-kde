@@ -30,6 +30,7 @@ pub struct CalendarMonthState {
     pub scale_offset: f32,
     pub font_scale: f32,
     pub events: HashSet<NaiveDate>,
+    pub start_on_sunday: bool,
 }
 
 impl Default for CalendarMonthState {
@@ -42,6 +43,7 @@ impl Default for CalendarMonthState {
             scale_offset: 1.0,
             font_scale: 1.0,
             events: HashSet::new(),
+            start_on_sunday: false,
         }
     }
 }
@@ -66,6 +68,11 @@ impl CalendarMonthState {
 
     pub fn with_events(mut self, events: HashSet<NaiveDate>) -> Self {
         self.events = events;
+        self
+    }
+
+    pub fn with_start_on_sunday(mut self, start_on_sunday: bool) -> Self {
+        self.start_on_sunday = start_on_sunday;
         self
     }
 
@@ -128,10 +135,14 @@ impl CalendarMonthState {
         let first_of_month = NaiveDate::from_ymd_opt(self.curr_year(), self.curr_month(), 1)
             .unwrap_or(self.view_date);
 
-        // Days from Monday (0) to Sunday (6)
-        let first_weekday_idx = first_of_month.weekday().num_days_from_monday();
+        // Days from Monday (0) or Sunday (0)
+        let first_weekday_idx = if self.start_on_sunday {
+            first_of_month.weekday().num_days_from_sunday()
+        } else {
+            first_of_month.weekday().num_days_from_monday()
+        };
 
-        // Start from Monday on or before first_of_month
+        // Start from first weekday on or before first_of_month
         let start_date = first_of_month
             .checked_sub_days(Days::new(first_weekday_idx as u64))
             .unwrap_or(first_of_month);
@@ -166,17 +177,50 @@ impl CalendarMonthState {
 #[derive(IntoElement)]
 pub struct CalendarMonth {
     state: CalendarMonthState,
+    colours: Option<CaelestiaColours>,
+    on_prev: Option<std::rc::Rc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    on_next: Option<std::rc::Rc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    on_today: Option<std::rc::Rc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
 }
 
 impl CalendarMonth {
     pub fn new(state: CalendarMonthState) -> Self {
-        Self { state }
+        Self {
+            state,
+            colours: None,
+            on_prev: None,
+            on_next: None,
+            on_today: None,
+        }
+    }
+
+    pub fn with_colours(mut self, colours: CaelestiaColours) -> Self {
+        self.colours = Some(colours);
+        self
+    }
+
+    pub fn on_prev(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
+        self.on_prev = Some(std::rc::Rc::new(handler));
+        self
+    }
+
+    pub fn on_next(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
+        self.on_next = Some(std::rc::Rc::new(handler));
+        self
+    }
+
+    pub fn on_today(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
+        self.on_today = Some(std::rc::Rc::new(handler));
+        self
     }
 }
 
 impl RenderOnce for CalendarMonth {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let colours = cx.try_global::<CaelestiaColours>().cloned().unwrap_or_default();
+        let colours = self
+            .colours
+            .or_else(|| cx.try_global::<CaelestiaColours>().cloned())
+            .unwrap_or_default();
         let primary = rgba(colours.primary);
         let on_primary = rgba(colours.on_primary);
         let on_surface = rgba(colours.on_surface);
@@ -186,7 +230,48 @@ impl RenderOnce for CalendarMonth {
         let scale = self.state.scale_offset;
         let cells = self.state.generate_grid_cells();
 
-        let weekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+        let weekdays = if self.state.start_on_sunday {
+            ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
+        } else {
+            ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+        };
+
+        let mut prev_btn = div()
+            .id("cal-prev-month")
+            .px(px(PADDING_SMALL * scale))
+            .py(px(PADDING_EXTRA_SMALL * scale))
+            .rounded(px(ROUNDING_FULL))
+            .cursor_pointer()
+            .child(StyledText::new("<").text_size(px(FONT_SIZE_NORMAL)).text_color(primary));
+        if let Some(on_prev) = self.on_prev {
+            prev_btn = prev_btn.on_click(move |ev, window, cx| on_prev(ev, window, cx));
+        }
+
+        let mut title_btn = div()
+            .id("cal-month-title")
+            .px(px(PADDING_LARGE * scale))
+            .py(px(PADDING_EXTRA_SMALL * scale))
+            .rounded(px(ROUNDING_FULL))
+            .cursor_pointer()
+            .child(
+                StyledText::new(self.state.month_year_title())
+                    .text_size(px(FONT_SIZE_NORMAL))
+                    .text_color(primary),
+            );
+        if let Some(on_today) = self.on_today {
+            title_btn = title_btn.on_click(move |ev, window, cx| on_today(ev, window, cx));
+        }
+
+        let mut next_btn = div()
+            .id("cal-next-month")
+            .px(px(PADDING_SMALL * scale))
+            .py(px(PADDING_EXTRA_SMALL * scale))
+            .rounded(px(ROUNDING_FULL))
+            .cursor_pointer()
+            .child(StyledText::new(">").text_size(px(FONT_SIZE_NORMAL)).text_color(primary));
+        if let Some(on_next) = self.on_next {
+            next_btn = next_btn.on_click(move |ev, window, cx| on_next(ev, window, cx));
+        }
 
         div()
             .flex()
@@ -200,40 +285,9 @@ impl RenderOnce for CalendarMonth {
                     .items_center()
                     .justify_between()
                     .gap(px(SPACING_EXTRA_SMALL * scale))
-                    .child(
-                        // Prev button
-                        div()
-                            .id("cal-prev-month")
-                            .px(px(PADDING_SMALL * scale))
-                            .py(px(PADDING_EXTRA_SMALL * scale))
-                            .rounded(px(ROUNDING_FULL))
-                            .cursor_pointer()
-                            .child(StyledText::new("<").text_size(px(FONT_SIZE_NORMAL)).text_color(primary))
-                    )
-                    .child(
-                        // Title / Today button
-                        div()
-                            .id("cal-month-title")
-                            .px(px(PADDING_LARGE * scale))
-                            .py(px(PADDING_EXTRA_SMALL * scale))
-                            .rounded(px(ROUNDING_FULL))
-                            .cursor_pointer()
-                            .child(
-                                StyledText::new(self.state.month_year_title())
-                                    .text_size(px(FONT_SIZE_NORMAL))
-                                    .text_color(primary)
-                            )
-                    )
-                    .child(
-                        // Next button
-                        div()
-                            .id("cal-next-month")
-                            .px(px(PADDING_SMALL * scale))
-                            .py(px(PADDING_EXTRA_SMALL * scale))
-                            .rounded(px(ROUNDING_FULL))
-                            .cursor_pointer()
-                            .child(StyledText::new(">").text_size(px(FONT_SIZE_NORMAL)).text_color(primary))
-                    )
+                    .child(prev_btn)
+                    .child(title_btn)
+                    .child(next_btn),
             )
             .child(
                 // Weekday Header Row
@@ -242,7 +296,11 @@ impl RenderOnce for CalendarMonth {
                     .flex_row()
                     .justify_between()
                     .children(weekdays.iter().enumerate().map(|(idx, name)| {
-                        let is_weekend = idx >= 5;
+                        let is_weekend = if self.state.start_on_sunday {
+                            idx == 0 || idx == 6
+                        } else {
+                            idx >= 5
+                        };
                         let color = if is_weekend {
                             tertiary
                         } else {
@@ -253,7 +311,7 @@ impl RenderOnce for CalendarMonth {
                             .flex()
                             .justify_center()
                             .child(StyledText::new(*name).text_size(px(FONT_SIZE_SMALL)).text_color(color))
-                    }))
+                    })),
             )
             .child(
                 // 42-day Month Grid (6 rows of 7 days)
