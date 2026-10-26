@@ -27,9 +27,38 @@ use modules::screenshot::{
     ScreenshotOverlayView, SelectionMode, SelectionPhase, SelectionRegion,
 };
 use modules::session::SessionDrawer;
+use infrastructure::loader_diagnostics::{
+    global_diagnostics, global_record_failed, global_record_loaded, DiagnosticCategory,
+    LoaderDiagnostics,
+};
 use modules::sidebar::SidebarView;
 use modules::utilities::UtilitiesView;
+use std::io::IsTerminal;
 use tracing::info;
+
+fn record_window_result<V: 'static>(name: &str, result: &Result<gpui::WindowHandle<V>, anyhow::Error>) {
+    match result {
+        Ok(handle) => {
+            info!("{} opened successfully: {:?}", name, handle);
+            global_record_loaded(
+                DiagnosticCategory::Surface,
+                name,
+                None,
+                format!("Handle allocated: {:?}", handle),
+            );
+        }
+        Err(err) => {
+            tracing::error!("Failed to open {}: {:?}", name, err);
+            global_record_failed(
+                DiagnosticCategory::Surface,
+                name,
+                None,
+                "Layer-shell window creation failure",
+                format!("{:?}", err),
+            );
+        }
+    }
+}
 
 fn main() {
     tracing_subscriber::fmt()
@@ -39,14 +68,43 @@ fn main() {
         )
         .init();
 
+    let args: Vec<String> = std::env::args().collect();
+
+    // Check for CLI diagnostics command
+    if args
+        .iter()
+        .any(|arg| arg == "--diagnostics" || arg == "-d" || arg == "diagnostics" || arg == "--check")
+    {
+        let mut diag = LoaderDiagnostics::new();
+        diag.audit_all();
+        if args.iter().any(|arg| arg == "--json" || arg == "--diagnostics-json") {
+            match diag.to_json() {
+                Ok(j) => println!("{}", j),
+                Err(e) => eprintln!("Error formatting JSON diagnostics: {}", e),
+            }
+        } else {
+            let use_ansi = std::io::stdout().is_terminal();
+            println!("{}", diag.format_report(use_ansi));
+        }
+        return;
+    }
+
     info!("Starting Caelestia Shell daemon on Wayland Layer-Shell...");
+
+    // Run system audit and populate global loader diagnostics
+    let mut startup_diag = LoaderDiagnostics::new();
+    startup_diag.audit_all();
+    if let Ok(mut lock) = global_diagnostics().write() {
+        for entry in startup_diag.entries.drain(..) {
+            lock.add(entry);
+        }
+    }
 
     let app = gpui::Application::with_platform(gpui_linux::current_platform(false));
 
-    app.run(|cx: &mut App| {
+    app.run(move |cx: &mut App| {
         cx.set_quit_mode(gpui::QuitMode::Explicit);
 
-        let args: Vec<String> = std::env::args().collect();
         let colours = CaelestiaColours::load();
 
         let is_bar = std::env::var("BAR_OPEN").is_ok()
@@ -428,9 +486,10 @@ fn main() {
                 }),
                 ..Default::default()
             };
-            let _ = cx.open_window(bg_options, |_, cx| {
+            let bg_res = cx.open_window(bg_options, |_, cx| {
                 cx.new(|cx| BackgroundView::new(cx, colours.clone()))
             });
+            record_window_result("Desktop Background (caelestia-background)", &bg_res);
 
             // Top Status Bar
             let bar_options = WindowOptions {
@@ -451,11 +510,19 @@ fn main() {
                 }),
                 ..Default::default()
             };
-            let _ = cx.open_window(bar_options, |_, cx| {
+            let bar_res = cx.open_window(bar_options, |_, cx| {
                 cx.new(|_| BarView::new(colours))
             });
+            record_window_result("Status Bar (caelestia-bar)", &bar_res);
 
             info!("Caelestia Shell unified daemon initialized successfully.");
+        }
+
+        // Emit diagnostics report to logs and terminal
+        if let Ok(lock) = global_diagnostics().read() {
+            lock.log_diagnostics();
+            let use_ansi = std::io::stdout().is_terminal();
+            eprintln!("{}", lock.format_report(use_ansi));
         }
     });
 }

@@ -165,19 +165,53 @@ impl CaelestiaColours {
 
         let scheme_str = match std::fs::read_to_string(&scheme_path) {
             Ok(s) => s,
-            Err(_) => return Self::default(),
+            Err(e) => {
+                crate::infrastructure::loader_diagnostics::global_record_fallback(
+                    crate::infrastructure::loader_diagnostics::DiagnosticCategory::Theme,
+                    "scheme.json",
+                    Some(scheme_path.as_str()),
+                    "Using hardcoded default Material 3 Dark theme",
+                    format!("Failed to read theme file: {}", e),
+                );
+                return Self::default();
+            }
         };
 
         let scheme: serde_json::Value = match serde_json::from_str(&scheme_str) {
             Ok(v) => v,
-            Err(_) => return Self::default(),
+            Err(e) => {
+                crate::infrastructure::loader_diagnostics::global_record_fallback(
+                    crate::infrastructure::loader_diagnostics::DiagnosticCategory::Theme,
+                    "scheme.json",
+                    Some(scheme_path.as_str()),
+                    "Using hardcoded default Material 3 Dark theme",
+                    format!("JSON syntax error: {}", e),
+                );
+                return Self::default();
+            }
         };
 
         let is_light = scheme.get("mode").and_then(|m| m.as_str()) == Some("light");
         let colours = match scheme.get("colours") {
             Some(c) => c,
-            None => return Self::default(),
+            None => {
+                crate::infrastructure::loader_diagnostics::global_record_fallback(
+                    crate::infrastructure::loader_diagnostics::DiagnosticCategory::Theme,
+                    "scheme.json",
+                    Some(scheme_path.as_str()),
+                    "Using default Material 3 Dark theme",
+                    "Missing 'colours' object in scheme JSON",
+                );
+                return Self::default();
+            }
         };
+
+        crate::infrastructure::loader_diagnostics::global_record_loaded(
+            crate::infrastructure::loader_diagnostics::DiagnosticCategory::Theme,
+            "scheme.json",
+            Some(scheme_path.as_str()),
+            format!("Material 3 {} palette loaded successfully", if is_light { "light" } else { "dark" }),
+        );
 
         let get_hex = |key: &str, fallback: &str| -> String {
             colours

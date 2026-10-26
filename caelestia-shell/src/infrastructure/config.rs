@@ -45,12 +45,39 @@ impl Default for ShellConfig {
 impl ShellConfig {
     /// Load configuration from a specific path.
     pub fn load_from(path: &std::path::Path) -> Self {
-        if let Ok(content) = fs::read_to_string(path) {
-            if let Ok(val) = serde_json::from_str::<Value>(&content) {
-                return Self { raw: val };
+        match fs::read_to_string(path) {
+            Ok(content) => match serde_json::from_str::<Value>(&content) {
+                Ok(val) => {
+                    crate::infrastructure::loader_diagnostics::global_record_loaded(
+                        crate::infrastructure::loader_diagnostics::DiagnosticCategory::Config,
+                        "shell.json",
+                        path.to_str(),
+                        "Shell configuration loaded successfully",
+                    );
+                    Self { raw: val }
+                }
+                Err(err) => {
+                    crate::infrastructure::loader_diagnostics::global_record_fallback(
+                        crate::infrastructure::loader_diagnostics::DiagnosticCategory::Config,
+                        "shell.json",
+                        path.to_str(),
+                        "Using default built-in ShellConfig parameters",
+                        format!("JSON syntax error at line {}:{}: {}", err.line(), err.column(), err),
+                    );
+                    Self::default()
+                }
+            },
+            Err(err) => {
+                crate::infrastructure::loader_diagnostics::global_record_fallback(
+                    crate::infrastructure::loader_diagnostics::DiagnosticCategory::Config,
+                    "shell.json",
+                    path.to_str(),
+                    "Using default built-in ShellConfig parameters",
+                    format!("Failed to read file: {}", err),
+                );
+                Self::default()
             }
         }
-        Self::default()
     }
 
     /// Load shell.json from ~/.config/caelestia/shell.json.

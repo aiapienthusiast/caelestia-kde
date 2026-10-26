@@ -128,7 +128,7 @@ impl Render for BarView {
                     .flex()
                     .items_center()
                     .gap_2()
-                    // Logo Pill
+                    // Logo Pill (Launcher Toggle)
                     .child(
                         div()
                             .w(px(32.0))
@@ -144,7 +144,24 @@ impl Render for BarView {
                                 "auto_awesome",
                                 IconSize::Custom(16.0),
                                 c.on_primary,
-                            )),
+                            ))
+                            .on_mouse_down(
+                                gpui::MouseButton::Left,
+                                cx.listener(|_this, _, _, _cx| {
+                                    tracing::info!("Bar: Launcher icon clicked -> toggling Application Launcher");
+                                    let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("caelestia-shell"));
+                                    let _ = std::process::Command::new(exe)
+                                        .arg("--launcher")
+                                        .spawn();
+                                }),
+                            )
+                            .on_mouse_down(
+                                gpui::MouseButton::Right,
+                                cx.listener(|this, _, _, _cx| {
+                                    tracing::info!("Bar: Launcher icon right-clicked -> toggling osicon context menu");
+                                    this.popouts.toggle(PopoutType::DockContext, 32.0);
+                                }),
+                            ),
                     )
                     // Workspaces Pills
                     .child(
@@ -158,6 +175,8 @@ impl Render for BarView {
                             .children(
                                 self.workspaces.iter().map(|ws| {
                                     let is_active = ws.active;
+                                    let ws_name = ws.name.clone();
+                                    let ws_id = ws.id;
                                     div()
                                         .px_2()
                                         .py_1()
@@ -182,6 +201,12 @@ impl Render for BarView {
                                             gpui::FontWeight::NORMAL
                                         })
                                         .child(ws.name.clone())
+                                        .on_mouse_down(
+                                            gpui::MouseButton::Left,
+                                            cx.listener(move |_, _, _, _| {
+                                                tracing::info!("Bar: Workspace '{}' (id: {}) clicked", ws_name, ws_id);
+                                            }),
+                                        )
                                 }),
                             ),
                     ),
@@ -228,6 +253,7 @@ impl Render for BarView {
                             .on_mouse_down(
                                 gpui::MouseButton::Left,
                                 cx.listener(|this, _, _, _cx| {
+                                    tracing::info!("Bar: Active window dock clicked -> toggling dock context popout");
                                     this.popouts.toggle(PopoutType::DockContext, 500.0);
                                 }),
                             ),
@@ -291,6 +317,7 @@ impl Render for BarView {
                             .on_mouse_down(
                                 gpui::MouseButton::Left,
                                 cx.listener(|this, _, _, _cx| {
+                                    tracing::info!("Bar: Media pill clicked -> toggling media popout");
                                     this.popouts.toggle(PopoutType::Media, 720.0);
                                 }),
                             ),
@@ -330,6 +357,7 @@ impl Render for BarView {
                             .on_mouse_down(
                                 gpui::MouseButton::Left,
                                 cx.listener(|this, _, _, _cx| {
+                                    tracing::info!("Bar: Status cluster clicked -> toggling audio/quick settings popout");
                                     this.popouts.toggle(PopoutType::Audio, 850.0);
                                 }),
                             ),
@@ -355,6 +383,7 @@ impl Render for BarView {
                             .on_mouse_down(
                                 gpui::MouseButton::Left,
                                 cx.listener(|this, _, _, _cx| {
+                                    tracing::info!("Bar: Clock clicked -> toggling calendar popout");
                                     this.popouts.toggle(PopoutType::Calendar, 940.0);
                                 }),
                             ),
@@ -379,6 +408,11 @@ impl Render for BarView {
                             .on_mouse_down(
                                 gpui::MouseButton::Left,
                                 cx.listener(|this, _, _, _cx| {
+                                    tracing::info!("Bar: Power button clicked -> toggling Session Drawer");
+                                    let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("caelestia-shell"));
+                                    let _ = std::process::Command::new(exe)
+                                        .arg("--session")
+                                        .spawn();
                                     this.popouts.toggle(PopoutType::Power, 980.0);
                                 }),
                             ),
