@@ -14,10 +14,10 @@ pub struct SessionIcons {
 impl Default for SessionIcons {
     fn default() -> Self {
         Self {
-            logout: "system-log-out".to_string(),
-            shutdown: "system-shutdown".to_string(),
-            hibernate: "system-suspend-hibernate".to_string(),
-            reboot: "system-reboot".to_string(),
+            logout: "logout".to_string(),
+            shutdown: "power_settings_new".to_string(),
+            hibernate: "bedtime".to_string(),
+            reboot: "cached".to_string(),
         }
     }
 }

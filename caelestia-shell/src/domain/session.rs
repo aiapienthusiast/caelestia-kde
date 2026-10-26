@@ -26,25 +26,25 @@ impl SessionAction {
             kind: SessionActionKind::Logout,
             title: "Log out",
             description: "End current KDE session",
-            icon_name: "system-log-out",
+            icon_name: "logout",
         },
         SessionAction {
             kind: SessionActionKind::Shutdown,
             title: "Shut down",
             description: "Power off the computer",
-            icon_name: "system-shutdown",
+            icon_name: "power_settings_new",
         },
         SessionAction {
             kind: SessionActionKind::Hibernate,
             title: "Hibernate",
             description: "Suspend to disk",
-            icon_name: "system-suspend-hibernate",
+            icon_name: "bedtime",
         },
         SessionAction {
             kind: SessionActionKind::Reboot,
             title: "Restart",
             description: "Reboot the computer",
-            icon_name: "system-reboot",
+            icon_name: "cached",
         },
     ];
 }

@@ -11,10 +11,10 @@ fn test_session_config_and_actions_parity() {
     let config = SessionConfig::default();
     assert!(config.enabled);
     assert!(config.vim_keybinds);
-    assert_eq!(config.icons.logout, "system-log-out");
-    assert_eq!(config.icons.shutdown, "system-shutdown");
-    assert_eq!(config.icons.hibernate, "system-suspend-hibernate");
-    assert_eq!(config.icons.reboot, "system-reboot");
+    assert_eq!(config.icons.logout, "logout");
+    assert_eq!(config.icons.shutdown, "power_settings_new");
+    assert_eq!(config.icons.hibernate, "bedtime");
+    assert_eq!(config.icons.reboot, "cached");
 
     let state = SessionState::new(&config);
     assert_eq!(state.actions.len(), 4);
