@@ -11,7 +11,7 @@ pub struct CategoryDef {
 }
 
 pub const CATEGORY_DEFINITIONS: &[CategoryDef] = &[
-    CategoryDef { id: "favorites", name: "Favorites", icon: "favorite", xdg: &[] },
+    CategoryDef { id: "favorites", name: "Favorites", icon: "favorite_border", xdg: &[] },
     CategoryDef { id: "all", name: "All Applications", icon: "apps", xdg: &[] },
     CategoryDef { id: "audioVideo", name: "Audio & Video", icon: "movie", xdg: &["AudioVideo"] },
     CategoryDef { id: "audio", name: "Audio", icon: "music_note", xdg: &["Audio"] },
@@ -70,7 +70,12 @@ impl Categories {
             "all" => entries.iter().collect(),
             "favorites" => entries
                 .iter()
-                .filter(|e| favourite_ids.iter().any(|fav| fav == &e.id || fav == &e.name))
+                .filter(|e| {
+                    let base_id = e.id.trim_end_matches(".desktop");
+                    favourite_ids.iter().any(|fav| {
+                        fav == &e.id || fav == &e.name || fav == base_id || e.name.eq_ignore_ascii_case(fav)
+                    })
+                })
                 .collect(),
             "other" => entries
                 .iter()

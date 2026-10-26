@@ -1,18 +1,91 @@
 //! Launcher View Component
-//! Parity with `shell/modules/launcher/Content.qml` and `AppList.qml`.
+//! Parity with `shell/modules/launcher/Content.qml`, `ContentList.qml`, and `AppBrowserGrid.qml`.
 //!
-//! Renders search bar, category chips, scrollable application grid, and session controls.
+//! Renders category sidebar on the left, app grid on the right, and the bottom notched search bar.
 
-use super::categories::{Categories, CATEGORY_DEFINITIONS};
+use super::categories::Categories;
 use super::entry::DesktopEntry;
 use super::executor::AppExecutor;
 use super::searcher::AppSearcher;
-use crate::components::icon::MaterialIcon;
+use crate::components::icon::{IconSize, MaterialIcon};
 use crate::infrastructure::theme::CaelestiaColours;
 use gpui::{
-    div, prelude::*, px, rgba, CursorStyle, FocusHandle, IntoElement, KeyDownEvent,
-    Render, Styled, Window,
+    div, img, prelude::*, px, rgba, svg, CursorStyle, FocusHandle, FontWeight, IntoElement,
+    KeyDownEvent, MouseButton, Render, Styled, Window,
 };
+use std::path::{Path, PathBuf};
+
+#[derive(Clone, Debug)]
+pub enum ResolvedAppIcon {
+    Png(PathBuf),
+    Svg(PathBuf),
+    Glyph(&'static str),
+}
+
+/// Resolves an application icon name to a local filesystem PNG/SVG, or fallback glyph
+pub fn resolve_app_icon(icon_name: &str, app_id: &str) -> ResolvedAppIcon {
+    let p = Path::new(icon_name);
+    if p.is_absolute() && p.exists() {
+        if icon_name.ends_with(".svg") {
+            return ResolvedAppIcon::Svg(p.to_path_buf());
+        } else {
+            return ResolvedAppIcon::Png(p.to_path_buf());
+        }
+    }
+
+    let base_name = app_id.trim_end_matches(".desktop");
+    let candidates = [icon_name, app_id, base_name];
+
+    for name in candidates {
+        if name.is_empty() {
+            continue;
+        }
+
+        // Check PNGs first
+        let png_paths = [
+            format!("/usr/share/icons/hicolor/48x48/apps/{}.png", name),
+            format!("/usr/share/icons/hicolor/64x64/apps/{}.png", name),
+            format!("/usr/share/icons/hicolor/128x128/apps/{}.png", name),
+            format!("/usr/share/pixmaps/{}.png", name),
+            format!("/usr/share/icons/hicolor/256x256/apps/{}.png", name),
+        ];
+        for p_str in &png_paths {
+            let path = PathBuf::from(p_str);
+            if path.exists() {
+                return ResolvedAppIcon::Png(path);
+            }
+        }
+
+        // Check SVGs (check Papirus theme first as standard on Caelestia)
+        let svg_paths = [
+            format!("/usr/share/icons/Papirus/48x48/apps/{}.svg", name),
+            format!("/usr/share/icons/Papirus/64x64/apps/{}.svg", name),
+            format!("/usr/share/icons/hicolor/scalable/apps/{}.svg", name),
+            format!("/usr/share/icons/breeze/apps/48/{}.svg", name),
+            format!("/usr/share/pixmaps/{}.svg", name),
+        ];
+        for s_str in &svg_paths {
+            let path = PathBuf::from(s_str);
+            if path.exists() {
+                return ResolvedAppIcon::Svg(path);
+            }
+        }
+    }
+
+    let lower_icon = icon_name.to_ascii_lowercase();
+    let lower_id = app_id.to_ascii_lowercase();
+    if lower_icon.contains("firefox") || lower_id.contains("firefox") {
+        ResolvedAppIcon::Glyph("public")
+    } else if lower_icon.contains("dolphin") || lower_id.contains("dolphin") || lower_icon.contains("folder") {
+        ResolvedAppIcon::Glyph("folder")
+    } else if lower_icon.contains("term") || lower_id.contains("alacritty") {
+        ResolvedAppIcon::Glyph("terminal")
+    } else if lower_icon.contains("code") || lower_id.contains("code") {
+        ResolvedAppIcon::Glyph("code")
+    } else {
+        ResolvedAppIcon::Glyph("apps")
+    }
+}
 
 pub struct LauncherView {
     pub entries: Vec<DesktopEntry>,
@@ -23,6 +96,7 @@ pub struct LauncherView {
     pub colours: CaelestiaColours,
     pub is_open: bool,
     pub show_power_menu: bool,
+    pub favourite_ids: Vec<String>,
     focus_handle: FocusHandle,
 }
 
@@ -31,13 +105,18 @@ impl LauncherView {
         let entries = DesktopEntry::scan_system_applications();
         let mut launcher = Self {
             entries: entries.clone(),
-            filtered_entries: entries,
+            filtered_entries: Vec::new(),
             search_query: String::new(),
-            selected_category: "all".to_string(),
+            selected_category: "favorites".to_string(),
             focused_index: 0,
             colours,
-            is_open: false,
-            show_power_menu: true,
+            is_open: true,
+            show_power_menu: false,
+            favourite_ids: vec![
+                "firefox".to_string(),
+                "org.kde.dolphin".to_string(),
+                "dolphin".to_string(),
+            ],
             focus_handle: cx.focus_handle(),
         };
         launcher.refresh_results();
@@ -53,18 +132,40 @@ impl LauncherView {
     /// Select category filter
     pub fn select_category(&mut self, category_id: &str) {
         self.selected_category = category_id.to_string();
+        self.search_query.clear();
         self.refresh_results();
     }
 
     /// Filter applications based on category and search query
     pub fn refresh_results(&mut self) {
-        let base = Categories::apps_for(&self.selected_category, &self.entries, &[]);
-        let base_owned: Vec<DesktopEntry> = base.into_iter().cloned().collect();
-
         if self.search_query.is_empty() {
+            let base = Categories::apps_for(&self.selected_category, &self.entries, &self.favourite_ids);
+            let mut base_owned: Vec<DesktopEntry> = base.into_iter().cloned().collect();
+
+            // Fallback for favorites if explicit ID match yielded nothing
+            if self.selected_category == "favorites" && base_owned.is_empty() {
+                for entry in &self.entries {
+                    let id_l = entry.id.to_ascii_lowercase();
+                    let name_l = entry.name.to_ascii_lowercase();
+                    if id_l.contains("firefox") || name_l == "firefox" || id_l.contains("dolphin") || name_l == "dolphin" {
+                        base_owned.push(entry.clone());
+                    }
+                }
+            }
+
+            if self.selected_category == "favorites" {
+                base_owned.sort_by_key(|e| {
+                    let base_id = e.id.trim_end_matches(".desktop");
+                    self.favourite_ids
+                        .iter()
+                        .position(|f| f == &e.id || f == &e.name || f == base_id || e.name.eq_ignore_ascii_case(f))
+                        .unwrap_or(999)
+                });
+            }
+
             self.filtered_entries = base_owned;
         } else {
-            let matches = AppSearcher::search(&self.search_query, &base_owned);
+            let matches = AppSearcher::search(&self.search_query, &self.entries);
             self.filtered_entries = matches.into_iter().cloned().collect();
         }
 
@@ -102,6 +203,14 @@ impl LauncherView {
             "escape" => {
                 self.is_open = false;
             }
+            "backspace" => {
+                self.search_query.pop();
+                self.refresh_results();
+            }
+            key if key.len() == 1 => {
+                self.search_query.push_str(key);
+                self.refresh_results();
+            }
             _ => {}
         }
     }
@@ -110,218 +219,331 @@ impl LauncherView {
 impl Render for LauncherView {
     fn render(&mut self, _window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
         let c = &self.colours;
+        let visible_categories = Categories::visible_categories(&self.entries);
 
+        // Outermost layer-shell backdrop overlay
         div()
+            .id("launcher-backdrop")
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(|this, event, _window, _cx| {
                 this.handle_key_down(event);
             }))
-            .w(px(640.0))
-            .max_h(px(680.0))
-            .rounded_3xl()
-            .bg(rgba(c.surface_container_low))
-            .border_1()
-            .border_color(rgba(c.outline_variant))
-            .p_4()
+            .w_full()
+            .h_full()
             .flex()
             .flex_col()
-            .gap_3()
-            // 1. Search Bar Header
+            .justify_end()
+            .items_center()
+            .pb(px(52.0))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, _| {
+                    this.is_open = false;
+                }),
+            )
             .child(
+                // Floating Launcher Card Dialog
                 div()
-                    .w_full()
-                    .h(px(48.0))
-                    .rounded_2xl()
-                    .bg(rgba(c.surface_container_highest))
+                    .id("launcher-card")
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                        cx.stop_propagation();
+                    })
+                    .w(px(640.0))
+                    .h(px(460.0))
+                    .rounded(px(24.0))
+                    .bg(rgba(c.surface_container_low))
                     .border_1()
                     .border_color(rgba(c.outline_variant))
-                    .px_4()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        MaterialIcon::new("search")
-                            .text_color(rgba(c.on_surface_variant))
-                            .text_size(px(20.0)),
-                    )
-                    .child(
-                        div()
-                            .text_color(if self.search_query.is_empty() {
-                                rgba(c.on_surface_variant)
-                            } else {
-                                rgba(c.on_surface)
-                            })
-                            .text_sm()
-                            .child(if self.search_query.is_empty() {
-                                "Search applications...".to_string()
-                            } else {
-                                self.search_query.clone()
-                            }),
-                    ),
-            )
-            // 2. Category Chips Bar
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .overflow_hidden()
-                    .children(
-                        CATEGORY_DEFINITIONS
-                            .iter()
-                            .take(6)
-                            .map(|cat| {
-                                let is_active = self.selected_category == cat.id;
-                                let cat_id = cat.id.to_string();
-                                div()
-                                    .px_3()
-                                    .py_1()
-                                    .rounded_full()
-                                    .cursor(CursorStyle::PointingHand)
-                                    .bg(if is_active {
-                                        rgba(c.primary)
-                                    } else {
-                                        rgba(c.surface_container)
-                                    })
-                                    .text_color(if is_active {
-                                        rgba(c.on_primary)
-                                    } else {
-                                        rgba(c.on_surface)
-                                    })
-                                    .text_xs()
-                                    .child(cat.name)
-                                    .on_mouse_down(
-                                        gpui::MouseButton::Left,
-                                        cx.listener(move |this, _, _, _cx| {
-                                            this.select_category(&cat_id);
-                                        }),
-                                    )
-                            }),
-                    ),
-            )
-            // 3. Scrollable Applications List / Grid
-            .child(
-                div()
-                    .w_full()
-                    .flex_1()
-                    .overflow_hidden()
+                    .p(px(16.0))
                     .flex()
                     .flex_col()
-                    .gap_1()
-                    .children(
-                        self.filtered_entries
-                            .iter()
-                            .take(7)
-                            .enumerate()
-                            .map(|(idx, entry)| {
-                                let is_focused = idx == self.focused_index;
-                                let entry_id = entry.id.clone();
+                    .justify_between()
+                    // 1. Top Section: Sidebar + App Grid
+                    .child(
+                        div()
+                            .flex_1()
+                            .w_full()
+                            .flex()
+                            .flex_row()
+                            .gap(px(16.0))
+                            .overflow_hidden()
+                            .mb(px(12.0))
+                            // Left Category Sidebar
+                            .child(
                                 div()
-                                    .w_full()
-                                    .px_3()
-                                    .py_2()
-                                    .rounded_xl()
-                                    .cursor(CursorStyle::PointingHand)
-                                    .bg(if is_focused {
-                                        rgba(c.surface_container_highest)
-                                    } else {
-                                        rgba(0x00000000)
-                                    })
+                                    .id("categories-sidebar")
+                                    .w(px(175.0))
+                                    .h_full()
                                     .flex()
-                                    .items_center()
-                                    .gap_3()
-                                    .child(
+                                    .flex_col()
+                                    .gap(px(3.0))
+                                    .overflow_y_scroll()
+                                    .children(
+                                        visible_categories.iter().map(|cat| {
+                                            let is_active = self.selected_category == cat.id;
+                                            let cat_id = cat.id.to_string();
+                                            div()
+                                                .w_full()
+                                                .h(px(38.0))
+                                                .px(px(12.0))
+                                                .rounded(px(12.0))
+                                                .cursor(CursorStyle::PointingHand)
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(12.0))
+                                                .bg(if is_active {
+                                                    rgba(c.surface_container_high)
+                                                } else {
+                                                    rgba(0x00000000)
+                                                })
+                                                .child(
+                                                    MaterialIcon::with_size(
+                                                        cat.icon,
+                                                        IconSize::Small,
+                                                        if is_active { c.primary } else { c.on_surface_variant },
+                                                    ),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_sm()
+                                                        .font_weight(if is_active {
+                                                            FontWeight::MEDIUM
+                                                        } else {
+                                                            FontWeight::NORMAL
+                                                        })
+                                                        .text_color(rgba(if is_active {
+                                                            c.on_surface
+                                                        } else {
+                                                            c.on_surface_variant
+                                                        }))
+                                                        .overflow_hidden()
+                                                        .truncate()
+                                                        .child(cat.name),
+                                                )
+                                                .on_mouse_down(
+                                                    MouseButton::Left,
+                                                    cx.listener(move |this, _, _, _cx| {
+                                                        this.select_category(&cat_id);
+                                                    }),
+                                                )
+                                        }),
+                                    ),
+                            )
+                            // Right Applications Grid Area
+                            .child(
+                                div()
+                                    .id("apps-grid-container")
+                                    .flex_1()
+                                    .h_full()
+                                    .flex()
+                                    .flex_col()
+                                    .overflow_y_scroll()
+                                    .child(if self.filtered_entries.is_empty() {
                                         div()
-                                            .w(px(36.0))
-                                            .h(px(36.0))
-                                            .rounded_lg()
-                                            .bg(rgba(c.primary_container))
-                                            .text_color(rgba(c.on_primary_container))
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .child(
-                                                MaterialIcon::new("apps")
-                                                    .text_size(px(20.0)),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex_1()
+                                            .w_full()
+                                            .h_full()
                                             .flex()
                                             .flex_col()
+                                            .items_center()
+                                            .justify_center()
+                                            .gap(px(8.0))
+                                            .child(MaterialIcon::with_size("apps", IconSize::Large, c.outline))
                                             .child(
                                                 div()
-                                                    .text_color(rgba(c.on_surface))
                                                     .text_sm()
-                                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                                    .child(entry.name.clone()),
+                                                    .text_color(rgba(c.outline))
+                                                    .child("No apps in this category"),
                                             )
-                                            .child(
-                                                div()
-                                                    .text_color(rgba(c.on_surface_variant))
-                                                    .text_xs()
-                                                    .child(if !entry.generic_name.is_empty() {
-                                                        entry.generic_name.clone()
-                                                    } else {
-                                                        entry.comment.clone()
-                                                    }),
-                                            ),
-                                    )
-                                    .on_mouse_down(
-                                        gpui::MouseButton::Left,
-                                        cx.listener(move |this, _, _, _cx| {
-                                            if let Some(pos) = this.filtered_entries.iter().position(|e| e.id == entry_id) {
-                                                this.focused_index = pos;
-                                                let _ = this.launch_focused();
-                                            }
-                                        }),
-                                    )
-                            }),
-                    ),
-            )
-            // 4. Quick Session Controls Footer matching Content.qml
-            .child(
-                div()
-                    .w_full()
-                    .pt_2()
-                    .border_t_1()
-                    .border_color(rgba(c.outline_variant))
-                    .flex()
-                    .items_center()
-                    .justify_end()
-                    .gap_2()
-                    .child(
-                        div()
-                            .px_3()
-                            .py_1()
-                            .rounded_lg()
-                            .bg(rgba(c.surface_container))
-                            .text_color(rgba(c.on_surface))
-                            .text_xs()
-                            .child("Lock"),
+                                    } else {
+                                        div()
+                                            .w_full()
+                                            .flex()
+                                            .flex_row()
+                                            .flex_wrap()
+                                            .gap(px(10.0))
+                                            .p(px(2.0))
+                                            .children(
+                                                self.filtered_entries.iter().enumerate().map(|(idx, entry)| {
+                                                    let is_focused = idx == self.focused_index;
+                                                    let is_fav = self.favourite_ids.iter().any(|fav| {
+                                                        fav == &entry.id || fav == &entry.name
+                                                    }) || self.selected_category == "favorites";
+                                                    let resolved_icon = resolve_app_icon(&entry.icon, &entry.id);
+                                                    let entry_id = entry.id.clone();
+
+                                                    div()
+                                                        .w(px(84.0))
+                                                        .h(px(96.0))
+                                                        .relative()
+                                                        .rounded(px(14.0))
+                                                        .p(px(6.0))
+                                                        .cursor(CursorStyle::PointingHand)
+                                                        .bg(if is_focused {
+                                                            rgba(c.surface_container_highest)
+                                                        } else {
+                                                            rgba(0x00000000)
+                                                        })
+                                                        .flex()
+                                                        .flex_col()
+                                                        .items_center()
+                                                        .justify_between()
+                                                        // Favorite badge at top-right
+                                                        .when(is_fav, |d| {
+                                                            d.child(
+                                                                div()
+                                                                    .absolute()
+                                                                    .top(px(4.0))
+                                                                    .right(px(6.0))
+                                                                    .child(MaterialIcon::with_size(
+                                                                        "favorite",
+                                                                        IconSize::Custom(12.0),
+                                                                        c.primary,
+                                                                    )),
+                                                            )
+                                                        })
+                                                        // Large App Icon
+                                                        .child(
+                                                            div()
+                                                                .w(px(48.0))
+                                                                .h(px(48.0))
+                                                                .flex()
+                                                                .items_center()
+                                                                .justify_center()
+                                                                .child(match resolved_icon {
+                                                                    ResolvedAppIcon::Png(ref path) => {
+                                                                        img(path.as_path()).w(px(44.0)).h(px(44.0)).into_any_element()
+                                                                    }
+                                                                    ResolvedAppIcon::Svg(ref path) => {
+                                                                        svg()
+                                                                            .external_path(path.to_string_lossy().to_string())
+                                                                            .w(px(44.0))
+                                                                            .h(px(44.0))
+                                                                            .into_any_element()
+                                                                    }
+                                                                    ResolvedAppIcon::Glyph(glyph) => {
+                                                                        MaterialIcon::with_size(glyph, IconSize::Large, c.primary)
+                                                                            .into_any_element()
+                                                                    }
+                                                                }),
+                                                        )
+                                                        // App Name Label
+                                                        .child(
+                                                            div()
+                                                                .text_xs()
+                                                                .text_color(rgba(c.on_surface))
+                                                                .text_center()
+                                                                .line_height(px(13.0))
+                                                                .max_w_full()
+                                                                .overflow_hidden()
+                                                                .truncate()
+                                                                .child(entry.name.clone()),
+                                                        )
+                                                        .on_mouse_down(
+                                                            MouseButton::Left,
+                                                            cx.listener(move |this, _, _, _cx| {
+                                                                if let Some(pos) = this
+                                                                    .filtered_entries
+                                                                    .iter()
+                                                                    .position(|e| e.id == entry_id)
+                                                                {
+                                                                    this.focused_index = pos;
+                                                                    let _ = this.launch_focused();
+                                                                }
+                                                            }),
+                                                        )
+                                                }),
+                                            )
+                                    }),
+                            ),
                     )
+                    // 2. Bottom Section: Outlined Notched Search Bar Row
                     .child(
                         div()
-                            .px_3()
-                            .py_1()
-                            .rounded_lg()
-                            .bg(rgba(c.surface_container))
-                            .text_color(rgba(c.on_surface))
-                            .text_xs()
-                            .child("Logout"),
-                    )
-                    .child(
-                        div()
-                            .px_3()
-                            .py_1()
-                            .rounded_lg()
-                            .bg(rgba(c.error_container))
-                            .text_color(rgba(c.on_error_container))
-                            .text_xs()
-                            .child("Power"),
+                            .w_full()
+                            .h(px(44.0))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(10.0))
+                            // Search Icon Button
+                            .child(
+                                div()
+                                    .w(px(40.0))
+                                    .h(px(40.0))
+                                    .rounded_full()
+                                    .bg(rgba(c.surface_container_highest))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(MaterialIcon::with_size(
+                                        "search",
+                                        IconSize::Custom(20.0),
+                                        c.on_surface_variant,
+                                    )),
+                            )
+                            // Outlined Text Box with Notched Cutout Label
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .h(px(42.0))
+                                    .relative()
+                                    .rounded(px(14.0))
+                                    .border_1()
+                                    .border_color(rgba(if self.search_query.is_empty() {
+                                        c.outline_variant
+                                    } else {
+                                        c.primary
+                                    }))
+                                    .px(px(12.0))
+                                    .flex()
+                                    .items_center()
+                                    // Floating Notch Label
+                                    .child(
+                                        div()
+                                            .absolute()
+                                            .top(px(-9.0))
+                                            .left(px(10.0))
+                                            .px(px(4.0))
+                                            .bg(rgba(c.surface_container_low))
+                                            .text_xs()
+                                            .text_color(rgba(if self.search_query.is_empty() {
+                                                c.on_surface_variant
+                                            } else {
+                                                c.primary
+                                            }))
+                                            .child("Type \">\" for commands"),
+                                    )
+                                    // Current Query
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(rgba(c.on_surface))
+                                            .child(if self.search_query.is_empty() {
+                                                "".to_string()
+                                            } else {
+                                                self.search_query.clone()
+                                            }),
+                                    ),
+                            )
+                            // Hamburger Menu Button
+                            .child(
+                                div()
+                                    .w(px(40.0))
+                                    .h(px(40.0))
+                                    .rounded_full()
+                                    .bg(rgba(c.surface_container_highest))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .cursor(CursorStyle::PointingHand)
+                                    .child(MaterialIcon::with_size(
+                                        "menu",
+                                        IconSize::Custom(20.0),
+                                        c.on_surface_variant,
+                                    )),
+                            ),
                     ),
             )
     }
 }
+
