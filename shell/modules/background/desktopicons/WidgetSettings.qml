@@ -57,6 +57,22 @@ Item {
     anchors.fill: parent
     visible: panel.opacity > 0
 
+    /// Where the panel goes: away from the widget it edits, on whichever side has room,
+    /// so it never covers the card or the gear that opened it. The anchor is the card's
+    /// edge, not its centre.
+    readonly property point place: {
+        const gap = Tokens.padding.medium;
+        const w = panel.width;
+        const h = panel.height;
+        const right = root.at.x + gap;
+        const left = root.at.x - w - gap;
+        const below = root.at.y + gap;
+        const above = root.at.y - h - gap;
+        const x = right + w > root.width - Tokens.padding.large && left >= Tokens.padding.large ? left : right;
+        const y = below + h > root.height - Tokens.padding.large && above >= Tokens.padding.large ? above : below;
+        return Qt.point(Math.max(Tokens.padding.large, Math.min(root.width - w - Tokens.padding.large, x)), Math.max(Tokens.padding.large, Math.min(root.height - h - Tokens.padding.large, y)));
+    }
+
     onWidgetChanged: {
         // The widget was removed while its settings were open; there is nothing left
         // to configure, so the panel goes with it.
@@ -80,18 +96,15 @@ Item {
         target: WidgetEditor
     }
 
-    MouseArea {
-        anchors.fill: parent
-        enabled: root.open
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-        onPressed: root.close()
-    }
+    // No backdrop on purpose: the panel is a floating inspector, not a modal. A
+    // full-surface click-catcher sat above the desktop's own menus and swallowed every
+    // click meant for them, so the panel only takes what lands on itself.
 
     Elevation {
         id: panel
 
-        x: Math.max(Tokens.padding.large, Math.min(root.width - width - Tokens.padding.large, root.at.x))
-        y: Math.max(Tokens.padding.large, Math.min(root.height - height - Tokens.padding.large, root.at.y))
+        x: root.place.x
+        y: root.place.y
         width: Math.min(340, root.width - Tokens.padding.large * 2)
         height: body.implicitHeight + Tokens.padding.large * 2
         radius: Tokens.rounding.large
@@ -157,6 +170,12 @@ Item {
                         text: qsTr("Reset")
                         type: TextButton.Text
                         onClicked: form.item?.reset()
+                    }
+
+                    IconButton {
+                        type: IconButton.Text
+                        icon: "close"
+                        onClicked: root.close()
                     }
                 }
 

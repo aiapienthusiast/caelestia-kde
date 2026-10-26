@@ -170,8 +170,6 @@ Item {
         anchors.bottomMargin: root.frameless ? 0 : root.labelHeight
         radius: root.frameless ? Tokens.rounding.medium : root.backgroundRadius
         color: root.frameless ? "transparent" : Qt.alpha(GlobalConfig.appearance.pitchBlack ? "#000000" : Colours.palette.m3surfaceContainer, root.backgroundOpacity)
-        border.width: root.selected || root.mergeTarget || root.focusVisible ? 2 : (root.frameless ? 0 : 1)
-        border.color: root.selected || root.mergeTarget || root.focusVisible ? Qt.darker(Colours.palette.m3primary, 1.45) : Qt.alpha(Colours.palette.m3onSurface, 0.12)
 
         // Background of the card: selects, opens, drags and resizes the item.
         // Controls inside the content take their own clicks first. In edit mode the
@@ -324,6 +322,20 @@ Item {
                 radius: parent.radius
                 onClicked: root.settingsRequested()
             }
+        }
+
+        // The card's edge, drawn last so nothing inside the card can hide it: the
+        // frosted wallpaper and the widget's own content both reach these pixels, and
+        // the border is what says where the card ends and the desktop begins.
+        StyledRect {
+            id: cardEdge
+
+            anchors.fill: card
+            radius: card.radius
+            color: "transparent"
+            border.width: root.selected || root.mergeTarget || root.focusVisible ? 2 : (root.frameless ? 0 : 1)
+            border.color: root.selected || root.mergeTarget || root.focusVisible ? Qt.darker(Colours.palette.m3primary, 1.45) : Qt.alpha(Colours.palette.m3onSurface, 0.22)
+            z: 1
         }
     }
 

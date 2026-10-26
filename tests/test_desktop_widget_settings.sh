@@ -80,6 +80,36 @@ test_the_form_starts_afresh_for_each_opening() {
     assert_file_contains "$PANEL" 'onTypeChanged: root.refresh()' "a type that arrives after the panel opened must still build the form"
 }
 
+test_the_card_edge_is_drawn_over_what_the_card_holds() {
+    # The frosted wallpaper and the widget's own content both reach the card's pixels,
+    # so the edge lives in its own overlay drawn last.
+    local edge settings cardblock
+    edge="$(grep -n 'id: cardEdge' "$BIG" | cut -d: -f1)"
+    settings="$(grep -n 'id: settingsButton' "$BIG" | cut -d: -f1)"
+    assert_ne "" "$edge" "the card must have one edge overlay"
+    [ -n "$edge" ] && [ -n "$settings" ] && assert_eq "after" "$([ "$edge" -gt "$settings" ] && echo after || echo before)" "the edge must be drawn after everything the card holds"
+    assert_file_contains "$BIG" 'anchors.fill: card' "the edge overlay must follow the card exactly"
+    cardblock="$(awk '/id: card$/{f=1} f{print} f&&/MouseArea \{/{exit}' "$BIG")"
+    assert_not_contains "$cardblock" "border.width" "the card itself must not draw an edge its contents can cover"
+}
+
+test_the_panel_never_swallows_a_click_meant_for_something_else() {
+    # A full-surface click-catcher sits above the desktop's menus and eats their clicks.
+    assert_file_not_contains "$PANEL" 'enabled: root.open' "the panel must not cover the desktop with a backdrop"
+    assert_file_not_contains "$PANEL" 'onPressed: root.close()' "clicks outside the panel belong to the desktop"
+    assert_file_contains "$PANEL" 'onClicked: root.close()' "the panel needs its own way out"
+    assert_file_contains "$PANEL" 'x: root.place.x' "the panel must place itself away from the widget"
+    assert_contains "$(function_body "$PANEL" refresh)" 'form.active = false' "the panel is still rebuilt per opening"
+}
+
+test_the_panel_opens_away_from_the_widget_it_edits() {
+    local place
+    place="$(awk '/readonly property point place: \{/{f=1} f{print} f&&/^    \}$/{exit}' "$PANEL")"
+    assert_contains "$place" 'root.at.x - w - gap' "it must be able to open to the left of the anchor"
+    assert_contains "$place" 'root.at.y - h - gap' "it must be able to open above the anchor"
+    assert_contains "$place" 'Math.min(root.width - w - Tokens.padding.large, x)' "it must stay on screen"
+}
+
 test_the_panel_is_only_as_tall_as_its_fields() {
     assert_file_contains "$PANEL" 'height: body.implicitHeight + Tokens.padding.large * 2' "a two-field widget must not get a screen-tall panel"
     assert_file_contains "$PANEL" 'Layout.preferredHeight: Math.min(root.formHeight, root.maxFormHeight)' "a long form must be capped and scroll instead"
